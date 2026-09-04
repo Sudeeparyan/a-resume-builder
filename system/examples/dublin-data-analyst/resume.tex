@@ -1,0 +1,217 @@
+%==============================================================================
+%  FICTIONAL SAMPLE — not a real person. "Aoife Byrne" is invented to show a
+%  filled Track-B (education-forward) resume for a Dublin data-analyst graduate.
+%  Purpose: (1) a known-good Overleaf reference you can compile to see the
+%  layout/pagination, and (2) an example of how a NON-software profile fills the
+%  same template. Paste the whole file into overleaf.com → Recompile.
+%
+%  Same preamble/macros as system/templates/latex/resume-track-b.tex — do not edit the
+%  preamble; only content between \begin{document} and \end{document} changes.
+%==============================================================================
+
+
+\documentclass[letterpaper,10.5pt]{article}
+
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{marvosym}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{verbatim}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage[
+    colorlinks=true,
+    linkcolor=black,
+    urlcolor=blue,
+    citecolor=blue
+]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\IfFileExists{fontawesome5.sty}{\usepackage{fontawesome5}}{}
+\usepackage{tabularx}
+\usepackage{ifthen}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+\addtolength{\oddsidemargin}{-0.55in}
+\addtolength{\evensidemargin}{-0.55in}
+\addtolength{\textwidth}{1.1in}
+\addtolength{\topmargin}{-0.8in}
+\addtolength{\textheight}{1.35in}
+
+\urlstyle{same}
+
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+\setlength{\parskip}{0pt}
+
+\setlist[itemize]{topsep=1pt, itemsep=0.5pt, parsep=0pt, leftmargin=0.15in}
+
+\titleformat{\section}{
+  \vspace{2pt}\scshape\raggedright\normalsize
+}{}{0em}{}[\color{black}\titlerule \vspace{1pt}]
+
+\pdfgentounicode=1
+
+\newcommand{\resumeItem}[1]{
+  \item\small{{#1}}
+}
+
+\newcommand{\resumeSubheading}[4]{
+  \vspace{1pt}\item
+    \begin{tabular*}{0.97\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & #2 \\
+      \textit{\small#3} & \textit{\small #4} \\
+    \end{tabular*}\vspace{0.5pt}
+}
+
+\newcommand{\resumeProjectHeading}[2]{
+    \item
+    \begin{tabular*}{0.97\textwidth}{l@{\extracolsep{\fill}}r}
+      \small#1 & #2 \\
+    \end{tabular*}\vspace{1pt}
+}
+
+\newcommand{\resumeSubItem}[1]{\resumeItem{#1}\vspace{-1pt}}
+
+\renewcommand\labelitemii{$\vcenter{\hbox{\tiny$\bullet$}}$}
+
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.15in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+\newcommand{\resumeItemListStart}{\begin{itemize}[leftmargin=0.15in]}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{0.5pt}}
+
+\newcommand{\ifnotempty}[2]{\if\relax\detokenize{#1}\relax\else#2\fi}
+
+\newcommand{\job}[4]{%
+    \vspace{2pt}%
+    \noindent\textbf{#1}\hfill #4\par
+    \ifnotempty{#2}{{\small #2}\par}%
+    \ifnotempty{#3}{#3\par}%
+    \vspace{2pt}%
+}
+
+\newcommand{\project}[3]{%
+    \vspace{1pt}%
+    \noindent\textit{#1}\ifnotempty{#2}{ #2}\par
+    \ifnotempty{#3}{#3\par}%
+    \vspace{1pt}%
+}
+
+\newcommand{\subproject}[1]{%
+    \vspace{0.5pt}%
+    \noindent\textbf{#1}\par
+    \vspace{-1pt}%
+}
+
+\newcommand{\sectioncontent}[1]{#1}
+
+\IfFileExists{soul.sty}{\usepackage{soul}}{}
+\providecommand{\ul}[1]{\underline{#1}}
+
+%-------------------------------------------
+\begin{document}
+
+%----------HEADING----------
+\begin{center}
+    \textbf{\Huge \scshape Aoife Byrne} \\ \vspace{1pt}
+    \small +353 87 123 4567 $|$
+    \href{mailto:aoife.byrne@example.com}{\textcolor{blue}{\ul{aoife.byrne@example.com}}} $|$
+    \href{https://www.linkedin.com/in/example}{\textcolor{blue}{\ul{LinkedIn}}} $|$
+    \href{https://github.com/example}{\textcolor{blue}{\ul{GitHub}}} \\
+    Dublin, Ireland $|$ EU citizen — eligible to work in Ireland
+\end{center}
+
+%-----------SUMMARY-----------
+\section{Summary}
+\begin{itemize}[leftmargin=0.15in,label={}]
+    \item \small{MSc Data Analytics graduate with hands-on project experience in SQL, Python, and Power BI, and a six-month data internship in retail analytics. Comfortable turning messy operational data into dashboards and A/B-test readouts that a non-technical team can act on. Looking for a graduate Data Analyst role in Dublin.}
+\end{itemize}
+
+%-----------EDUCATION-----------
+\section{Education}
+  \resumeSubHeadingListStart
+    \resumeSubheading
+      {Technological University Dublin}{Dublin, Ireland}
+      {MSc in Data Analytics}{2024 -- 2025}
+      \resumeItemListStart
+        \resumeItem{\textbf{Relevant modules:} Statistical Modelling, Machine Learning, Data Visualisation, Database Systems (SQL), Big Data Tools}
+        \resumeItem{\textbf{Dissertation:} Predicting customer churn for a grocery retailer (gradient boosting, 0.88 ROC-AUC)}
+      \resumeItemListEnd
+    \resumeSubheading
+      {University College Cork}{Cork, Ireland}
+      {BSc in Business Information Systems (2.1)}{2020 -- 2024}
+      \resumeItemListStart
+        \resumeItem{\textbf{Relevant modules:} Databases, Business Statistics, Information Systems, Programming for Business}
+      \resumeItemListEnd
+  \resumeSubHeadingListEnd
+
+%-----------PROJECTS-----------
+\section{Projects}
+\job{Grocery Churn Prediction (MSc dissertation)}{}{}{\hspace{1mm}2025}
+
+\begin{itemize}
+    \item Built a churn model on 18 months of loyalty-card transactions to flag customers likely to lapse within 60 days.
+    \item \textbf{Stack:} Python (pandas, scikit-learn, XGBoost), SQL, matplotlib.
+    \item Engineered recency/frequency/monetary features and reached 0.88 ROC-AUC; wrote the results up for a non-technical retail audience.
+\end{itemize}
+
+\job{Dublin Bikes Usage Dashboard}{}{}{\hspace{1mm}2024}
+
+\begin{itemize}
+    \item Interactive dashboard on the public Dublin Bikes API showing station demand by hour and weather.
+    \item \textbf{Stack:} Python, Power BI, REST API ingestion, PostgreSQL.
+    \item Automated a daily refresh and surfaced the five stations most often empty at commute peak.
+\end{itemize}
+
+\job{Product-Review Sentiment Classifier}{}{}{\hspace{1mm}2024}
+
+\begin{itemize}
+    \item Classified 20k e-commerce reviews into positive/negative/neutral to prioritise support triage (coursework project).
+    \item Compared logistic regression and a fine-tuned transformer; reported precision/recall trade-offs.
+\end{itemize}
+
+%-----------EXPERIENCE-----------
+\section{Experience}
+\sectioncontent{
+
+\job{Retail Analytics Ltd (fictional)}{}{}{\hspace{1mm}Jun 2024 -- Dec 2024}
+
+    \project{Data Analyst Intern (Internship)}{Dublin, Ireland}{}
+    \begin{itemize}
+        \item Wrote SQL queries feeding weekly sales dashboards used by three category managers.
+        \item Ran an A/B test on a promotional email and reported a 6\% uplift in click-through with confidence intervals.
+    \end{itemize}
+
+}
+
+%-----------TECHNICAL SKILLS-----------
+\section{Technical Skills}
+\begin{itemize}[leftmargin=0.15in, label={}]
+    \small{\item{
+        \textbf{Languages \& query}{: Python (pandas, scikit-learn), SQL, R (basics) } \\
+        \textbf{BI \& visualisation}{: Power BI, Tableau, matplotlib, Excel } \\
+        \textbf{Data \& cloud}{: PostgreSQL, BigQuery, Git, basic dbt } \\
+        \textbf{Academic exposure}{: PySpark, Airflow (coursework only) }
+    }}
+\end{itemize}
+
+%-----------CERTIFICATIONS-----------
+\section{Certifications}
+\begin{itemize}[leftmargin=0.15in]
+    \item \small{ Google Data Analytics Professional Certificate (Coursera, 2024) }
+    \item \small{ Microsoft Power BI Data Analyst (PL-300), 2025 }
+\end{itemize}
+
+%-----------ACHIEVEMENTS-----------
+\section{Achievements}
+\begin{itemize}[leftmargin=0.15in]
+    \item \small{ Runner-up, TU Dublin Data Hackathon 2024 (of 22 teams) }
+\end{itemize}
+
+\end{document}

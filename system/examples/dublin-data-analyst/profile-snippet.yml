@@ -1,0 +1,50 @@
+# FICTIONAL example — how system/config/profile.yml's tracks + archetypes look for a
+# Dublin data-analyst graduate. Copy the SHAPE into your own system/config/profile.yml;
+# never copy the content. (Only the relevant blocks are shown here.)
+
+candidate:
+  full_name: "Aoife Byrne"                # fictional
+  location: "Dublin, Ireland"
+  current_status: "MSc Data Analytics graduate (2025)"
+  work_authorisation: "EU citizen — no permit required"
+  years_professional_experience: "0"      # a 6-month internship, honest as 0 professional years
+
+tracks:
+  track_a:
+    name: "Data Analytics / BI"
+    latex_base: "system/templates/latex/resume-track-b.tex"   # education-forward for a graduate
+    primary_titles:
+      - "Data Analyst"
+      - "Business Intelligence Analyst"
+      - "Junior Data Analyst"
+    secondary_titles:
+      - "Reporting Analyst"
+      - "Insights Analyst"
+  track_b:
+    name: "Analytics / Data Engineering"
+    latex_base: "system/templates/latex/resume-track-b.tex"
+    primary_titles:
+      - "Analytics Engineer"
+      - "Junior Data Engineer"
+    secondary_titles:
+      - "Data Operations Analyst"
+
+archetypes:
+  - name: "Data Analyst"
+    track: track_a
+    level: "junior"
+    fit: primary
+    signals: ["SQL", "Power BI", "dashboards", "stakeholder", "reporting", "Excel"]
+  - name: "Analytics Engineer"
+    track: track_b
+    level: "junior"
+    fit: secondary
+    signals: ["dbt", "pipeline", "ETL", "warehouse", "BigQuery", "Python"]
+
+location:
+  primary_region: "ireland"
+  city: "Dublin"
+
+compensation:
+  currency: "EUR"
+  target_range: "EUR 35k-45k"             # graduate data-analyst band, Dublin

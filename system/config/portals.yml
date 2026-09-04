@@ -1,0 +1,92 @@
+# ============================================================
+# Portal scanner configuration — company career pages to scan
+# directly, plus the saved searches to run.
+#
+# Direct career pages beat aggregators: fewer applicants, fresher
+# listings, and no ghost jobs.
+# ============================================================
+
+meta:
+  last_updated: "{{DATE}}"
+  scan_cadence: "weekly"
+
+# ------------------------------------------------------------
+# Tracked companies. Tier 1 = best odds (small, niche, actively
+# hiring for this skill set). Tier 3 = big names, long odds.
+# ------------------------------------------------------------
+tracked_companies:
+
+  - name: "{{COMPANY_1}}"
+    careers_url: "{{COMPANY_1_CAREERS_URL}}"
+    track: track_a
+    region: "ireland"
+    tier: 1
+    size: "{{COMPANY_1_SIZE}}"
+    why: "{{COMPANY_1_WHY}}"        # why this person is a plausible hire here
+    enabled: true
+
+  - name: "{{COMPANY_2}}"
+    careers_url: "{{COMPANY_2_CAREERS_URL}}"
+    track: track_b
+    region: "ireland"
+    tier: 1
+    size: "{{COMPANY_2_SIZE}}"
+    why: "{{COMPANY_2_WHY}}"
+    enabled: true
+
+  # Add as many as you like. Keep `why` honest — it becomes the
+  # personalisation line in the cover letter.
+
+  # -----------------------------------------------------------------
+  # IRELAND EMPLOYER STARTER LIST (reference only — not yet enabled).
+  # Uncomment and adapt the ones that fit THIS candidate's field.
+  # Grouped by domain so software / data / medtech people all have a
+  # starting point. Always confirm the live careers URL before scanning.
+  #
+  # Software / SaaS / AI (mostly Dublin):
+  #   Stripe, Intercom, HubSpot, Workday, Squarespace, Guidewire, Tines,
+  #   Sysdig, LetsGetChecked, SoftwareOne, Fenergo, Version1, Ergo.
+  # Big tech EMEA HQs (higher competition):
+  #   Google, Microsoft, Meta, Amazon, LinkedIn, Salesforce, OpenAI.
+  # Financial services / data (Dublin):
+  #   Mastercard, Fidelity Investments, Citi, AIB, Bank of Ireland, Stripe,
+  #   Fenergo, Prometric, Aon, PartnerRe.
+  # Medtech / pharma (Cork, Galway, Limerick):
+  #   Medtronic, Boston Scientific, Stryker, Johnson & Johnson, Abbott,
+  #   Pfizer, Eli Lilly, Johnson Controls, Solventum.
+  # Semiconductor / hardware (Cork, Limerick):
+  #   Analog Devices, Qualcomm, Intel, Dell, Cadence, Synopsys.
+  # -----------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Saved searches. {{TOKENS}} are substituted from system/config/profile.yml
+# and system/config/regions.yml at scan time.
+# ------------------------------------------------------------
+search_queries:
+
+  track_a:
+    - '"{{TRACK_A_TITLE_1}}" "Ireland" site:linkedin.com/jobs'
+    - '"{{TRACK_A_TITLE_2}}" ("Dublin" OR "Cork" OR "Galway" OR "Limerick") (site:lever.co OR site:greenhouse.io OR site:jobs.ashbyhq.com)'
+    - '"{{TRACK_A_TITLE_1}}" "Ireland" -senior -principal -"10+ years"'
+    - '"{{TRACK_A_TITLE_1}}" (site:ie.indeed.com OR site:irishjobs.ie OR site:jobs.ie)'
+
+  track_b:
+    - '"{{TRACK_B_TITLE_1}}" "Ireland" site:linkedin.com/jobs'
+    - '"{{TRACK_B_TITLE_2}}" "Ireland" (site:apply.workable.com OR site:recruitee.com)'
+    - '"{{TRACK_B_TITLE_1}}" OR "{{TRACK_B_TITLE_3}}" ("Dublin" OR "Cork" OR "Galway" OR "Limerick")'
+
+  graduate_and_entry:
+    - '"graduate programme" OR "graduate scheme" "Ireland" "{{TRACK_A_TITLE_1}}"'
+    - '"entry level" OR "junior" "{{TRACK_A_TITLE_1}}" "Ireland"'
+    - '"internship" "{{TRACK_A_TITLE_1}}" "Ireland" {{CURRENT_YEAR}}'
+
+# ------------------------------------------------------------
+# Filters applied to every result before it reaches the tracker.
+# ------------------------------------------------------------
+filters:
+  max_posting_age_days: 30
+  exclude_title_words: ["Senior", "Principal", "Staff", "Head of", "Director", "VP"]
+  exclude_if_requires_years_over: "{{MAX_YEARS_REQUIRED}}"
+  require_location_match: true
+  drop_if_in_applied_list: true
+  drop_agency_reposts: true       # same role listed by 3+ recruiters = low-signal

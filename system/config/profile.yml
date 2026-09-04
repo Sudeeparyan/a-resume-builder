@@ -1,0 +1,151 @@
+# ============================================================
+# Candidate configuration — single source of truth for identity,
+# targets, and compensation across every agent and skill.
+#
+# Built by the `profile-intake` skill from context/ (the documents Annie
+# provided in context/files/) plus two answers confirmed directly in
+# conversation (target market = United States; needs visa sponsorship).
+# Everything else traces to a specific context/ file — see the comments.
+# ============================================================
+
+meta:
+  template_version: "1.0"
+  last_updated: "2026-09-04"
+  filled: false            # blocking tokens remain (EMAIL, PHONE, CITY) — see below
+
+# ------------------------------------------------------------
+# Runtime — OPTIONAL. You almost never need this.
+# ------------------------------------------------------------
+runtime:
+  provider: "copilot"        # "copilot" = use the model selected in Copilot chat (default). "api" = use the key below.
+  api_env_var: ""            # optional: name of an env var holding your API key, e.g. "OPENAI_API_KEY" or "ANTHROPIC_API_KEY"
+  api_model: ""              # optional: model id to use when provider is "api"; blank = let the tool decide
+
+candidate:
+  full_name: "Annie Prasanna Manoharan"
+  email: "{{EMAIL}}"
+  phone: "{{PHONE}}"
+  location: "{{CITY}}, United States"
+  linkedin: "{{LINKEDIN_URL}}"
+  github: "{{GITHUB_URL}}"
+  portfolio_url: "{{PORTFOLIO_URL}}"
+
+  # Status — be literal. These drive honest claims on the resume.
+  current_status: "Recently completed MS Computer Engineering (University of Arkansas); currently working at InsOps Inc. in data engineering / AI; job-searching for a full-time role"
+  work_authorisation: "Needs employer visa sponsorship in the United States (exact route — OPT/STEM-OPT vs. H-1B — unconfirmed, see context/QUESTIONS-FOR-YOU.md)"
+  years_professional_experience: "~2 years at Soliton Technologies (Jul 2022 - Jun 2024) plus current, date-unconfirmed work at InsOps — no rolled-up total; see system/profile/master-profile.md do-not-claim list"
+  education_highest: "MS Computer Engineering, University of Arkansas ({{EDU_DATES_1}})"
+  availability: "{{AVAILABILITY}}"
+
+# ------------------------------------------------------------
+# Two career tracks — proposed from the evidence in context/, not yet
+# confirmed by Annie. See system/profile/positioning.md for the full
+# reasoning and the competition read on each.
+# ------------------------------------------------------------
+tracks:
+  track_a:
+    name: "Data & AI Engineering"
+    latex_base: "system/templates/latex/resume-track-a.tex"
+    primary_titles:
+      - "Data Engineer"
+      - "Machine Learning Engineer"
+      - "AI Engineer"
+    secondary_titles:
+      - "Data Scientist"
+      - "Applied AI Engineer"
+
+  track_b:
+    name: "Software & Test Automation Engineering"
+    latex_base: "system/templates/latex/resume-track-b.tex"
+    primary_titles:
+      - "Software Engineer"
+      - "Test Automation Engineer"
+      - "Applications Engineer"
+    secondary_titles:
+      - "Embedded Software Engineer"
+
+# ------------------------------------------------------------
+# Archetypes — how a JD is recognised and framed.
+# `signals` are the words whose presence in a JD selects this archetype.
+# ------------------------------------------------------------
+archetypes:
+  - name: "Data Engineer"
+    track: track_a
+    level: "junior-mid"     # ~1-3 yrs equivalent professional + research experience
+    fit: primary
+    signals: ["data pipeline", "ETL", "Airflow", "Spark", "SQL"]
+
+  - name: "Machine Learning / AI Engineer"
+    track: track_a
+    level: "junior-mid"
+    fit: secondary
+    signals: ["machine learning", "computer vision", "PyTorch", "LLM", "generative AI"]
+
+  - name: "Software Engineer"
+    track: track_b
+    level: "junior-mid"
+    fit: primary
+    signals: ["software engineer", "full stack", "test automation", "C#", ".NET"]
+
+  - name: "Embedded / Test Automation Engineer"
+    track: track_b
+    level: "junior-mid"
+    fit: secondary
+    signals: ["embedded systems", "firmware", "LabVIEW", "hardware-software"]
+
+narrative:
+  headline: "Data & AI Engineer — published CV/generative-AI researcher (ICCV 2025) who also ships production data pipelines"
+  positioning_story: >-
+    Annie is a Computer Engineering graduate (MS, University of Arkansas) whose career moved from
+    electronics and embedded systems, through professional software test automation at Soliton
+    Technologies, into AI/ML research (two publications, including ICCV 2025) and now production
+    data engineering at InsOps. She has owned a customer-facing production project end-to-end
+    (Soliton/Medtronic), built real streaming and RAG systems solo, and published peer-reviewed
+    generative-AI research — most candidates have one of these, not all three.
+  differentiators:
+    - "Published, peer-reviewed generative-AI/computer-vision research (ICCV 2025 plus a journal publication) — rare alongside real production pipeline work"
+    - "Solo, end-to-end ownership of a customer-facing production project (Medtronic, via Soliton) — sprint planning through delivery, with direct customer communication"
+    - "Genuine hardware-to-LLM range: FPGA and embedded systems through data engineering to generative AI, evidenced by real shipped projects at every layer"
+  proof_points:
+    - name: "DualFit — ICCV 2025"
+      evidence: "system/profile/master-profile.md — Projects & Build Bank — DualFit"
+      track: "track_a"
+    - name: "Soliton — sole developer, Medtronic project"
+      evidence: "system/profile/master-profile.md — Work Experience — Soliton Technologies, Project Engineer"
+      track: "track_b"
+
+compensation:
+  currency: "USD"
+  target_range: "{{COMP_RANGE}}"
+  minimum: "{{COMP_MINIMUM}}"
+  notes: "{{COMP_NOTES}}"
+
+location:
+  primary_region: "united-states"       # matches the key in system/config/regions.yml
+  city: "{{CITY}}"
+  timezone: "{{TIMEZONE}}"
+  acceptable:
+    - "{{LOCATION_PREF_1}}"
+    - "{{LOCATION_PREF_2}}"
+  relocation: "Yes — open to relocating for the right opportunity (context/07-preferences.md, from HR.pdf Q21)"
+
+# ------------------------------------------------------------
+# Which openings to chase first. Tuned for callback probability,
+# not prestige.
+# ------------------------------------------------------------
+competition_strategy:
+  prefer:
+    - "Companies under 200 employees — fewer applicants per opening"
+    - "Postings less than 7 days old — apply before the pile builds"
+    - "Roles needing an uncommon skill combination this person actually has"
+    - "Non-obvious employers in the sector (suppliers, agencies, public bodies)"
+    - "Companies with a track record of sponsoring H-1B/OPT hires (check myvisajobs.com or similar before applying — see system/config/regions.yml → united-states)"
+  avoid:
+    - "Roles demanding more years than her real, non-rounded timeline plus a stretch — see system/profile/master-profile.md do-not-claim list"
+    - "Postings older than 30 days with no re-post"
+    - "Roles requiring a language or clearance this person does not have"
+    - "Roles explicitly stating no visa sponsorship — flag and list separately, never hide, per this workspace's rules"
+
+exclusions:
+  # Companies already applied to — the job-hunter must never resurface these.
+  applied_companies_file: "system/data/applied-companies.md"

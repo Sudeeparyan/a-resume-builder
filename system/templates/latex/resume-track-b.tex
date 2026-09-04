@@ -1,0 +1,251 @@
+%==============================================================================
+%  RESUME BASE — TRACK B  (education-forward layout)
+%
+%  Section order: Summary -> Education (with relevant modules) -> Projects
+%                 -> Experience -> Skills -> Certifications -> Achievements
+%  Use for: graduates, career changers, and any track where coursework and
+%  projects carry more weight than employment history.
+%
+%  Same preamble and commands as Track A, so a resume can be switched between
+%  bases without reformatting. Same rules apply: never alter the preamble,
+%  never leave a {{TOKEN}} in a sent resume, escape % & _ # $ in content.
+%==============================================================================
+
+
+\documentclass[letterpaper,10.5pt]{article}
+
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{marvosym}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{verbatim}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage[
+    colorlinks=true,
+    linkcolor=black,   % internal links stay black
+    urlcolor=blue,     % external links in blue
+    citecolor=blue
+]{hyperref}   % loaded exactly once - a second \usepackage{hyperref} with different
+              % options is an 'Option clash' error
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+% fontawesome5 is optional: guarded so the file still builds on a minimal TeX install
+\IfFileExists{fontawesome5.sty}{\usepackage{fontawesome5}}{}
+\usepackage{tabularx}
+%   - Keep the glyphtounicode line and \pdfgentounicode=1 — they make the PDF's
+%     text extractable by ATS parsers.
+\usepackage{ifthen}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Adjust margins tighter
+\addtolength{\oddsidemargin}{-0.55in}
+\addtolength{\evensidemargin}{-0.55in}
+\addtolength{\textwidth}{1.1in}
+\addtolength{\topmargin}{-0.8in}
+\addtolength{\textheight}{1.35in}
+
+\urlstyle{same}
+
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+\setlength{\parskip}{0pt} % remove paragraph gaps
+
+% Compact lists
+\setlist[itemize]{topsep=1pt, itemsep=0.5pt, parsep=0pt, leftmargin=0.15in}
+
+% Section formatting
+\titleformat{\section}{
+  \vspace{2pt}\scshape\raggedright\normalsize
+}{}{0em}{}[\color{black}\titlerule \vspace{1pt}]
+
+\pdfgentounicode=1
+
+%-------------------------
+% Custom commands
+\newcommand{\resumeItem}[1]{
+  \item\small{{#1}}
+}
+
+\newcommand{\resumeSubheading}[4]{
+  \vspace{1pt}\item
+    \begin{tabular*}{0.97\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & #2 \\
+      \textit{\small#3} & \textit{\small #4} \\
+    \end{tabular*}\vspace{0.5pt}
+}
+
+\newcommand{\resumeProjectHeading}[2]{
+    \item
+    \begin{tabular*}{0.97\textwidth}{l@{\extracolsep{\fill}}r}
+      \small#1 & #2 \\
+    \end{tabular*}\vspace{1pt}
+}
+
+\newcommand{\resumeSubItem}[1]{\resumeItem{#1}\vspace{-1pt}}
+
+\renewcommand\labelitemii{$\vcenter{\hbox{\tiny$\bullet$}}$}
+
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.15in, label={}]} 
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+\newcommand{\resumeItemListStart}{\begin{itemize}[leftmargin=0.15in]}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{0.5pt}}
+
+% -------------------------
+% Hierarchical Experience Commands
+% -------------------------
+
+% Robust empty-argument test (expansion-safe, no ifthen quirks).
+\newcommand{\ifnotempty}[2]{\if\relax\detokenize{#1}\relax\else#2\fi}
+
+% \job{Employer}{subtitle or empty}{extra or empty}{date, right-aligned}
+% Empty arguments are skipped cleanly - no "There's no line here to end" error.
+\newcommand{\job}[4]{%
+    \vspace{2pt}%
+    \noindent\textbf{#1}\hfill #4\par
+    \ifnotempty{#2}{{\small #2}\par}%
+    \ifnotempty{#3}{#3\par}%
+    \vspace{2pt}%
+}
+
+% \project{Role or project title}{location or empty}{extra or empty}
+\newcommand{\project}[3]{%
+    \vspace{1pt}%
+    \noindent\textit{#1}\ifnotempty{#2}{ #2}\par
+    \ifnotempty{#3}{#3\par}%
+    \vspace{1pt}%
+}
+
+\newcommand{\subproject}[1]{%
+    \vspace{0.5pt}%
+    \noindent\textbf{#1}\par
+    \vspace{-1pt}%
+}
+
+% Passthrough wrapper used around the Experience section content.
+% (Defined here so the document compiles cleanly with no "undefined control sequence" error.)
+\newcommand{\sectioncontent}[1]{#1}
+
+% soul gives the underlined links; guarded with a plain-underline fallback so the
+% file still builds on a minimal TeX install (Overleaf always has soul)
+\IfFileExists{soul.sty}{\usepackage{soul}}{}
+\providecommand{\ul}[1]{\underline{#1}}  % fallback if soul is unavailable
+
+%-------------------------------------------
+%%%%%%  RESUME STARTS HERE  %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+
+%----------HEADING----------
+\begin{center}
+    \textbf{\Huge \scshape Annie Prasanna Manoharan} \\ \vspace{1pt}
+    \small {{PHONE}} $|$
+    \href{mailto:{{EMAIL}}}{\textcolor{blue}{\ul{{{EMAIL}}}}} $|$
+    \href{{{LINKEDIN_URL}}}{\textcolor{blue}{\ul{LinkedIn}}} $|$
+    \href{{{GITHUB_URL}}}{\textcolor{blue}{\ul{GitHub}}} \\
+    {{CITY}}, United States $|$ {{WORK_AUTH}}
+\end{center}
+
+%-----------SUMMARY-----------
+% Graduate formula: <degree + specialisation> + <strongest project or coursework
+% area matching the JD> + <the domain interest this role sits in>.
+% Never claim years of experience that do not exist.
+\section{Summary}
+\begin{itemize}[leftmargin=0.15in,label={}]
+    \item \small{ {{SUMMARY_PARAGRAPH}} }
+\end{itemize}
+
+%-----------EDUCATION-----------
+% Education leads on this base. Include the modules the JD actually names.
+\section{Education}
+  \resumeSubHeadingListStart
+    \resumeSubheading
+      {{{INSTITUTION_1}}}{{{EDU_LOCATION_1}}}
+      {{{DEGREE_1}}}{{{EDU_DATES_1}}}
+      \resumeItemListStart
+        \resumeItem{\textbf{Relevant modules:} {{EDU_COURSEWORK_1}}}
+        \resumeItem{\textbf{Major project:} {{EDU_PROJECT_1}}}
+      \resumeItemListEnd
+    \resumeSubheading
+      {{{INSTITUTION_2}}}{{{EDU_LOCATION_2}}}
+      {{{DEGREE_2}}}{{{EDU_DATES_2}}}
+      \resumeItemListStart
+        \resumeItem{\textbf{Relevant modules:} {{EDU_COURSEWORK_2}}}
+      \resumeItemListEnd
+  \resumeSubHeadingListEnd
+
+%-----------PROJECTS-----------
+% On this base the projects do the work employment normally does: three of them,
+% each with what it does, the stack, and the candidate's own contribution.
+\section{Projects}
+\job{{{PROJECT_B1_NAME}}}{}{}{\hspace{1mm}{{PROJECT_B1_DATES}}}
+
+\begin{itemize}
+    \item {{PROJECT_B1_DESCRIPTION}}
+    \item \textbf{Stack:} {{PROJECT_B1_STACK}}
+    \item {{PROJECT_B1_CONTRIBUTION}}
+\end{itemize}
+
+\job{{{PROJECT_B2_NAME}}}{}{}{\hspace{1mm}{{PROJECT_B2_DATES}}}
+
+\begin{itemize}
+    \item {{PROJECT_B2_DESCRIPTION}}
+    \item \textbf{Stack:} {{PROJECT_B2_STACK}}
+    \item {{PROJECT_B2_CONTRIBUTION}}
+\end{itemize}
+
+\job{{{PROJECT_B3_NAME}}}{}{}{\hspace{1mm}{{PROJECT_B3_DATES}}}
+
+\begin{itemize}
+    \item {{PROJECT_B3_DESCRIPTION}}
+    \item {{PROJECT_B3_CONTRIBUTION}}
+\end{itemize}
+
+%-----------EXPERIENCE----------- (internships, part-time, volunteer — labelled honestly)
+\section{Experience}
+\sectioncontent{
+
+\job{{{EMPLOYER_1}}}{}{}{\hspace{1mm}{{EMP_DATES_1}}}
+
+    \project{{{ROLE_1}} ({{EMP_TYPE_1}})}{{{EMP_LOCATION_1}}}{}
+    \begin{itemize}
+        \item {{EMP_BULLET_1_1}}
+        \item {{EMP_BULLET_1_2}}
+    \end{itemize}
+
+}
+% If there is no employment history at all, delete this entire section rather
+% than relabelling coursework or personal projects as jobs.
+
+%-----------TECHNICAL SKILLS-----------
+% Keep coursework-level knowledge in its own line, described as familiarity.
+\section{Technical Skills}
+\begin{itemize}[leftmargin=0.15in, label={}]
+    \small{\item{
+        \textbf{ {{SKILL_CATEGORY_1}} }{: {{SKILL_LIST_1}} } \\
+        \textbf{ {{SKILL_CATEGORY_2}} }{: {{SKILL_LIST_2}} } \\
+        \textbf{ {{SKILL_CATEGORY_3}} }{: {{SKILL_LIST_3}} } \\
+        \textbf{ {{SKILL_CATEGORY_4}} }{: {{SKILL_LIST_4}} } \\
+        \textbf{Academic exposure}{: {{SKILL_LIST_EXPOSURE}} }
+    }}
+\end{itemize}
+
+%-----------CERTIFICATIONS-----------
+\section{Certifications}
+\begin{itemize}[leftmargin=0.15in]
+    \item \small{ {{CERT_1}} }
+    \item \small{ {{CERT_2}} }
+\end{itemize}
+
+%-----------ACHIEVEMENTS----------- (delete if empty)
+\section{Achievements}
+\begin{itemize}[leftmargin=0.15in]
+    \item \small{ {{AWARD_1}} }
+\end{itemize}
+
+\end{document}

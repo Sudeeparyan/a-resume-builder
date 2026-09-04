@@ -1,0 +1,31 @@
+# Build artefacts
+*.aux
+*.log
+*.out
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.bbl
+*.blg
+*.toc
+build/
+*.pdf.bak
+
+# Generated verification output
+verification_results*.json
+
+# Local env
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.env
+
+# If you publish this repo, uncomment these to keep your personal data out of it.
+# Personal source documents and generated application data
+context/**
+output/**
+system/profile/**
+system/data/**
+annie/**
+Archive.zip

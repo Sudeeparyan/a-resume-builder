@@ -1,4 +1,4 @@
-# Resume Builder — Ireland Edition
+# Resume Builder — USA Edition
 
 An AI-driven job-search workspace for one person. You put your background into `context/`, ask in
 plain English, and get a resume tailored to each job — plus company research, a study plan, and a

@@ -1,0 +1,4 @@
+refreshed: 2026-09-04
+fiscal years: 2021, 2022, 2023
+employers: 83624
+source: USCIS H-1B Employer Data Hub (bulk CSV export)

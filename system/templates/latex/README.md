@@ -10,7 +10,7 @@ without reformatting:
   Experience → Skills → Certifications → Achievements). Use for students / graduates / career changers.
 - **`cover-letter.tex`** — one-page cover letter (Pain → Agitate → Solution → Close).
 
-A filled, compile-ready sample lives in [`system/examples/dublin-data-analyst/resume.tex`](../../examples/dublin-data-analyst/resume.tex).
+A filled, compile-ready sample lives in [`system/examples/us-data-engineer/resume.tex`](../../examples/us-data-engineer/resume.tex).
 
 ## Compiling on Overleaf (no local install needed)
 
@@ -48,7 +48,7 @@ Fix in this order — never shrink the font below the base's `10.5pt`:
 4. Only then, nudge a `\vspace{...}` down slightly (they're already tuned; small changes only).
 
 Target: a graduate CV = **one full page**; an experienced CV = **two pages, ~95% of page 2 filled**.
-Irish market convention (see `system/config/regions.yml → cv_conventions`): no photo, no date of birth,
+US market convention (see `system/config/regions.yml → cv_conventions`): no photo, no date of birth,
 state right-to-work briefly, include LinkedIn.
 
 ## Sanity-check before sending

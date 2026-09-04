@@ -74,9 +74,9 @@ collect the identity and **you** write it into `system/config/profile.yml` — t
    in plain language — not as a form:
 
    > To set up your workspace I need a few basics. You can paste them however you like:
-   > **name, email, phone, city (in Ireland), LinkedIn/GitHub/portfolio links, your current status**
-   > (e.g. "final-year MSc student" or "employed at X"), and your **right to work in Ireland**
-   > (EU citizen / Stamp 1G / needs sponsorship / …). Then paste or describe your background —
+   > **name, email, phone, city (in the United States), LinkedIn/GitHub/portfolio links, your current status**
+   > (e.g. "final-year MSc student" or "employed at X"), and your **right to work in the United States**
+   > (US citizen / green card / F-1 OPT / STEM OPT / needs H-1B sponsorship / …). Then paste or describe your background —
    > education, projects, jobs, skills — as much as you've got.
 
 2. Take whatever they give (typed answers, an old CV, a LinkedIn export — any format) and **write the
@@ -84,7 +84,7 @@ collect the identity and **you** write it into `system/config/profile.yml` — t
 
    ```bash
    python3 system/scripts/init_profile.py --set FULL_NAME="Jane Doe" --set EMAIL="jane@example.com" \
-       --set PHONE="+353 8X XXX XXXX" --set CITY="Dublin" --set COUNTRY="Ireland" --set ...
+       --set PHONE="(XXX) XXX-XXXX" --set CITY="Fayetteville" --set COUNTRY="United States" --set ...
    ```
 
    (Or edit `system/config/profile.yml` on their behalf.) Only fill what they actually gave you; leave the

@@ -1,10 +1,10 @@
 ---
-description: "Batch: find N verified Ireland openings, then research, tailor, audit and plan one application per company in a single pass — N resumes with N different signature projects, plus a study plan each. Trigger with 'give me N companies this week + resumes' or 'find N <field> roles in Ireland and tailor each'."
+description: "Batch: find N verified the United States openings, then research, tailor, audit and plan one application per company in a single pass — N resumes with N different signature projects, plus a study plan each. Trigger with 'give me N companies this week + resumes' or 'find N <field> roles in the United States and tailor each'."
 ---
 
 # Workflow: batch apply (N companies → N resumes)
 
-This is the headline flow. One request → a shortlist of live, verified Ireland jobs, **and** for
+This is the headline flow. One request → a shortlist of live, verified the United States jobs, **and** for
 each one: company research, a tailored and audited resume carrying a **signature project unique to
 that company**, and an upskilling plan for the weeks before they call. Follow `system/modes/batch.md`
 exactly; this file is the Copilot entry point.
@@ -14,7 +14,7 @@ Ten companies means ten genuinely different resumes — not one resume with the 
 ## When to run
 The user asks for **multiple jobs and their resumes together**, e.g.:
 - "give me the latest 10 companies this week with working links"
-- "find 10 data roles in Ireland and tailor my resume for each"
+- "find 10 data roles in the United States and tailor my resume for each"
 - "10 companies + 10 resumes"
 
 If they ask only for a *list* of companies (no resumes), run the plain `job-hunter` scan instead and
@@ -25,7 +25,7 @@ offer to tailor afterwards.
    (titles, cities, seniority, salary floor, hard limits, companies to skip, companies to check
    directly); `01-basics.md` right-to-work is a hard eligibility filter; `04-projects.md` is the bank
    the ten distinct signature projects come from. Then the config: `system/config/profile.yml`,
-   `system/config/regions.yml` (Ireland), `system/config/portals.yml`, `system/modes/_shared.md`,
+   `system/config/regions.yml` (the United States), `system/config/portals.yml`, `system/modes/_shared.md`,
    `system/modes/_profile.md`, `system/profile/master-profile.md`,
    `system/data/applied-companies.md`. If `master-profile.md` has `{{TOKEN}}`s, stop and run
    `profile-intake`; if `context/` is empty too, offer to interview the user and fill it for them.

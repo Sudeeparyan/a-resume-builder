@@ -93,7 +93,7 @@ The assistant runs `python3 system/scripts/doctor.py` and tells you in plain wor
 
 **One job:** paste the job ad (or a link) and say *"tailor my resume for this"*.
 
-**Ten jobs:** *"Give me 10 companies in Ireland this week with working links, and a resume for each."*
+**Ten jobs:** *"Give me 10 companies in the United States this week with working links, and a resume for each."*
 
 Either way, check [`output/SUMMARY.md`](../output/SUMMARY.md) afterwards — one page listing every
 resume made, every company found, what was skipped and why, and what to study this week. Each job also
@@ -128,6 +128,6 @@ from the study plan into your profile — the one route by which anything reache
 
 ## Adding a different country
 
-Ireland is pre-filled in `system/config/regions.yml`. To target elsewhere, copy the `ireland:` block,
+The United States is the only market. `system/config/regions.yml` holds the US pack; to target elsewhere, copy the `united-states:` block,
 edit the boards, hubs, work-authorisation routes and CV conventions, and set `default_region` to the
 new slug. Or just ask the assistant to do it.

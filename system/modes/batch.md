@@ -4,7 +4,7 @@ Use this when the user asks for **several jobs *and* the resumes to go with them
 request. Typical triggers:
 
 - "give me the latest 10 companies this week with working links"
-- "find 10 AI roles in Ireland and tailor a resume for each"
+- "find 10 AI roles in the United States and tailor a resume for each"
 - "10 companies + 10 resumes"
 
 It chains three existing pieces — `scan` → `verify-job-url` → `resume-tailor` — over a list, and
@@ -35,7 +35,7 @@ rules in `system/modes/_shared.md` apply to every row.
 ## Pipeline
 
 ### 1. Discover (scan)
-Run `system/modes/scan.md`: career pages first, then the Ireland `search_queries`. Gather at least ~1.5×N
+Run `system/modes/scan.md`: career pages first, then the US `search_queries`. Gather at least ~1.5×N
 candidates so there are enough survivors after verification.
 
 ### 2. Verify every link (mandatory)

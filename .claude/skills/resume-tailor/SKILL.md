@@ -20,7 +20,7 @@ Turn a job description into a tailored, compile-ready resume for the person desc
 
 - **A pasted JD** — most common. Treat the paste itself as the trigger; no instruction needed.
 - **A job URL** — fetch it first, then proceed. If fetching is blocked, ask for the pasted text.
-- **A title only** ("Data Analyst, Dublin") — proceed, but say you are working from the title alone
+- **A title only** ("Data Analyst, Fayetteville") — proceed, but say you are working from the title alone
   and that a full JD would sharpen the match by a lot.
 - **A company name only** — research the company's open roles first, or ask which one.
 

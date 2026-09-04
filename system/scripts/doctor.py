@@ -118,7 +118,10 @@ def check_context() -> None:
 # ---- 1. identity filled -------------------------------------------------------
 def check_identity() -> None:
     print("Identity")
-    tokens, _ = init_profile.scan()
+    # Only the live profile/config layer must be token-free. system/templates/**
+    # is SUPPOSED to keep its {{TOKENS}} — that is what makes it a template —
+    # and so is system/PLACEHOLDERS.md, which documents them.
+    tokens, _ = init_profile.scan(dirs=["system/profile", "system/config", "system/data"])
     blocking = sorted(t for t in tokens if t in init_profile.BLOCKING)
     if not blocking:
         ok("the essentials are filled — you can generate a resume")

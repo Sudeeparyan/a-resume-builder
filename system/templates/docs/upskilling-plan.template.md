@@ -12,7 +12,7 @@
 | | |
 |---|---|
 | Applied | {{DATE_APPLIED}} |
-| Realistic first contact | {{EXPECTED_CONTACT_WINDOW}} (typically 3–6 weeks in Ireland) |
+| Realistic first contact | {{EXPECTED_CONTACT_WINDOW}} (typically 3–6 weeks in the United States) |
 | Study time available | {{HOURS_PER_WEEK}} h/week |
 | Their process, if known | {{INTERVIEW_PROCESS}} |
 

@@ -37,20 +37,43 @@ Skills and agents live in `.claude/skills/` and `.github/agents/` — hidden, an
 ## Two things you'll actually type
 
 ```
-"Give me 10 companies in Ireland this week with working links, and a resume for each"
+/hunt              →  10 sponsorship-safe US jobs + 10 tailored one-page resumes (LaTeX + PDF)
 <paste a job ad>   →  one tailored, screening-software-ready resume + an honest match assessment
 ```
+
+Every prompt worth knowing is in **[PROMPTS.md](PROMPTS.md)**.
 
 ## Requirements
 
 Any AI coding assistant — Claude Code, GitHub Copilot, or Codex — opened in this folder. Any model.
 No API key. The scripts in `system/scripts/` are Python standard library only.
+LaTeX builds locally via Tectonic at `system/bin/tectonic.exe`; the `.tex` files also compile on
+Overleaf unchanged.
 
-## The market is pre-set to Ireland
+## The market is the United States, and only the United States
 
-Job boards, hubs, work-permit routes (Critical Skills / General Employment Permit, Stamp 1G) and CV
-conventions (no photo, no date of birth) are filled in at `system/config/regions.yml`. To target a
-different country, copy the `ireland:` block there and change `default_region`.
+Job boards, hubs, salary bands and resume conventions (one page, no photo, no date of birth) are
+in `system/config/regions.yml`. A role outside the US is not searched for, ranked, or listed.
+
+## The sponsorship rule
+
+| The posting says | What happens |
+|---|---|
+| Explicitly **won't sponsor** | **Excluded.** Never shown. |
+| **Says nothing** | **Shown** — most postings, and where most offers come from. |
+| Explicitly **will sponsor** | Shown, ranked top. |
+| Needs citizenship / clearance / ITAR | **Excluded** — cannot hire you regardless. |
+
+Ranking: **S** cap-exempt (no H-1B lottery) → **A** says yes → **B** proven sponsor → **C** silent.
+
+A company having no H-1B record is **not** a reason to skip it. Rules and patterns live in
+`system/config/sponsorship.yml`; the local sponsor index is 83,624 employers from USCIS FY2021–2023.
+
+## It never lets you apply twice
+
+`system/data/applications.tsv` tracks every application. Same company + same role is never
+surfaced again; a company that rejected you disappears for 180 days. Just say
+*"I got rejected by X"* and it updates.
 
 ## Setup and reference
 

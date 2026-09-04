@@ -1,92 +1,173 @@
 # ============================================================
-# Portal scanner configuration — company career pages to scan
-# directly, plus the saved searches to run.
+# Where to look, and what to type. United States only.
 #
-# Direct career pages beat aggregators: fewer applicants, fresher
-# listings, and no ghost jobs.
+# tracked_companies are checked DIRECTLY on their careers pages,
+# ahead of any job board — fresher listings, fewer applicants.
 # ============================================================
 
 meta:
-  last_updated: "{{DATE}}"
+  last_updated: "2026-09-04"
   scan_cadence: "weekly"
+  region: "united-states"
 
 # ------------------------------------------------------------
-# Tracked companies. Tier 1 = best odds (small, niche, actively
-# hiring for this skill set). Tier 3 = big names, long odds.
+# Tracked companies. `ats` lets the hunter hit the public JSON API
+# directly instead of scraping. `cap_exempt: true` ranks first —
+# those file H-1B year-round with no lottery.
+#
+# Add companies from context/07-preferences.md Q8 as they're named.
 # ------------------------------------------------------------
 tracked_companies:
 
-  - name: "{{COMPANY_1}}"
-    careers_url: "{{COMPANY_1_CAREERS_URL}}"
-    track: track_a
-    region: "ireland"
+  # ---- CAP-EXEMPT: no H-1B lottery, files any time of year ----
+  - name: "University of Arkansas"
+    careers_url: "https://jobs.uark.edu/"
+    cap_exempt: true
     tier: 1
-    size: "{{COMPANY_1_SIZE}}"
-    why: "{{COMPANY_1_WHY}}"        # why this person is a plausible hire here
+    why: "Current employer (TA + RA). Internal candidate; cap-exempt."
     enabled: true
 
-  - name: "{{COMPANY_2}}"
-    careers_url: "{{COMPANY_2_CAREERS_URL}}"
-    track: track_b
-    region: "ireland"
+  - name: "Oak Ridge National Laboratory"
+    careers_url: "https://jobs.ornl.gov/"
+    cap_exempt: true
     tier: 1
-    size: "{{COMPANY_2_SIZE}}"
-    why: "{{COMPANY_2_WHY}}"
+    why: "National lab; data/ML engineering roles; cap-exempt. Note: some roles require citizenship — the Group 2 screen catches those."
     enabled: true
 
-  # Add as many as you like. Keep `why` honest — it becomes the
-  # personalisation line in the cover letter.
+  - name: "Mayo Clinic"
+    careers_url: "https://jobs.mayoclinic.org/"
+    cap_exempt: true
+    tier: 1
+    why: "Academic medical center; medical-device and clinical data work matches her domain."
+    enabled: true
 
-  # -----------------------------------------------------------------
-  # IRELAND EMPLOYER STARTER LIST (reference only — not yet enabled).
-  # Uncomment and adapt the ones that fit THIS candidate's field.
-  # Grouped by domain so software / data / medtech people all have a
-  # starting point. Always confirm the live careers URL before scanning.
-  #
-  # Software / SaaS / AI (mostly Dublin):
-  #   Stripe, Intercom, HubSpot, Workday, Squarespace, Guidewire, Tines,
-  #   Sysdig, LetsGetChecked, SoftwareOne, Fenergo, Version1, Ergo.
-  # Big tech EMEA HQs (higher competition):
-  #   Google, Microsoft, Meta, Amazon, LinkedIn, Salesforce, OpenAI.
-  # Financial services / data (Dublin):
-  #   Mastercard, Fidelity Investments, Citi, AIB, Bank of Ireland, Stripe,
-  #   Fenergo, Prometric, Aon, PartnerRe.
-  # Medtech / pharma (Cork, Galway, Limerick):
-  #   Medtronic, Boston Scientific, Stryker, Johnson & Johnson, Abbott,
-  #   Pfizer, Eli Lilly, Johnson Controls, Solventum.
-  # Semiconductor / hardware (Cork, Limerick):
-  #   Analog Devices, Qualcomm, Intel, Dell, Cadence, Synopsys.
-  # -----------------------------------------------------------------
+  - name: "Broad Institute"
+    careers_url: "https://broadinstitute.avature.net/careers"
+    cap_exempt: true
+    tier: 1
+    why: "Nonprofit research institute; heavy computational/data engineering hiring."
+    enabled: true
+
+  - name: "Allen Institute"
+    careers_url: "https://alleninstitute.org/careers/"
+    cap_exempt: true
+    tier: 1
+    why: "Nonprofit research; computer vision and scientific data pipelines."
+    enabled: true
+
+  # ---- Medical device / health tech: matches her strongest domain thread ----
+  - name: "Medtronic"
+    careers_url: "https://jobs.medtronic.com/"
+    cap_exempt: false
+    tier: 1
+    why: "She already delivered a project FOR Medtronic via Soliton. Strongest narrative fit in the whole list."
+    enabled: true
+
+  - name: "Boston Scientific"
+    careers_url: "https://jobs.bostonscientific.com/"
+    cap_exempt: false
+    tier: 2
+    why: "Medical device; test automation and V&V roles match Track D."
+    enabled: true
+
+  - name: "Abbott"
+    careers_url: "https://www.jobs.abbott/"
+    cap_exempt: false
+    tier: 2
+    why: "Medical device; embedded and data roles."
+    enabled: true
+
+  - name: "Dexcom"
+    careers_url: "https://careers.dexcom.com/"
+    cap_exempt: false
+    tier: 2
+    why: "Continuous glucose monitoring — device telemetry streaming, close to her P1 project."
+    enabled: true
+
+  # ---- Data / streaming platform companies: direct P1 relevance ----
+  - name: "Databricks"
+    careers_url: "https://www.databricks.com/company/careers/open-positions"
+    ats: "greenhouse"
+    ats_token: "databricks"
+    cap_exempt: false
+    tier: 2
+    why: "She uses Databricks/Spark/Delta Lake at InsOps."
+    enabled: true
+
+  - name: "Confluent"
+    careers_url: "https://www.confluent.io/careers/"
+    ats: "greenhouse"
+    ats_token: "confluent"
+    cap_exempt: false
+    tier: 2
+    why: "Kafka company. Her P1 streaming platform is the portfolio piece for this."
+    enabled: true
+
+  - name: "Snowflake"
+    careers_url: "https://careers.snowflake.com/"
+    cap_exempt: false
+    tier: 3
+    why: "Large data employer, consistent sponsor. Note: Snowflake itself is a listed gap in her skills."
+    enabled: true
 
 # ------------------------------------------------------------
-# Saved searches. {{TOKENS}} are substituted from system/config/profile.yml
-# and system/config/regions.yml at scan time.
+# Search queries. {{TOKENS}} come from system/config/profile.yml.
 # ------------------------------------------------------------
 search_queries:
 
-  track_a:
-    - '"{{TRACK_A_TITLE_1}}" "Ireland" site:linkedin.com/jobs'
-    - '"{{TRACK_A_TITLE_2}}" ("Dublin" OR "Cork" OR "Galway" OR "Limerick") (site:lever.co OR site:greenhouse.io OR site:jobs.ashbyhq.com)'
-    - '"{{TRACK_A_TITLE_1}}" "Ireland" -senior -principal -"10+ years"'
-    - '"{{TRACK_A_TITLE_1}}" (site:ie.indeed.com OR site:irishjobs.ie OR site:jobs.ie)'
+  track_a_data:
+    - '"Data Engineer" ("new grad" OR "entry level" OR "Engineer I" OR "Junior") "United States" -senior -staff -principal'
+    - '"Analytics Engineer" OR "Data Platform Engineer" "Remote" United States {{CURRENT_YEAR}}'
+    - '("Data Engineer") ("Airflow" OR "Kafka" OR "Flink" OR "Databricks") (site:greenhouse.io OR site:lever.co OR site:jobs.ashbyhq.com)'
 
-  track_b:
-    - '"{{TRACK_B_TITLE_1}}" "Ireland" site:linkedin.com/jobs'
-    - '"{{TRACK_B_TITLE_2}}" "Ireland" (site:apply.workable.com OR site:recruitee.com)'
-    - '"{{TRACK_B_TITLE_1}}" OR "{{TRACK_B_TITLE_3}}" ("Dublin" OR "Cork" OR "Galway" OR "Limerick")'
+  track_b_ml:
+    - '"Machine Learning Engineer" ("new grad" OR "entry level" OR "I") "United States" -senior -staff'
+    - '"Computer Vision Engineer" OR "AI Engineer" "United States" {{CURRENT_YEAR}} -senior'
+    - '("MLOps" OR "Applied Scientist") "entry" OR "new grad" (site:greenhouse.io OR site:lever.co)'
 
-  graduate_and_entry:
-    - '"graduate programme" OR "graduate scheme" "Ireland" "{{TRACK_A_TITLE_1}}"'
-    - '"entry level" OR "junior" "{{TRACK_A_TITLE_1}}" "Ireland"'
-    - '"internship" "{{TRACK_A_TITLE_1}}" "Ireland" {{CURRENT_YEAR}}'
+  track_c_software:
+    - '"Software Engineer" ("new grad" OR "Engineer I" OR "entry level") "United States" -senior -staff -principal'
+    - '"Software Engineer" ("C#" OR ".NET" OR "C++") "United States" -senior'
+
+  track_d_embedded:
+    - '"Embedded Software Engineer" OR "Firmware Engineer" "United States" -senior -staff'
+    - '("Test Automation Engineer" OR "SDET" OR "V&V Engineer") ("medical device" OR "LabVIEW" OR "TestStand") "United States"'
+    - '"FPGA Engineer" OR "Embedded Engineer" ("entry" OR "new grad") "United States"'
+
+  cap_exempt:
+    - '("Research Engineer" OR "Data Engineer" OR "Software Engineer") site:*.edu careers {{CURRENT_YEAR}}'
+    - '("Scientific Software" OR "Research Software Engineer") ("national laboratory" OR "research institute")'
+    - '"Research Engineer" ("nonprofit research" OR "research institute") "United States"'
+
+  sponsorship_positive:
+    # Finds postings that SAY they sponsor. Highest-value query in the file.
+    - '"visa sponsorship available" ("Data Engineer" OR "Software Engineer" OR "Machine Learning Engineer") "United States"'
+    - '"will sponsor" H-1B ("new grad" OR "entry level") engineer {{CURRENT_YEAR}}'
+    - '"we sponsor" OR "sponsorship provided" software engineer "United States"'
 
 # ------------------------------------------------------------
-# Filters applied to every result before it reaches the tracker.
+# Pre-scoring filters.
 # ------------------------------------------------------------
 filters:
   max_posting_age_days: 30
-  exclude_title_words: ["Senior", "Principal", "Staff", "Head of", "Director", "VP"]
-  exclude_if_requires_years_over: "{{MAX_YEARS_REQUIRED}}"
-  require_location_match: true
+  exclude_title_words:
+    - "Senior"
+    - "Sr."
+    - "Staff"
+    - "Principal"
+    - "Lead"
+    - "Manager"
+    - "Head of"
+    - "Director"
+    - "VP"
+    - "Architect"
+    - "Distinguished"
+    - "Fellow"
+  exclude_if_requires_years_over: 4
+  require_us_location: true
   drop_if_in_applied_list: true
-  drop_agency_reposts: true       # same role listed by 3+ recruiters = low-signal
+  drop_if_rejected_within_days: 180
+  drop_agency_reposts: true
+
+  # The hard sponsorship gate lives in system/config/sponsorship.yml.
+  apply_sponsorship_screen: true

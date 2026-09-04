@@ -8,10 +8,10 @@ ones still unfilled. Tokens are always `{{UPPER_SNAKE_CASE}}` inside double brac
 |-------|---------|---------|
 | `{{FULL_NAME}}` | Name as it appears on the resume header | Jane Q. Candidate |
 | `{{EMAIL}}` | Contact email | jane@example.com |
-| `{{PHONE}}` | Contact phone with country code | +353 89 000 0000 |
-| `{{CITY}}` | City | Dublin |
-| `{{COUNTRY}}` | Country | Ireland |
-| `{{POSTAL_LINE}}` | Optional second header line | Dublin, D01 XXXX |
+| `{{PHONE}}` | Contact phone with country code | +1 (479) 301-1366 |
+| `{{CITY}}` | City | Fayetteville |
+| `{{COUNTRY}}` | Country | the United States |
+| `{{POSTAL_LINE}}` | Optional second header line | Fayetteville, AR |
 | `{{LINKEDIN_URL}}` | LinkedIn profile URL | https://linkedin.com/in/... |
 | `{{GITHUB_URL}}` | GitHub/GitLab URL (omit if none) | https://github.com/... |
 | `{{PORTFOLIO_URL}}` | Portfolio/site URL (omit if none) | https://... |
@@ -45,8 +45,8 @@ appear first.
 ## Targets & region
 | Token | Meaning |
 |-------|---------|
-| `{{REGION}}` | Country or market being targeted, e.g. Ireland |
-| `{{REGION_SLUG}}` | Lowercase folder name, e.g. `ireland` |
+| `{{REGION}}` | Country or market being targeted, e.g. the United States |
+| `{{REGION_SLUG}}` | Lowercase folder name, e.g. `united-states` |
 | `{{TARGET_ROLE_1}}`… | Job titles to search for |
 | `{{COMP_RANGE}}` / `{{CURRENCY}}` | Target compensation band |
 

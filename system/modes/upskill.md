@@ -5,7 +5,7 @@ Runs automatically after every tailored resume (`resume-tailor` Step 8). Output 
 
 ## Why this mode exists
 
-Shortlisting takes weeks. From "applied" to "first interview" is typically **3–6 weeks** in the Irish
+Shortlisting takes weeks. From "applied" to "first interview" is typically **3–6 weeks** in the US
 market, and often longer for larger employers. That waiting time is the single most usable asset the
 candidate has: if they know *exactly* what this company will probe, they can close real gaps before
 anyone asks about them.

@@ -23,6 +23,11 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:  # pragma: no cover
+    pass
+
 STOP = set("""
 a about above after again against all am an and any are aren as at be because been before being
 below between both but by can cannot could couldn did didn do does doesn doing don down during each

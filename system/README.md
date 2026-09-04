@@ -9,7 +9,7 @@ Left here for reference only:
 | Path | What it is |
 |------|-----------|
 | `config/profile.yml` | Your identity, tracks and targets — filled in from `context/` |
-| `config/regions.yml` | The Ireland market pack: job boards, hubs, work-permit routes, CV conventions |
+| `config/regions.yml` | The the United States market pack: job boards, hubs, work-permit routes, CV conventions |
 | `config/portals.yml` | Career pages to check and the saved searches to run |
 | `modes/_shared.md` | The rules every task follows: scoring, honesty, ATS writing |
 | `modes/_profile.md` | Your personal overrides — these beat the shared rules |

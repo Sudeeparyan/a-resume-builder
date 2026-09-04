@@ -1,15 +1,11 @@
 # ============================================================
-# Region packs — everything market-specific lives here so the
-# job-hunter agent stays generic. This template ships with a
-# filled Ireland pack as the default market; a United States pack
-# was added for this candidate (confirmed target market).
+# Region pack — United States only.
 #
-# These are GENERIC MARKET FACTS — no personal data.
-# Candidate-specific values (work auth status, target roles) are
-# still {{TOKENS}} filled from system/config/profile.yml per person.
+# This workspace targets the US market exclusively. A role outside
+# the US is not searched for, not ranked, and not listed as skipped.
 #
-# To add another market later: copy a block below and set
-# `default_region` to its slug. Everything else adapts automatically.
+# These are GENERIC MARKET FACTS. Candidate-specific values come from
+# system/config/profile.yml and context/.
 # ============================================================
 
 default_region: "united-states"
@@ -20,165 +16,140 @@ regions:
     display_name: "United States"
     country_code: "US"
     currency: "USD"
-    language: "English"
+    language: "English (US)"
 
     work_authorisation:
-      # Candidate's own status comes from system/config/profile.yml → candidate.work_authorisation.
+      # NOTE: the key stays British-spelled — system/scripts/init_profile.py maps
+      # `work_authorisation` -> {{WORK_AUTH}}. Renaming it breaks that silently.
       candidate_status: "{{WORK_AUTH}}"
-      # Generic US routes worth filtering/searching for (market facts, same for everyone):
+
       notes: >-
-        Common routes for a non-US-citizen graduate of a US university:
-        F-1 students get 12 months of Optional Practical Training (OPT) after graduation with no
-        employer sponsorship needed; STEM-degree graduates (most Computer Engineering programs
-        qualify) can extend this by 24 months (STEM OPT), for up to 36 months total, still without
-        sponsorship — but the employer must be enrolled in E-Verify.
-        Longer term, employers sponsor an H-1B specialty-occupation visa (subject to an annual
-        lottery, cap-subject unless the employer is cap-exempt, e.g. universities/nonprofits/some
-        research orgs). Some employers instead sponsor an O-1 (extraordinary ability — a real path
-        for a candidate with peer-reviewed publications like ICCV) or, rarely, a green card
-        petition directly (PERM labor certification, EB-2/EB-3).
-        A posting that says "no sponsorship" or "must be authorized to work without sponsorship"
-        excludes most F-1/OPT candidates once their OPT window runs out — flag rather than hide
-        these, per this workspace's rules.
+        Routes for a non-US-citizen graduate of a US university, in the order they apply:
+
+        1. F-1 OPT — 12 months of post-completion work authorization. NO employer sponsorship
+           needed. The candidate can start immediately at any employer.
+        2. STEM OPT extension — +24 months (36 total) for STEM degrees. Computer Engineering
+           qualifies. NO sponsorship needed, but the EMPLOYER MUST BE ENROLLED IN E-VERIFY.
+        3. H-1B — employer-sponsored specialty occupation. Cap-subject employers enter an annual
+           lottery; FY2026 saw roughly 339,000 eligible registrations for 85,000 slots (~25%).
+        4. H-1B cap-EXEMPT — universities, nonprofit research organizations affiliated with
+           universities, nonprofit research orgs, and government research bodies. These file
+           ANY TIME OF YEAR WITH NO LOTTERY. Structurally the strongest route.
+        5. O-1 (extraordinary ability) — no lottery. Peer-reviewed publications strengthen it.
+        6. Green card — PERM / EB-2 / EB-3, employer-initiated, long timeline.
+
+        IMPORTANT for screening: "must be authorized to work in the United States" does NOT
+        disqualify a candidate on active OPT — they ARE authorized. Only an explicit refusal to
+        sponsor ("without sponsorship now or in the future", "we do not sponsor") disqualifies.
+        See system/config/sponsorship.yml for the exact patterns.
+
       sponsorship_routes:
-        - "F-1 OPT (12 months) — post-graduation work authorization, no employer sponsorship needed"
-        - "STEM OPT extension (24 months) — for STEM degrees at E-Verify employers, no sponsorship needed yet"
-        - "H-1B specialty-occupation visa — employer-sponsored, annual lottery, cap-subject"
-        - "O-1 (extraordinary ability) — employer-sponsored; peer-reviewed publications (e.g. ICCV) strengthen this route"
-      hours_limit: "Full-time only under OPT/STEM OPT; must be a job related to the degree field"
+        - "F-1 OPT (12 months) — no sponsorship needed, works immediately"
+        - "STEM OPT extension (24 months) — no sponsorship needed; employer must be E-Verify enrolled"
+        - "H-1B cap-exempt — universities, nonprofits, research orgs; no lottery, any time of year"
+        - "H-1B cap-subject — annual lottery, ~25% selection rate"
+        - "O-1 extraordinary ability — no lottery; publications strengthen the case"
+        - "PERM / EB-2 / EB-3 green card — employer-initiated, multi-year"
+
+      hours_limit: "Full-time; employment must relate to the degree field under OPT/STEM OPT"
+
+    # Cap-exempt employer categories — ranked first by the job hunter.
+    cap_exempt_categories:
+      - "Universities and colleges (any H-1B, year-round, no lottery)"
+      - "Nonprofit organizations affiliated with a university"
+      - "Nonprofit research organizations"
+      - "Government research organizations (national labs, NIH, NASA centers)"
+      - "Academic medical centers and university hospitals"
 
     job_boards:
-      - name: "LinkedIn Jobs (United States)"
-        query_pattern: 'site:linkedin.com/jobs "United States" ("{{TARGET_ROLE_1}}" OR "{{TARGET_ROLE_2}}")'
-      - name: "Indeed (US)"
-        query_pattern: 'site:indeed.com "{{TARGET_ROLE_1}}"'
-      - name: "ATS platforms"
-        query_pattern: '("{{TARGET_ROLE_1}}") ("Remote" OR "United States") (site:lever.co OR site:greenhouse.io OR site:jobs.ashbyhq.com OR site:apply.workable.com OR site:myworkdayjobs.com)'
-      - name: "Wellfound (startups)"
-        query_pattern: 'site:wellfound.com "United States" "{{TARGET_ROLE_1}}"'
-      - name: "Built In (tech hub job boards)"
+      - name: "Indeed (via the Indeed MCP connector — PRIMARY, structured, returns full JD text)"
+        method: "mcp"
+        tool: "mcp__claude_ai_Indeed__search_jobs"
+        notes: "country_code: US. Use get_job_details for the full JD, which feeds both the sponsorship screen and the tailoring step."
+      - name: "Greenhouse public job board API"
+        method: "api"
+        query_pattern: "https://boards-api.greenhouse.io/v1/boards/{board_token}/jobs?content=true"
+        notes: "No auth, no pagination — returns every job in one response."
+      - name: "Lever public postings API"
+        method: "api"
+        query_pattern: "https://api.lever.co/v0/postings/{company}?mode=json"
+        notes: "No auth. Supports team, location, commitment, level, skip, limit."
+      - name: "Ashby public job board API"
+        method: "api"
+        query_pattern: "https://api.ashbyhq.com/posting-api/job-board/{company}?includeCompensation=true"
+      - name: "LinkedIn Jobs (US)"
+        method: "search"
+        query_pattern: 'site:linkedin.com/jobs "{{TARGET_ROLE_1}}" "United States"'
+      - name: "ATS platforms (broad search)"
+        method: "search"
+        query_pattern: '("{{TARGET_ROLE_1}}") ("Remote" OR "United States") (site:lever.co OR site:greenhouse.io OR site:jobs.ashbyhq.com OR site:apply.workable.com OR site:myworkdayjobs.com OR site:smartrecruiters.com)'
+      - name: "Built In (tech hub boards)"
+        method: "search"
         query_pattern: 'site:builtin.com "{{TARGET_ROLE_1}}"'
-      - name: "USAJOBS (federal — note: most federal roles require US citizenship)"
-        query_pattern: 'site:usajobs.gov "{{TARGET_ROLE_1}}"'
-      - name: "H1BGrader / myvisajobs (sponsorship-history lookup, not a job board)"
-        query_pattern: 'site:myvisajobs.com "{{TARGET_ROLE_1}}" H1B sponsor'
+      - name: "Wellfound (startups)"
+        method: "search"
+        query_pattern: 'site:wellfound.com "United States" "{{TARGET_ROLE_1}}"'
+      - name: "HigherEdJobs (CAP-EXEMPT — universities)"
+        method: "search"
+        query_pattern: 'site:higheredjobs.com "{{TARGET_ROLE_1}}"'
+      - name: "University and national-lab careers pages (CAP-EXEMPT)"
+        method: "search"
+        query_pattern: '"{{TARGET_ROLE_1}}" (site:*.edu OR site:*.org) careers'
 
-    # Domain-neutral hubs — covers software, data, and AI/ML so the same pack
-    # serves any candidate's field.
+    # Sponsorship evidence lookups — RANKING signals, never filters.
+    sponsorship_lookups:
+      - name: "USCIS H-1B Employer Data Hub (bulk CSV, FY2009-FY2023)"
+        url_pattern: "https://www.uscis.gov/sites/default/files/document/data/h1b_datahubexport-{year}.csv"
+        notes: "Verified: FY2023 = 2.2MB. FY2024+ bulk exports are not published. Cached locally by sponsor_data_refresh.py."
+      - name: "USCIS H-1B Employer Data Hub (interactive, through FY2026 Q3)"
+        url: "https://www.uscis.gov/tools/reports-and-studies/h-1b-employer-data-hub"
+      - name: "DOL LCA disclosure data (FY2026 Q3, current through June 2026)"
+        url: "https://www.dol.gov/media/LCA_Disclosure_Data_FY2026_Q3.xlsx"
+        notes: "252MB xlsx. Opt-in deep refresh only."
+      - name: "E-Verify employer search (needed for STEM OPT; no bulk download exists)"
+        url: "https://www.e-verify.gov/about-e-verify/e-verify-data/how-to-find-participating-employers"
+        notes: "Search-only, updated daily. Checked per finalist."
+      - name: "H1BGrader"
+        url_pattern: "https://h1bgrader.com/h1b-sponsors/{company-slug}"
+      - name: "MyVisaJobs"
+        url: "https://www.myvisajobs.com/employers/search.aspx"
+
     hubs:
-      - city: "San Francisco Bay Area, CA"
-        notes: "Largest tech hub: big tech, AI/ML startups, venture-backed software — also the most competitive and highest cost of living."
-      - city: "Seattle, WA"
-        notes: "Big tech (Amazon, Microsoft) plus a strong cloud/data-engineering scene; no state income tax."
-      - city: "Austin, TX"
-        notes: "Fast-growing tech hub, many companies relocating there; medtech and semiconductor presence too; no state income tax."
-      - city: "New York, NY"
-        notes: "Fintech, ad tech, enterprise software, and a growing AI scene; also healthcare/insurance tech (relevant to InsOps-style experience)."
-      - city: "Boston, MA"
-        notes: "Biotech/medtech cluster plus strong AI/ML research ties (relevant to her medical-device and CV research background)."
-      - city: "Raleigh-Durham, NC"
-        notes: "Research Triangle — biotech, data infrastructure, lower cost of living, notable H-1B-sponsoring employers."
       - city: "Remote (US)"
-        notes: "Many data/AI roles are remote-within-US; still filter for visa sponsorship since remote does not remove that requirement."
+        notes: "Many data/AI roles are remote-within-US. Remote does not remove the sponsorship question."
+      - city: "San Francisco Bay Area, CA"
+        notes: "Largest tech hub; most H-1B filings, also the most competitive."
+      - city: "Seattle, WA"
+        notes: "Big tech plus strong cloud/data engineering. No state income tax."
+      - city: "Austin, TX"
+        notes: "Fast-growing; medtech and semiconductor presence. No state income tax."
+      - city: "New York, NY"
+        notes: "Fintech, ad tech, enterprise software, healthcare/insurance tech."
+      - city: "Boston, MA"
+        notes: "Biotech/medtech cluster plus dense academic and research employers — many cap-exempt."
+      - city: "Chicago, IL"
+        notes: "InsOps is here; insurance and logistics tech."
+      - city: "Raleigh-Durham, NC"
+        notes: "Research Triangle — biotech, data infrastructure, three research universities."
+      - city: "Minneapolis, MN"
+        notes: "Medical-device capital (Medtronic HQ). Direct match for her medical-device history."
 
-    # Indicative USD annual bands (market facts, not a personal target).
     salary_bands:
-      junior: "USD 75k–105k (new grad / 0–2 yrs)"
-      mid: "USD 105k–150k (2–5 yrs)"
-      senior: "USD 150k–210k+ (5+ yrs / lead)"
+      junior: "USD 75k-105k (new grad / 0-2 yrs)"
+      mid: "USD 105k-150k (2-5 yrs)"
+      senior: "USD 150k-210k+ (5+ yrs / lead)"
 
     cv_conventions:
       pages: 1
-      photo: false               # US resumes do not include a photo
-      date_of_birth: false       # no DOB, marital status, or nationality
+      photo: false
+      date_of_birth: false
       phone_format: "(XXX) XXX-XXXX"
       notes: >-
-        US English spelling. No photo, DOB, or marital status. State work-authorization briefly if
-        it's a plus (e.g. "Authorized to work in the US under STEM OPT through [date]") — never
-        omit it if a posting screens on it, but don't lead with it either. One page is the norm
-        even for a Master's graduate with research experience; two pages only once experience
-        clearly doesn't fit. Include a LinkedIn URL; a GitHub URL matters more here than in most
-        markets given her project-heavy background.
+        US English spelling. No photo, no date of birth, no marital status, no nationality.
+        ONE PAGE — this is a hard requirement for this candidate, not a preference, and it holds
+        even with a master's plus research experience. Include a GitHub URL; her background is
+        project-heavy and it matters more than in most markets. Use full URLs rather than
+        hyperlinked words so ATS text extraction keeps them.
+        Work authorization is NOT stated by default (see Q10 in context/QUESTIONS-FOR-YOU.md).
 
-    summary_file: "output/SUMMARY.md"   # the one page the user reads
-
-  ireland:
-    display_name: "Ireland"
-    country_code: "IE"
-    currency: "EUR"
-    language: "English"
-
-    work_authorisation:
-      # Candidate's own status comes from system/config/profile.yml → candidate.work_authorisation.
-      candidate_status: "{{WORK_AUTH}}"
-      # Generic Irish routes worth filtering/searching for (market facts, same for everyone):
-      notes: >-
-        Common routes into the Irish market:
-        EU/EEA/Swiss citizens need no permit.
-        Non-EU graduates of Irish institutions can use the Third Level Graduate Scheme (Stamp 1G)
-        to work full-time for up to 24 months after the course.
-        Longer term, employers sponsor a Critical Skills Employment Permit (roles on the
-        Critical Skills Occupations List — most software, data, and engineering roles qualify) or a
-        General Employment Permit. Stamp 4 holders and spouses of CSEP holders work without a permit.
-      sponsorship_routes:
-        - "Critical Skills Employment Permit (CSEP) — degree-level roles on the critical-skills list"
-        - "General Employment Permit (GEP) — roles above the salary threshold not on the CSEP list"
-        - "Third Level Graduate Scheme (Stamp 1G) — post-study work, up to 24 months"
-      hours_limit: "20 hrs/week during term, 40 hrs/week during holidays (Stamp 2 students)"
-
-    job_boards:
-      - name: "LinkedIn Jobs (Ireland)"
-        query_pattern: 'site:linkedin.com/jobs "Ireland" ("{{TARGET_ROLE_1}}" OR "{{TARGET_ROLE_2}}")'
-      - name: "Indeed Ireland"
-        query_pattern: 'site:ie.indeed.com "{{TARGET_ROLE_1}}"'
-      - name: "IrishJobs.ie"
-        query_pattern: 'site:irishjobs.ie "{{TARGET_ROLE_1}}"'
-      - name: "Jobs.ie"
-        query_pattern: 'site:jobs.ie "{{TARGET_ROLE_1}}"'
-      - name: "ATS platforms"
-        query_pattern: '("{{TARGET_ROLE_1}}") ("Dublin" OR "Cork" OR "Galway" OR "Limerick" OR "Ireland" OR "Remote Ireland") (site:lever.co OR site:greenhouse.io OR site:jobs.ashbyhq.com OR site:apply.workable.com)'
-      - name: "Wellfound (startups)"
-        query_pattern: 'site:wellfound.com "Ireland" "{{TARGET_ROLE_1}}"'
-      - name: "Silicon Republic (tech news + jobs)"
-        query_pattern: 'site:siliconrepublic.com/jobs "{{TARGET_ROLE_1}}"'
-      - name: "publicjobs.ie (Irish public sector)"
-        query_pattern: 'site:publicjobs.ie "{{TARGET_ROLE_1}}"'
-
-    # Domain-neutral hubs — covers software, data, medtech/pharma, and finance
-    # so the same pack serves any candidate's field.
-    hubs:
-      - city: "Dublin"
-        notes: "Largest hub: big tech EMEA HQs, financial services, SaaS, AI startups, pharma HQs."
-      - city: "Cork"
-        notes: "Pharma & medtech, semiconductors, and enterprise tech (Apple, Dell, Stryker, Pfizer, Qualcomm)."
-      - city: "Galway"
-        notes: "Medical devices cluster (Medtronic, Boston Scientific) plus SAP, Genesys, and analytics."
-      - city: "Limerick"
-        notes: "Medtech and analog/semiconductor (Analog Devices, Stryker), plus fintech and manufacturing."
-      - city: "Waterford / Athlone / Sligo"
-        notes: "Regional pharma, medtech and shared-services roles — often lower competition."
-      - city: "Remote (Ireland)"
-        notes: "Many EMEA roles are remote-within-Ireland; filter for right-to-work in Ireland."
-
-    # Indicative EUR annual bands (market facts, not a personal target).
-    salary_bands:
-      junior: "EUR 32k–48k (graduate / 0–2 yrs)"
-      mid: "EUR 50k–75k (2–5 yrs)"
-      senior: "EUR 75k–110k+ (5+ yrs / lead)"
-
-    cv_conventions:
-      pages: 2
-      photo: false               # Irish CVs do not include a photo
-      date_of_birth: false       # no DOB, marital status, or nationality beyond right-to-work
-      phone_format: "+353 8X XXX XXXX"
-      notes: >-
-        Irish/EU English spelling. No photo, DOB, or marital status. State right-to-work briefly
-        (e.g. "Eligible to work in Ireland — Stamp 1G" or "EU citizen"). One page for graduates,
-        two for experienced. Include a LinkedIn URL; recruiters expect it.
-
-    summary_file: "output/SUMMARY.md"   # the one page the user reads
-
-  # ---- To add a second market later, copy the ireland block above and rename it.
-  # "united-kingdom":
-  #   display_name: "United Kingdom"
-  #   ...
+    summary_file: "output/SUMMARY.md"

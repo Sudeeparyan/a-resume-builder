@@ -1,0 +1,82 @@
+\documentclass[letterpaper,10pt]{article}
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=black,urlcolor=blue,citecolor=blue]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\ifdefined\pdfglyphtounicode
+  \IfFileExists{glyphtounicode.tex}{\input{glyphtounicode}}{}
+\fi
+\pagestyle{fancy}\fancyhf{}\fancyfoot{}\renewcommand{\headrulewidth}{0pt}\renewcommand{\footrulewidth}{0pt}
+\addtolength{\oddsidemargin}{-0.6in}\addtolength{\evensidemargin}{-0.6in}\addtolength{\textwidth}{1.2in}\addtolength{\topmargin}{-0.85in}\addtolength{\textheight}{1.5in}
+\urlstyle{same}\raggedbottom\raggedright\setlength{\tabcolsep}{0in}\setlength{\parskip}{0pt}
+\setlist[itemize]{topsep=0pt,itemsep=0.4pt,parsep=0pt,leftmargin=0.15in}
+\titleformat{\section}{\vspace{2pt}\scshape\raggedright\normalsize\bfseries}{}{0em}{}[\color{black}\titlerule \vspace{2pt}]
+\ifdefined\pdfgentounicode \pdfgentounicode=1 \fi
+\newcommand{\resumeSubheading}[4]{\vspace{1pt}\item\begin{tabular*}{0.985\textwidth}[t]{l@{\extracolsep{\fill}}r}\textbf{#1} & #2 \\ \textit{\small#3} & \textit{\small#4} \\ \end{tabular*}\vspace{1pt}}
+\newcommand{\resumeSingleHeading}[2]{\vspace{1pt}\item\begin{tabular*}{0.985\textwidth}{l@{\extracolsep{\fill}}r}\textbf{#1} & \small#2 \\ \end{tabular*}\vspace{2pt}}
+\newcommand{\resumeItem}[1]{\item\small{#1}}
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.0in,label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}\vspace{-2pt}}
+\newcommand{\resumeItemListStart}{\begin{itemize}[leftmargin=0.17in]}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{2pt}}
+\begin{document}
+\begin{center}
+  \textbf{\Large \scshape Annie Prasanna Manoharan}\\ \vspace{2pt}
+  \small +1 (479) 301-1366 $|$ \href{mailto:annieprm0501@gmail.com}{\textcolor{blue}{\underline{annieprm0501@gmail.com}}} $|$ \href{https://annie0159.github.io/Portfolio/}{\textcolor{blue}{\underline{https://annie0159.github.io/Portfolio/}}} $|$ \href{https://github.com/Annie0159}{\textcolor{blue}{\underline{https://github.com/Annie0159}}}
+\end{center}\vspace{-6pt}
+\section{Research Profile}
+\small{M.S. Computer Engineering graduate with research experience using computer vision and deep learning to process and analyze annotated image and video data. Brings measurable model evaluation, reproducible preprocessing workflows, and medical-device software validation experience.}
+\vspace{-3pt}
+\section{Education}
+\resumeSubHeadingListStart
+  \resumeSubheading{University of Arkansas, Fayetteville, AR}{Aug 2024 -- May 2026}{M.S. Computer Engineering}{Coursework: Artificial Intelligence, Machine Learning, Image Processing, Data Mining}
+  \resumeSubheading{Sri Ramakrishna Engineering College, India}{Aug 2019 -- May 2023}{B.E. Electronics and Communication Engineering}{}
+\resumeSubHeadingListEnd
+\section{Technical Skills}
+\begin{itemize}[leftmargin=0.0in,label={}]
+\small{\item{\textbf{Machine Learning \& Vision}: Python, PyTorch, deep learning, YOLO11n-Pose, OC-SORT, LSTM, Res-UNet, computer vision, image processing \\ \textbf{Data \& Research}: SQL, Pandas, NumPy, data preprocessing, annotation pipelines, data validation, feature engineering, model evaluation \\ \textbf{Software \& Platforms}: C++, C\#, WPF/.NET, Flask, Git, Docker, LabVIEW, NI TestStand \\ \textbf{ML / Data Tools}: Scikit-learn, Apache Kafka, Apache Flink, ClickHouse, Grafana, data visualization, LangChain, FAISS}}
+\end{itemize}\vspace{-5pt}
+\section{Projects}
+\resumeSubHeadingListStart
+  \resumeSingleHeading{DualFit: Two-Stage Virtual Try-On}{PyTorch, Res-UNet, flow-based warping, inpainting}
+  \resumeItemListStart
+    \resumeItem{Developed a two-stage image pipeline combining flow-based garment warping with Res-UNet synthesis to improve alignment and visual realism.}
+    \resumeItem{Built preprocessing and inpainting workflows, then trained and evaluated on VITON-HD: 24.9 PSNR, 0.913 SSIM, and 5.261 FID.}
+  \resumeItemListEnd
+  \resumeSingleHeading{MiGa: Multi-Chicken Gait Assessment}{YOLO11n-Pose, OC-SORT, LSTM, PyTorch}
+  \resumeItemListStart
+    \resumeItem{Built a keypoint-estimation, multi-object-tracking, and many-to-one LSTM classification workflow for video analysis.}
+    \resumeItem{Produced 4,569 annotated frames, 11,422 bounding boxes, and 55 expert-annotated sequences; achieved 91.83\% keypoint mAP, 0.93 MOTA, and 0.91 IDF1.}
+  \resumeItemListEnd
+  \resumeSingleHeading{Local LLM-Powered News Research Platform}{Python, LangChain, FAISS, Ollama, Llama 3.2}
+  \resumeItemListStart
+    \resumeItem{Built a local ETL and RAG workflow to ingest, clean, chunk, embed, and retrieve unstructured web content on demand.}
+    \resumeItem{Used FAISS and nomic-embed-text for persistent vector storage and LangChain to orchestrate semantic queries over local Llama 3.2 models.}
+  \resumeItemListEnd
+\resumeSubHeadingListEnd
+\section{Professional Experience}
+\resumeSubHeadingListStart
+  \resumeSingleHeading{Research Assistant, AICV Lab, University of Arkansas}{Sep 2024 -- Jan 2026}
+  \resumeItemListStart
+    \resumeItem{Integrated YOLO11n-Pose, OC-SORT, and an LSTM network for multi-subject gait analysis from image and video data.}
+    \resumeItem{Developed automated preprocessing and annotation workflows that transformed raw frames into structured model inputs and evaluation datasets.}
+    \resumeItem{Trained and evaluated image-synthesis and tracking models using mAP, MOTA, IDF1, PSNR, SSIM, and FID metrics.}
+  \resumeItemListEnd
+  \resumeSingleHeading{Engineering Intern / Project Engineer, Soliton Technologies}{Jul 2022 -- Jun 2024}
+  \resumeItemListStart
+    \resumeItem{Designed a C\# WPF desktop application integrating C\#, Python, and LabVIEW-based test workflows for medical-device verification and validation.}
+    \resumeItem{Implemented reusable object-oriented components and automated testing workflows to improve development and validation efficiency.}
+    \resumeItem{Collaborated with cross-functional engineering teams to debug system-level issues, troubleshoot application behavior, and deliver production-ready software.}
+  \resumeItemListEnd
+  \resumeSingleHeading{Teaching Assistant, University of Arkansas}{Sep 2024 -- May 2026}
+  \resumeItemListStart
+    \resumeItem{Supported 100+ students in Programming Foundations through laboratory instruction, debugging, and mentorship in C++ fundamentals.}
+    \resumeItem{Supported Database Management Systems instruction for approximately 180 students, answering technical questions and assisting with assignments and assessments.}
+  \resumeItemListEnd
+\resumeSubHeadingListEnd
+\end{document}

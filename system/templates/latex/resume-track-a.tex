@@ -1,23 +1,26 @@
 %==============================================================================
-%  RESUME BASE — TRACK A  (experienced layout)
+%  RESUME — TRACK A  (experience-led)
 %
-%  Section order: Summary -> Education -> Experience -> Projects -> Skills
-%                 -> Publications -> Achievements -> Certifications
-%  Use for: candidates with real employment history to lead with.
-%  Pair this base with whichever track you like in system/config/profile.yml
-%  (tracks.track_a.latex_base / tracks.track_b.latex_base).
+%  Section order: Education -> Technical Skills -> Professional Experience
+%                 -> Projects
+%  Use for: Data/Analytics Engineering and Software Engineering, where a real
+%  employer name is the strongest thing on the page.
+%
+%  This layout reproduces the one Annie already uses successfully across her
+%  14 resume variants. Do not redesign it.
 %
 %  RULES FOR THE TAILORING AGENT
+%   - ONE PAGE. Not a preference. If it spills, cut bullets, never shrink margins.
 %   - Never change the document class, margins, or the \newcommand definitions.
 %   - Only content between \begin{document} and \end{document} is rewritten.
 %   - Delete unused blocks entirely; never leave a {{TOKEN}} in a sent resume.
-%   - Escape % & _ # $ in content ( 40\% , R\&D ).
-%   - Keep the glyphtounicode line and \pdfgentounicode=1 — they are what make
+%   - Escape % & _ # $ in content ( 94\% , R\&D ).
+%   - Keep \pdfgentounicode=1 and the glyphtounicode input — they are what make
 %     the PDF's text extractable by ATS parsers.
+%   - Compiles with Tectonic locally AND on Overleaf unchanged.
 %==============================================================================
 
-
-\documentclass[letterpaper,10.5pt]{article}
+\documentclass[letterpaper,10pt]{article}
 
 \usepackage{latexsym}
 \usepackage[empty]{fullpage}
@@ -29,202 +32,115 @@
 \usepackage{xcolor}
 \usepackage[
     colorlinks=true,
-    linkcolor=black,   % internal links stay black
-    urlcolor=blue,     % external links in blue
+    linkcolor=black,
+    urlcolor=blue,
     citecolor=blue
-]{hyperref}   % loaded exactly once - a second \usepackage{hyperref} with different
-              % options is an 'Option clash' error
+]{hyperref}   % loaded exactly once - a second \usepackage{hyperref} is an option clash
 \usepackage{fancyhdr}
 \usepackage[english]{babel}
-% fontawesome5 is optional: guarded so the file still builds on a minimal TeX install
-\IfFileExists{fontawesome5.sty}{\usepackage{fontawesome5}}{}
 \usepackage{tabularx}
 % glyphtounicode makes the PDF's text extractable by ATS parsers - keep it
-\IfFileExists{glyphtounicode.tex}{\input{glyphtounicode}}{}
-\usepackage{ifthen}
+% ATS text extraction: glyphtounicode is a pdfTeX feature. Guard it so the file
+% compiles unchanged under pdfLaTeX (Overleaf's default) AND XeTeX (Tectonic),
+% where correct ToUnicode mapping is produced natively anyway.
+\ifdefined\pdfglyphtounicode
+  \IfFileExists{glyphtounicode.tex}{\input{glyphtounicode}}{}
+\fi
 \pagestyle{fancy}
 \fancyhf{}
 \fancyfoot{}
 \renewcommand{\headrulewidth}{0pt}
 \renewcommand{\footrulewidth}{0pt}
 
-% Adjust margins tighter
-\addtolength{\oddsidemargin}{-0.55in}
-\addtolength{\evensidemargin}{-0.55in}
-\addtolength{\textwidth}{1.1in}
-\addtolength{\topmargin}{-0.8in}
-\addtolength{\textheight}{1.35in}
+% Tight margins - matches the density of her existing one-pagers
+\addtolength{\oddsidemargin}{-0.6in}
+\addtolength{\evensidemargin}{-0.6in}
+\addtolength{\textwidth}{1.2in}
+\addtolength{\topmargin}{-0.85in}
+\addtolength{\textheight}{1.5in}
 
 \urlstyle{same}
-
 \raggedbottom
 \raggedright
 \setlength{\tabcolsep}{0in}
-\setlength{\parskip}{0pt} % remove paragraph gaps
+\setlength{\parskip}{0pt}
 
-% Compact lists
-\setlist[itemize]{topsep=1pt, itemsep=0.5pt, parsep=0pt, leftmargin=0.15in}
+\setlist[itemize]{topsep=0pt, itemsep=0.4pt, parsep=0pt, leftmargin=0.15in}
 
-% Section formatting
 \titleformat{\section}{
-  \vspace{2pt}\scshape\raggedright\normalsize
-}{}{0em}{}[\color{black}\titlerule \vspace{1pt}]
+  \vspace{2pt}\scshape\raggedright\normalsize\bfseries
+}{}{0em}{}[\color{black}\titlerule \vspace{2pt}]
 
-\pdfgentounicode=1
+\ifdefined\pdfgentounicode \pdfgentounicode=1 \fi
 
 %-------------------------
 % Custom commands
-\newcommand{\resumeItem}[1]{
-  \item\small{{#1}}
-}
+%-------------------------
 
+% Two-line entry: bold title + right-aligned date, then italic subtitle + right sub.
+% Used for Education and for multi-line Experience entries.
 \newcommand{\resumeSubheading}[4]{
   \vspace{1pt}\item
-    \begin{tabular*}{0.97\textwidth}[t]{l@{\extracolsep{\fill}}r}
+    \begin{tabular*}{0.985\textwidth}[t]{l@{\extracolsep{\fill}}r}
       \textbf{#1} & #2 \\
       \textit{\small#3} & \textit{\small #4} \\
-    \end{tabular*}\vspace{0.5pt}
-}
-
-\newcommand{\resumeProjectHeading}[2]{
-    \item
-    \begin{tabular*}{0.97\textwidth}{l@{\extracolsep{\fill}}r}
-      \small#1 & #2 \\
     \end{tabular*}\vspace{1pt}
 }
 
-\newcommand{\resumeSubItem}[1]{\resumeItem{#1}\vspace{-1pt}}
-
-\renewcommand\labelitemii{$\vcenter{\hbox{\tiny$\bullet$}}$}
-
-\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.15in, label={}]} 
-\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
-\newcommand{\resumeItemListStart}{\begin{itemize}[leftmargin=0.15in]}
-\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{0.5pt}}
-
-% -------------------------
-% Hierarchical Experience Commands
-% -------------------------
-
-% Robust empty-argument test (expansion-safe, no ifthen quirks).
-\newcommand{\ifnotempty}[2]{\if\relax\detokenize{#1}\relax\else#2\fi}
-
-% \job{Employer}{subtitle or empty}{extra or empty}{date, right-aligned}
-% Empty arguments are skipped cleanly - no "There's no line here to end" error.
-\newcommand{\job}[4]{%
-    \vspace{2pt}%
-    \noindent\textbf{#1}\hfill #4\par
-    \ifnotempty{#2}{{\small #2}\par}%
-    \ifnotempty{#3}{#3\par}%
-    \vspace{2pt}%
+% One-line entry: bold title on the left, plain text on the right.
+% Used for Experience rows and Project rows (project stack goes right).
+\newcommand{\resumeSingleHeading}[2]{
+  \vspace{1pt}\item
+    \begin{tabular*}{0.985\textwidth}{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & \small#2 \\
+    \end{tabular*}\vspace{2pt}
 }
 
-% \project{Role or project title}{location or empty}{extra or empty}
-\newcommand{\project}[3]{%
-    \vspace{1pt}%
-    \noindent\textit{#1}\ifnotempty{#2}{ #2}\par
-    \ifnotempty{#3}{#3\par}%
-    \vspace{1pt}%
+% Sub-project line inside a research role (e.g. "Project: MiGa ...")
+\newcommand{\resumeProjectLine}[1]{
+  \vspace{1pt}\item[]{\small\textit{#1}}\vspace{2pt}
 }
 
-\newcommand{\subproject}[1]{%
-    \vspace{0.5pt}%
-    \noindent\textbf{#1}\par
-    \vspace{-1pt}%
-}
+\newcommand{\resumeItem}[1]{\item\small{#1}}
 
-% Passthrough wrapper used around the Experience section content.
-% (Defined here so the document compiles cleanly with no "undefined control sequence" error.)
-\newcommand{\sectioncontent}[1]{#1}
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.0in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}\vspace{-2pt}}
+\newcommand{\resumeItemListStart}{\begin{itemize}[leftmargin=0.17in]}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{2pt}}
 
-% soul gives the underlined links; guarded with a plain-underline fallback so the
-% file still builds on a minimal TeX install (Overleaf always has soul)
-\IfFileExists{soul.sty}{\usepackage{soul}}{}
-\providecommand{\ul}[1]{\underline{#1}}  % fallback if soul is unavailable
-
-%-------------------------------------------
-%%%%%%  RESUME STARTS HERE  %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%==============================================================================
 \begin{document}
 
 %----------HEADING----------
+% Full URLs, not hyperlinked words: ATS text extraction keeps them.
 \begin{center}
-    \textbf{\Huge \scshape Annie Prasanna Manoharan} \\ \vspace{1pt}
+    \textbf{\Large \scshape {{FULL_NAME}}} \\ \vspace{2pt}
     \small {{PHONE}} $|$
-    \href{mailto:{{EMAIL}}}{\textcolor{blue}{\ul{{{EMAIL}}}}} $|$
-    \href{{{PORTFOLIO_URL}}}{\textcolor{blue}{\ul{Portfolio}}} $|$
-    \href{{{LINKEDIN_URL}}}{\textcolor{blue}{\ul{LinkedIn}}} $|$
-    \href{{{GITHUB_URL}}}{\textcolor{blue}{\ul{GitHub}}} \\
-    {{CITY}}, United States
+    \href{mailto:{{EMAIL}}}{\textcolor{blue}{\underline{{{EMAIL}}}}} $|$
+    \href{{{PORTFOLIO_URL}}}{\textcolor{blue}{\underline{{{PORTFOLIO_URL}}}}} $|$
+    \href{{{GITHUB_URL}}}{\textcolor{blue}{\underline{{{GITHUB_URL}}}}}
 \end{center}
-% Delete any link above that the candidate does not have. Do not leave a dead \href.
-
-%-----------SUMMARY-----------
-% Rewritten per JD: <role identity from the JD> + <honest experience statement>
-% + <the JD's core technologies> + <strongest relevant proof>.
-\section{Summary}
-\begin{itemize}[leftmargin=0.15in,label={}]
-    \item \small{ {{SUMMARY_PARAGRAPH}} }
-\end{itemize}
+\vspace{-6pt}
 
 %-----------EDUCATION-----------
 \section{Education}
   \resumeSubHeadingListStart
     \resumeSubheading
-      {{{INSTITUTION_1}}}{{{EDU_LOCATION_1}}}
-      {{{DEGREE_1}}}{{{EDU_DATES_1}}}
+      {{{INSTITUTION_1}}}{{{EDU_DATES_1}}}
+      {{{DEGREE_1}}}{}
+    % Coursework line: keep ONLY the modules this JD names. Delete if not relevant.
+    \resumeProjectLine{Coursework: {{COURSEWORK_1}}}
+    % Second degree: delete this block entirely for software/data roles if space is tight.
     \resumeSubheading
-      {{{INSTITUTION_2}}}{{{EDU_LOCATION_2}}}
-      {{{DEGREE_2}}}{{{EDU_DATES_2}}}
+      {{{INSTITUTION_2}}}{{{EDU_DATES_2}}}
+      {{{DEGREE_2}}}{}
   \resumeSubHeadingListEnd
 
-%-----------EXPERIENCE-----------
-\section{Experience}
-\sectioncontent{
-
-\job{{{EMPLOYER_1}}}{}{}{\hspace{1mm}{{EMP_DATES_1}}}
-
-    \project{{{ROLE_1}}}{{{EMP_LOCATION_1}}}{}
-    \begin{itemize}
-        \item {{EMP_BULLET_1_1}}
-        \item {{EMP_BULLET_1_2}}
-        \item {{EMP_BULLET_1_3}}
-    \end{itemize}
-
-\job{{{EMPLOYER_2}}}{}{}{\hspace{1mm}{{EMP_DATES_2}}}
-
-    \project{{{ROLE_2}}}{{{EMP_LOCATION_2}}}{}
-    \begin{itemize}
-        \item {{EMP_BULLET_2_1}}
-        \item {{EMP_BULLET_2_2}}
-    \end{itemize}
-
-}
-
-%-----------PROJECTS-----------
-% REPLACE ENTIRELY per application. Two projects, reframed to the company's
-% domain using the map in system/profile/positioning.md. Reframe the title and the
-% framing only — the stack and the outcome stay exactly as recorded.
-\section{Projects}
-\job{\href{{{PROJECT_A1_LINK}}}{\textcolor{blue}{\ul{{{PROJECT_A1_NAME}}}}}}{}{}{\hspace{1mm}{{PROJECT_A1_DATES}}}
-
-\begin{itemize}
-    \item {{PROJECT_A1_DESCRIPTION}}
-    \item {{PROJECT_A1_CONTRIBUTION}}
-    \item {{PROJECT_A1_OUTCOME}}
-\end{itemize}
-
-\job{{{PROJECT_A2_NAME}}}{}{}{\hspace{1mm}{{PROJECT_A2_DATES}}}
-
-\begin{itemize}
-    \item {{PROJECT_A2_DESCRIPTION}}
-    \item {{PROJECT_A2_CONTRIBUTION}}
-\end{itemize}
-
 %-----------TECHNICAL SKILLS-----------
-% Reorder categories so the JD's top requirements appear first.
-% Drop any category the JD does not care about.
+% Reorder categories so the JD's top requirements come first.
+% Drop any category the JD does not care about. 4-6 lines is the target.
 \section{Technical Skills}
-\begin{itemize}[leftmargin=0.15in, label={}]
+\begin{itemize}[leftmargin=0.0in, label={}]
     \small{\item{
         \textbf{ {{SKILL_CATEGORY_1}} }{: {{SKILL_LIST_1}} } \\
         \textbf{ {{SKILL_CATEGORY_2}} }{: {{SKILL_LIST_2}} } \\
@@ -233,26 +149,56 @@
         \textbf{ {{SKILL_CATEGORY_5}} }{: {{SKILL_LIST_5}} }
     }}
 \end{itemize}
+\vspace{-4pt}
 
-%-----------PUBLICATIONS----------- (delete the section if there are none)
-\section{Publications}
-\begin{itemize}[leftmargin=0.15in]
-    \item \small{ {{PUBLICATION_1}} }
-    \item \small{ {{PUBLICATION_2}} }
-\end{itemize}
+%-----------PROFESSIONAL EXPERIENCE-----------
+\section{Professional Experience}
+  \resumeSubHeadingListStart
 
-%-----------ACHIEVEMENTS----------- (delete if empty)
-\section{Achievements}
-\begin{itemize}[leftmargin=0.15in]
-    \item \small{ {{AWARD_1}} }
-    \item \small{ {{AWARD_2}} }
-\end{itemize}
+    \resumeSingleHeading
+      {{{ROLE_1}}, {{EMPLOYER_1}}}{{{EMP_DATES_1}}}
+      \resumeItemListStart
+        \resumeItem{{{EMP_BULLET_1_1}}}
+        \resumeItem{{{EMP_BULLET_1_2}}}
+        \resumeItem{{{EMP_BULLET_1_3}}}
+      \resumeItemListEnd
 
-%-----------CERTIFICATIONS----------- (delete if empty)
-\section{Certifications}
-\begin{itemize}[leftmargin=0.15in]
-    \item \small{ {{CERT_1}} }
-    \item \small{ {{CERT_2}} }
-\end{itemize}
+    \resumeSingleHeading
+      {{{ROLE_2}}, {{EMPLOYER_2}}}{{{EMP_DATES_2}}}
+      \resumeItemListStart
+        \resumeItem{{{EMP_BULLET_2_1}}}
+        \resumeItem{{{EMP_BULLET_2_2}}}
+        \resumeItem{{{EMP_BULLET_2_3}}}
+      \resumeItemListEnd
+
+    \resumeSingleHeading
+      {{{ROLE_3}}, {{EMPLOYER_3}}}{{{EMP_DATES_3}}}
+      \resumeItemListStart
+        \resumeItem{{{EMP_BULLET_3_1}}}
+        \resumeItem{{{EMP_BULLET_3_2}}}
+      \resumeItemListEnd
+
+  \resumeSubHeadingListEnd
+
+%-----------PROJECTS-----------
+% The FIRST project is the signature project - chosen for this employer alone,
+% never reused across applications. See system/data/signature-projects.md.
+\section{Projects}
+  \resumeSubHeadingListStart
+
+    \resumeSingleHeading{{{PROJECT_1_NAME}}}{{{PROJECT_1_STACK}}}
+      \resumeItemListStart
+        \resumeItem{{{PROJECT_1_BULLET_1}}}
+        \resumeItem{{{PROJECT_1_BULLET_2}}}
+        \resumeItem{{{PROJECT_1_BULLET_3}}}
+      \resumeItemListEnd
+
+    \resumeSingleHeading{{{PROJECT_2_NAME}}}{{{PROJECT_2_STACK}}}
+      \resumeItemListStart
+        \resumeItem{{{PROJECT_2_BULLET_1}}}
+        \resumeItem{{{PROJECT_2_BULLET_2}}}
+      \resumeItemListEnd
+
+  \resumeSubHeadingListEnd
 
 \end{document}

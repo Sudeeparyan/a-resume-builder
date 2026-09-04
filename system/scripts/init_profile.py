@@ -5,7 +5,7 @@ init_profile.py — set up and audit a candidate workspace.
   python3 system/scripts/init_profile.py --check
       Report every unfilled {{PLACEHOLDER}} and every file still holding template text.
 
-  python3 system/scripts/init_profile.py --set FULL_NAME="Jane Doe" --set CITY=Dublin
+  python3 system/scripts/init_profile.py --set FULL_NAME="Jane Doe" --set CITY=Fayetteville
       Substitute one or more tokens across system/profile/, system/config/ and system/templates/.
 
   python3 system/scripts/init_profile.py --from-yaml system/config/profile.yml
@@ -51,8 +51,8 @@ BLOCKING = {
 }
 
 
-def iter_files():
-    for d in SCAN_DIRS:
+def iter_files(dirs=None):
+    for d in (dirs if dirs is not None else SCAN_DIRS):
         base = ROOT / d
         if not base.exists():
             continue
@@ -61,11 +61,15 @@ def iter_files():
                 yield p
 
 
-def scan():
-    """Return {token: [relative paths]} and {path: count}."""
+def scan(dirs=None):
+    """Return {token: [relative paths]} and {path: count}.
+
+    `dirs` narrows the scan. doctor.py passes the profile/config layer only,
+    because system/templates/** is supposed to keep its {{TOKENS}}.
+    """
     tokens: dict[str, list[str]] = {}
     per_file: dict[str, int] = {}
-    for p in iter_files():
+    for p in iter_files(dirs):
         try:
             text = p.read_text(encoding="utf-8")
         except UnicodeDecodeError:

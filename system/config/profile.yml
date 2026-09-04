@@ -23,111 +23,160 @@ runtime:
 
 candidate:
   full_name: "Annie Prasanna Manoharan"
-  email: "{{EMAIL}}"
-  phone: "{{PHONE}}"
-  location: "{{CITY}}, United States"
-  linkedin: "{{LINKEDIN_URL}}"
-  github: "{{GITHUB_URL}}"
-  portfolio_url: "{{PORTFOLIO_URL}}"
+  email: "annieprm0501@gmail.com"
+  phone: "+1 (479) 301-1366"
+  location: "Fayetteville, AR, United States"   # inferred from the university; NEVER printed on a resume until confirmed (Q5)
+  linkedin: ""                                   # none on record — see Q11
+  github: "https://github.com/Annie0159"
+  portfolio_url: "https://annie0159.github.io/Portfolio/"
 
   # Status — be literal. These drive honest claims on the resume.
-  current_status: "Recently completed MS Computer Engineering (University of Arkansas); currently working at InsOps Inc. in data engineering / AI; job-searching for a full-time role"
-  work_authorisation: "Needs employer visa sponsorship in the United States (exact route — OPT/STEM-OPT vs. H-1B — unconfirmed, see context/QUESTIONS-FOR-YOU.md)"
-  years_professional_experience: "~2 years at Soliton Technologies (Jul 2022 - Jun 2024) plus current, date-unconfirmed work at InsOps — no rolled-up total; see system/profile/master-profile.md do-not-claim list"
-  education_highest: "MS Computer Engineering, University of Arkansas ({{EDU_DATES_1}})"
-  availability: "{{AVAILABILITY}}"
+  current_status: "Completed MS Computer Engineering (University of Arkansas, May 2026); worked at InsOps Inc. from Jul 2024 (title and current status unconfirmed — Q2); job-searching for a full-time US role"
+  work_authorisation: "F-1 OPT, ACTIVE. Authorized to work in the US now with no sponsorship. STEM-eligible, so a STEM OPT extension (+24 months) is available at an E-Verify employer. Needs H-1B sponsorship longer term. Cap-exempt employers file year-round with no lottery."
+  years_professional_experience: "DO NOT STATE A TOTAL. Q1 is unresolved: 11 resumes show Soliton as one 2-year role, 3 show internship (Jul 2022-May 2023) + Project Engineer (Jun 2023-Jun 2024). Plus 2 years of graduate TA/RA work. See the do-not-claim list in system/profile/master-profile.md."
+  education_highest: "MS Computer Engineering, University of Arkansas (Aug 2024 - May 2026)"
+  availability: "Presumed immediately available — unconfirmed (Q9)"
 
 # ------------------------------------------------------------
 # Two career tracks — proposed from the evidence in context/, not yet
 # confirmed by Annie. See system/profile/positioning.md for the full
 # reasoning and the competition read on each.
 # ------------------------------------------------------------
+# Four active tracks, all confirmed. Reference layouts are her own resume variants.
+# Full reasoning and the competition read: system/profile/positioning.md
 tracks:
   track_a:
-    name: "Data & AI Engineering"
+    name: "Data / Analytics Engineering"
     latex_base: "system/templates/latex/resume-track-a.tex"
-    primary_titles:
-      - "Data Engineer"
-      - "Machine Learning Engineer"
-      - "AI Engineer"
-    secondary_titles:
-      - "Data Scientist"
-      - "Applied AI Engineer"
+    reference_variant: "_DE"
+    lead_section: "experience"
+    primary_titles: ["Data Engineer", "Analytics Engineer", "Data Platform Engineer"]
+    secondary_titles: ["ETL Developer", "Big Data Engineer", "Data Engineer I"]
+    signature_pool: ["P1", "P4", "P6"]
 
   track_b:
-    name: "Software & Test Automation Engineering"
+    name: "ML / AI Engineering"
     latex_base: "system/templates/latex/resume-track-b.tex"
-    primary_titles:
-      - "Software Engineer"
-      - "Test Automation Engineer"
-      - "Applications Engineer"
-    secondary_titles:
-      - "Embedded Software Engineer"
+    reference_variant: "_A / _DS"
+    lead_section: "research"
+    primary_titles: ["Machine Learning Engineer", "AI Engineer", "Computer Vision Engineer"]
+    secondary_titles: ["Applied Scientist", "MLOps Engineer", "NLP Engineer"]
+    signature_pool: ["P2", "P3", "P4", "P5"]
+
+  track_c:
+    name: "Software Engineering"
+    latex_base: "system/templates/latex/resume-track-a.tex"
+    reference_variant: "_S"
+    lead_section: "experience"
+    primary_titles: ["Software Engineer", "Software Development Engineer", "Backend Engineer"]
+    secondary_titles: ["Software Engineer I", "Application Engineer", "Associate Software Engineer"]
+    signature_pool: ["P6", "P1", "P10"]
+
+  track_d:
+    name: "Embedded / Test Automation"
+    latex_base: "system/templates/latex/resume-track-b.tex"
+    reference_variant: "_ES / _H"
+    lead_section: "experience"
+    primary_titles: ["Embedded Software Engineer", "Firmware Engineer", "Test Automation Engineer"]
+    secondary_titles: ["V&V Engineer", "SDET", "FPGA Engineer"]
+    signature_pool: ["P7", "P8", "P9"]
+    note: "Least contested track and the strongest profile fit. Under-applied relative to its odds."
+
+# Recommended mix per 10-job batch (see positioning.md):
+# 4 track_a / 2 track_b / 2 track_c / 2 track_d
+batch_mix:
+  track_a: 4
+  track_b: 2
+  track_c: 2
+  track_d: 2
 
 # ------------------------------------------------------------
 # Archetypes — how a JD is recognised and framed.
 # `signals` are the words whose presence in a JD selects this archetype.
 # ------------------------------------------------------------
+# Track selection = count JD keyword hits, highest wins.
 archetypes:
-  - name: "Data Engineer"
+  - name: "Data / Analytics Engineer"
     track: track_a
-    level: "junior-mid"     # ~1-3 yrs equivalent professional + research experience
+    level: "entry-junior"
     fit: primary
-    signals: ["data pipeline", "ETL", "Airflow", "Spark", "SQL"]
+    signals: ["data pipeline", "ETL", "ELT", "Airflow", "Spark", "Databricks", "Kafka",
+              "Flink", "SQL", "warehouse", "lakehouse", "ingestion", "streaming", "dbt"]
 
   - name: "Machine Learning / AI Engineer"
-    track: track_a
-    level: "junior-mid"
-    fit: secondary
-    signals: ["machine learning", "computer vision", "PyTorch", "LLM", "generative AI"]
+    track: track_b
+    level: "entry-junior"
+    fit: primary
+    signals: ["machine learning", "deep learning", "computer vision", "PyTorch", "LLM",
+              "generative AI", "RAG", "NLP", "model training", "inference", "MLOps"]
 
   - name: "Software Engineer"
-    track: track_b
-    level: "junior-mid"
+    track: track_c
+    level: "entry-junior"
     fit: primary
-    signals: ["software engineer", "full stack", "test automation", "C#", ".NET"]
+    signals: ["software engineer", "backend", "OOP", "C++", "C#", ".NET", "data structures",
+              "algorithms", "design patterns", "API", "SDLC"]
 
   - name: "Embedded / Test Automation Engineer"
-    track: track_b
-    level: "junior-mid"
-    fit: secondary
-    signals: ["embedded systems", "firmware", "LabVIEW", "hardware-software"]
+    track: track_d
+    level: "entry-junior"
+    fit: primary
+    signals: ["embedded", "firmware", "RTOS", "microcontroller", "FPGA", "Verilog",
+              "LabVIEW", "TestStand", "V&V", "verification", "validation", "SDET",
+              "test automation", "hardware"]
 
 narrative:
-  headline: "Data & AI Engineer — published CV/generative-AI researcher (ICCV 2025) who also ships production data pipelines"
+  # NOTE: the previous version of this block asserted an ICCV 2025 paper and a journal
+  # publication. NOT ONE of her 14 resumes mentions any publication. That claim is
+  # UNVERIFIED and has been removed from the active narrative so it cannot leak onto a
+  # resume. See Q3 in context/QUESTIONS-FOR-YOU.md — if confirmed, restore it, because it
+  # would be her strongest differentiator and an O-1 argument.
+  headline: "Data & AI engineer with production streaming and cloud pipeline work, measured computer-vision research, and solo ownership of a shipped medical-device application"
   positioning_story: >-
-    Annie is a Computer Engineering graduate (MS, University of Arkansas) whose career moved from
-    electronics and embedded systems, through professional software test automation at Soliton
-    Technologies, into AI/ML research (two publications, including ICCV 2025) and now production
-    data engineering at InsOps. She has owned a customer-facing production project end-to-end
-    (Soliton/Medtronic), built real streaming and RAG systems solo, and published peer-reviewed
-    generative-AI research — most candidates have one of these, not all three.
+    Annie is a Computer Engineering graduate (MS, University of Arkansas, May 2026) whose work
+    moved from electronics and embedded systems, through professional software test automation at
+    Soliton Technologies, into computer-vision research at the AICV Lab and production data
+    engineering at InsOps. She owned a customer-facing medical-device project solo
+    (Soliton/Medtronic), built a sub-second Kafka/Flink/ClickHouse streaming platform end to end,
+    and produced research with real measured results. The unusual part is the range: FPGA firmware
+    at one end, RAG pipelines at the other, production AWS pipelines in between.
   differentiators:
-    - "Published, peer-reviewed generative-AI/computer-vision research (ICCV 2025 plus a journal publication) — rare alongside real production pipeline work"
-    - "Solo, end-to-end ownership of a customer-facing production project (Medtronic, via Soliton) — sprint planning through delivery, with direct customer communication"
-    - "Genuine hardware-to-LLM range: FPGA and embedded systems through data engineering to generative AI, evidenced by real shipped projects at every layer"
+    - "Solo, end-to-end ownership of a customer-facing production project (Medtronic, via Soliton) — ~94% of manual test cases automated under medical-device validation requirements"
+    - "Genuine hardware-to-LLM range: FPGA/MicroBlaze SoC and embedded firmware, through production cloud data pipelines, to RAG and fine-tuning support — with shipped work at every layer"
+    - "Real streaming depth that is uncommon at entry level: Flink event-time semantics, OVER windows, watermark strategies for out-of-order data, and ClickHouse MergeTree schema design"
+    - "Already inside a cap-exempt employer (university TA and RA) — cap-exempt employers file H-1B year-round with no lottery"
   proof_points:
-    - name: "DualFit — ICCV 2025"
-      evidence: "system/profile/master-profile.md — Projects & Build Bank — DualFit"
+    - name: "Real-Time Medical IoT Analytics Platform"
+      evidence: "context/04-projects.md — P1"
+      track: "track_a"
+    - name: "MiGa — mAP 91.83% @ 1250 FPS, MOTA 0.93, IDF1 0.91"
+      evidence: "context/03-experience.md — AICV Lab"
       track: "track_a"
     - name: "Soliton — sole developer, Medtronic project"
-      evidence: "system/profile/master-profile.md — Work Experience — Soliton Technologies, Project Engineer"
+      evidence: "context/03-experience.md — Soliton Technologies"
       track: "track_b"
 
 compensation:
   currency: "USD"
-  target_range: "{{COMP_RANGE}}"
-  minimum: "{{COMP_MINIMUM}}"
-  notes: "{{COMP_NOTES}}"
+  target_range: ""      # OPEN — see Q6. Market reference only: entry USD 75-105k, mid 105-150k.
+  minimum: ""           # OPEN — see Q6
+  notes: "No salary floor or target has been stated. Do not negotiate or filter on pay until Q6 is answered."
 
 location:
-  primary_region: "united-states"       # matches the key in system/config/regions.yml
-  city: "{{CITY}}"
-  timezone: "{{TIMEZONE}}"
+  primary_region: "united-states"
+  city: "Fayetteville, AR"    # inferred from the university, unconfirmed (Q5)
+  timezone: "America/Chicago"
   acceptable:
-    - "{{LOCATION_PREF_1}}"
-    - "{{LOCATION_PREF_2}}"
-  relocation: "Yes — open to relocating for the right opportunity (context/07-preferences.md, from HR.pdf Q21)"
+    - "Remote (US)"
+    - "San Francisco Bay Area, CA"
+    - "Seattle, WA"
+    - "Austin, TX"
+    - "New York, NY"
+    - "Boston, MA"
+    - "Chicago, IL"
+    - "Raleigh-Durham, NC"
+    - "Minneapolis, MN"
+  relocation: "UNCONFIRMED (Q5). Until answered, search all hubs plus Remote (US) and do not down-rank on location."
 
 # ------------------------------------------------------------
 # Which openings to chase first. Tuned for callback probability,
@@ -135,16 +184,24 @@ location:
 # ------------------------------------------------------------
 competition_strategy:
   prefer:
+    - "CAP-EXEMPT employers first — universities, national labs, nonprofit research orgs, academic medical centers. They file H-1B year-round with NO lottery. FY2026 ran ~339k registrations for 85k slots (~25%). She is already inside a university system."
+    - "Postings that explicitly offer sponsorship — rare, and the highest-converting query in portals.yml"
     - "Companies under 200 employees — fewer applicants per opening"
     - "Postings less than 7 days old — apply before the pile builds"
-    - "Roles needing an uncommon skill combination this person actually has"
-    - "Non-obvious employers in the sector (suppliers, agencies, public bodies)"
-    - "Companies with a track record of sponsoring H-1B/OPT hires (check myvisajobs.com or similar before applying — see system/config/regions.yml → united-states)"
+    - "Medical-device and health-tech employers — the Soliton/Medtronic history plus the ventilator-telemetry project is a genuine domain thread most applicants lack"
+    - "Embedded / test-automation roles — the least contested of her four tracks and the one her profile fits best"
+    - "Roles needing an uncommon skill combination she actually has (Flink event-time semantics, LabVIEW+Python V&V, FPGA+data)"
   avoid:
-    - "Roles demanding more years than her real, non-rounded timeline plus a stretch — see system/profile/master-profile.md do-not-claim list"
+    - "Roles demanding more years than her real timeline — Q1 is unresolved, so cap at 4 years required"
     - "Postings older than 30 days with no re-post"
-    - "Roles requiring a language or clearance this person does not have"
-    - "Roles explicitly stating no visa sponsorship — flag and list separately, never hide, per this workspace's rules"
+    - "Senior/Staff/Principal/Lead titles"
+  exclude_hard:
+    # These are the ONLY sponsorship-related exclusions. See system/config/sponsorship.yml.
+    - "Postings that EXPLICITLY refuse to sponsor"
+    - "Postings requiring US citizenship, a security clearance, ITAR/EAR status, or permanent residency"
+  never_exclude_on:
+    - "Absence of H-1B history — most employers never appear in that data, and many sponsor after the interviews"
+    - "'Must be authorized to work in the US' — she IS authorized, on active OPT"
 
 exclusions:
   # Companies already applied to — the job-hunter must never resurface these.

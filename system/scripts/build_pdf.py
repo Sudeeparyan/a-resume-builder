@@ -149,6 +149,74 @@ TOO_LONG_ADVICE = """
   parsers do worse on them.
 """
 
+TOO_SHORT_ADVICE = """
+  This compiled to one page, but it looks under-filled — real content likely
+  ran out well before the bottom margin. A thin page reads as "not much to
+  say" and is exactly as costly as a two-page overflow. Before shipping it,
+  check context/ for real material that isn't on the page yet:
+    1. context/03-experience.md — every real job not blocked by an open
+       question (see context/QUESTIONS-FOR-YOU.md) should be on the page.
+    2. context/04-projects.md — three projects, not one or two, for a
+       graduate one-pager.
+    3. context/05-skills.md — every Strong/Used-it category, on its own
+       line, not crammed into one paragraph.
+    4. context/02-education.md — every module relevant to this JD from the
+       full coursework list, not just the first few.
+  Never invent a bullet or a project to fill the page. If real content is
+  genuinely exhausted, say so to the candidate instead of shipping it silent.
+"""
+
+# Rough floor for "not obviously thin" on this workspace's template (10pt,
+# tight margins). Character count is a weak proxy for vertical fill — one
+# extra job/project heading uses real space (spacing above/below the
+# heading, a new title line) without adding many characters, so two
+# resumes a few hundred characters apart can look very different when
+# rendered. This catches only the clearly-sparse case; it is NOT a
+# substitute for actually compiling and reading the last third of the
+# page, which is the real check in references/tailoring-playbook.md §7.
+MIN_FILL_CHARS = 3300
+
+
+def extract_text_chars(pdf: Path) -> int:
+    """Count characters drawn via PDF Tj/TJ text-show operators.
+
+    Approximate, and deliberately handles both string forms since the
+    engine matters here: pdflatex/xelatex usually emit literal strings
+    "(...)Tj"; Tectonic embeds CID-keyed subset fonts and shows text as
+    hex glyph strings "<...>Tj" instead, at 2 bytes/glyph (that's exactly
+    why the template loads glyphtounicode — so those glyph IDs still
+    extract as real text for ATS parsers). Undercounting here would just
+    make the under-fill warning silently useless, so both forms count.
+    """
+    data = pdf.read_bytes()
+    blobs = [data]
+    for m in re.finditer(rb"stream\r?\n", data):
+        start = m.end()
+        end = data.find(b"endstream", start)
+        if end == -1:
+            continue
+        chunk = data[start:end]
+        for wbits in (15, -15, 47):
+            try:
+                blobs.append(zlib.decompress(chunk, wbits))
+                break
+            except zlib.error:
+                continue
+    joined = b"\n".join(blobs)
+
+    total = 0
+    for m in re.finditer(rb"\(((?:[^()\\]|\\.)*)\)\s*Tj", joined):
+        total += len(m.group(1))
+    for m in re.finditer(rb"<([0-9A-Fa-f]+)>\s*Tj", joined):
+        total += len(m.group(1)) // 4  # 2 bytes (4 hex digits) per glyph
+    for m in re.finditer(rb"\[((?:[^\[\]]|\\.)*)\]\s*TJ", joined):
+        group = m.group(1)
+        for s in re.finditer(rb"\(((?:[^()\\]|\\.)*)\)", group):
+            total += len(s.group(1))
+        for s in re.finditer(rb"<([0-9A-Fa-f]+)>", group):
+            total += len(s.group(1)) // 4
+    return total
+
 
 def build_one(tex: Path, want_pages: int, check_only: bool) -> bool:
     print(f"\n=== {tex}")
@@ -207,6 +275,13 @@ def build_one(tex: Path, want_pages: int, check_only: bool) -> bool:
         return False
 
     print(f"  ok    built {pdf.name}  ({pages} page, {size_kb:.0f} KB)")
+
+    if want_pages == 1:
+        chars = extract_text_chars(pdf)
+        if chars < MIN_FILL_CHARS:
+            print(f"  WARN  only ~{chars} characters of text on the page (expected {MIN_FILL_CHARS}+)")
+            print(TOO_SHORT_ADVICE)
+
     return True
 
 

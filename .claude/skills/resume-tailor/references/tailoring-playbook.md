@@ -193,9 +193,40 @@ version. The pre-audit draft never becomes the deliverable.
 | Graduate / < 1 year | 1 page, completely filled |
 | Academic CV (research roles) | No limit, publications first |
 
+**A thin one-pager is exactly as bad as a two-pager, and the failure that gets missed more often.**
+`build_pdf.py` hard-fails a resume that overflows to page 2 — nothing stops a resume from
+compiling to one page that is 60% real content and 40% white space. That is not a safe default; it
+reads as "this candidate doesn't have much to say" and it is the single most common way this
+workspace has under-served an application. Treat visible bottom-of-page whitespace as a bug with
+the same severity as overflow, not a stylistic nicety.
+
+**Before shipping any one-pager, run this checklist:**
+
+1. **Every real job in `context/03-experience.md` that isn't blocked by an open question is on
+   the page**, unless it is genuinely irrelevant to the track being applied for. Leaving out a real
+   role because "the résumé already had enough" is how a resume goes thin — a real internship or
+   RA/TA appointment is worth more than empty space below the last section.
+2. **Three projects, not one or two**, per §5c/§6 — the graduate-CV target is three, and dropping to
+   two to save space is the wrong lever when the page has room.
+3. **Technical Skills lists every category the person actually has** (per
+   `context/05-skills.md`'s Strong/Used it tiers), reordered for the JD — not trimmed down to a
+   single cramped line because it "looks tidy". Real categories on separate lines read as more
+   substantial and are easier for both a human and an ATS parser to scan than one dense paragraph.
+4. **Education promotes every relevant module** from the union list in `context/02-education.md`,
+   not just the two or three that happened to be typed first.
+5. **Compile it and look at the bottom third of the page.** If there is a visible gap, that is not
+   "clean whitespace" — it is missing real content. Go back to steps 1–4 and add the next
+   highest-scoring real item before shipping.
+
+**If, after all of that, real content genuinely runs out** — say so plainly to the candidate rather
+than silently shipping a short page, and only then consider a slightly larger font/line-spacing
+step within the base template's own limits (never below the base's font size). Never invent a
+bullet, a number, or a project to fill the gap — an honest half-empty page is always shipped
+short and flagged, not padded with fiction.
+
 Too long → trim the oldest role's bullets, then the least relevant project bullet, then the least
-relevant publication. Too short → add technical depth to existing bullets, add a project, add
-relevant coursework. Never pad with soft-skill filler.
+relevant publication. Too short → work through the checklist above before trimming anything else;
+never pad with soft-skill filler and never fabricate content to reach the bottom of the page.
 
 ## 8. Gaps — and the "did you forget to add it?" loop
 

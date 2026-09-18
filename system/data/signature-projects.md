@@ -10,17 +10,18 @@ Project IDs are defined in `context/04-projects.md`.
 
 | # | Company | Role | Signature project | Date |
 |---|---------|------|-------------------|------|
-| — | (none yet) | | | |
+| 1 | University of Southern California | Research Engineer (CIC, neuroimaging ML) | P2 — MiGa (Multi-Chicken Gait Assessment) | 2026-09-05 |
+| 2 | Databricks | AI Engineer - FDE (Forward Deployed Engineer) | P1 — Real-Time Medical IoT Analytics Platform | 2026-09-06 |
 
 ## Available pool, by track
 
 | ID | Project | Best for | Used? |
 |----|---------|----------|-------|
-| P1 | Real-Time Medical IoT Analytics Platform | Data, streaming, medtech | free |
-| P2 | MiGa — Multi-Chicken Gait Assessment | ML/AI, computer vision | free |
-| P3 | DualFit — Two-Stage Virtual Try-On | ML/AI, generative | free |
-| P4 | Local LLM-Powered News Research Platform | ML/AI, LLM/RAG | free |
-| P5 | Resume Classification Model | ML/AI, classical ML | free |
+| P1 | Real-Time Medical IoT Analytics Platform | Data, streaming, medtech | **signature — Databricks #2** |
+| P2 | MiGa — Multi-Chicken Gait Assessment | ML/AI, computer vision | **signature — USC #1** |
+| P3 | DualFit — Two-Stage Virtual Try-On | ML/AI, generative | supporting on USC #1 |
+| P4 | Local LLM-Powered News Research Platform | ML/AI, LLM/RAG | supporting on Databricks #2 |
+| P5 | Resume Classification Model | ML/AI, classical ML | supporting on Databricks #2 |
 | P6 | Expense Tracker with Predictive Analytics | Software | free |
 | P7 | FPGA-Based Autonomous Vehicle | Embedded, FPGA | free |
 | P8 | Elevator Control System | Embedded, firmware | free |

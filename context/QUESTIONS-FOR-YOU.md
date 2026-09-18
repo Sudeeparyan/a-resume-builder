@@ -31,9 +31,12 @@ because overstating it is the kind of thing that unravels in a reference check.
 - `_DS` says **Data Science Intern**
 - Both say Jul 2024 – Present
 
-- [ ] **Exact title on record:**
-- [ ] **Still working there? (yes / no — if no, end date):**
-- [ ] **Intern, contractor, or full-time?**
+- [x] **Exact title on record:** Data Engineering Intern — confirmed by Annie, 2026-09-05.
+  Resumes now use the `_DE` framing (AWS Glue/Lambda/EMR/Airflow pipelines) for this role.
+- [ ] **Still working there? (yes / no — if no, end date):** assumed yes ("Present") until told
+  otherwise.
+- [ ] **Intern, contractor, or full-time?** implied by the confirmed title (Intern), but not
+  separately confirmed.
 
 ---
 

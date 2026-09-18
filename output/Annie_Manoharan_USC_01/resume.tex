@@ -39,24 +39,26 @@
 \resumeSubHeadingListEnd
 \section{Technical Skills}
 \begin{itemize}[leftmargin=0.0in,label={}]
-\small{\item{\textbf{Machine Learning \& Vision}: Python, PyTorch, deep learning, YOLO11n-Pose, OC-SORT, LSTM, Res-UNet, computer vision, image processing \\ \textbf{Data \& Research}: SQL, Pandas, NumPy, data preprocessing, annotation pipelines, data validation, feature engineering, model evaluation \\ \textbf{Software \& Platforms}: C++, C\#, WPF/.NET, Flask, Git, Docker, LabVIEW, NI TestStand \\ \textbf{ML / Data Tools}: Scikit-learn, Apache Kafka, Apache Flink, ClickHouse, Grafana, data visualization, LangChain, FAISS}}
+\resumeItem{\textbf{Machine Learning \& Vision}: Python, PyTorch, deep learning, YOLO11n-Pose, OC-SORT, LSTM, Res-UNet, computer vision, image processing}
+\resumeItem{\textbf{Data \& Research}: SQL, Pandas, NumPy, data preprocessing, annotation pipelines, data validation, feature engineering, model evaluation}
+\resumeItem{\textbf{Software \& Platforms}: C++, C\#, WPF/.NET, Flask, Git, Docker, LabVIEW, NI TestStand}
+\resumeItem{\textbf{ML / Data Tools}: Scikit-learn, Apache Kafka, Apache Flink, ClickHouse, Grafana, data visualization, LangChain, FAISS}
 \end{itemize}\vspace{-5pt}
 \section{Projects}
 \resumeSubHeadingListStart
-  \resumeSingleHeading{DualFit: Two-Stage Virtual Try-On}{PyTorch, Res-UNet, flow-based warping, inpainting}
+  \resumeSingleHeading{MiGa: Multi-Chicken Gait Assessment (AICV Lab Research)}{YOLO11n-Pose, OC-SORT, LSTM, PyTorch}
+  \resumeItemListStart
+    \resumeItem{Built a keypoint-estimation, multi-object-tracking, and many-to-one LSTM workflow to process and analyze 4,569 annotated frames and 11,422 bounding boxes of biological video data.}
+    \resumeItem{Applied spatial normalization to remove translational variance across subjects; achieved 91.83\% keypoint mAP, 0.93 MOTA, and 0.91 IDF1 across 55 expert-annotated sequences.}
+  \resumeItemListEnd
+  \resumeSingleHeading{DualFit: Two-Stage Virtual Try-On (AICV Lab Research)}{PyTorch, Res-UNet, flow-based warping, inpainting}
   \resumeItemListStart
     \resumeItem{Developed a two-stage image pipeline combining flow-based garment warping with Res-UNet synthesis to improve alignment and visual realism.}
     \resumeItem{Built preprocessing and inpainting workflows, then trained and evaluated on VITON-HD: 24.9 PSNR, 0.913 SSIM, and 5.261 FID.}
   \resumeItemListEnd
-  \resumeSingleHeading{MiGa: Multi-Chicken Gait Assessment}{YOLO11n-Pose, OC-SORT, LSTM, PyTorch}
+  \resumeSingleHeading{Real-Time Medical IoT Analytics Platform}{Apache Kafka, Apache Flink, ClickHouse, Grafana, Python}
   \resumeItemListStart
-    \resumeItem{Built a keypoint-estimation, multi-object-tracking, and many-to-one LSTM classification workflow for video analysis.}
-    \resumeItem{Produced 4,569 annotated frames, 11,422 bounding boxes, and 55 expert-annotated sequences; achieved 91.83\% keypoint mAP, 0.93 MOTA, and 0.91 IDF1.}
-  \resumeItemListEnd
-  \resumeSingleHeading{Local LLM-Powered News Research Platform}{Python, LangChain, FAISS, Ollama, Llama 3.2}
-  \resumeItemListStart
-    \resumeItem{Built a local ETL and RAG workflow to ingest, clean, chunk, embed, and retrieve unstructured web content on demand.}
-    \resumeItem{Used FAISS and nomic-embed-text for persistent vector storage and LangChain to orchestrate semantic queries over local Llama 3.2 models.}
+    \resumeItem{Built a sub-second-latency Flink SQL and Kafka pipeline to score high-frequency medical device data, then designed ClickHouse schemas and a Grafana visualization layer for real-time interpretability.}
   \resumeItemListEnd
 \resumeSubHeadingListEnd
 \section{Professional Experience}
@@ -67,11 +69,15 @@
     \resumeItem{Developed automated preprocessing and annotation workflows that transformed raw frames into structured model inputs and evaluation datasets.}
     \resumeItem{Trained and evaluated image-synthesis and tracking models using mAP, MOTA, IDF1, PSNR, SSIM, and FID metrics.}
   \resumeItemListEnd
+  \resumeSingleHeading{Data Engineering Intern, InsOps Inc.}{Jul 2024 -- Present}
+  \resumeItemListStart
+    \resumeItem{Developed data pipelines in AWS using Glue, Lambda, EMR, and Apache Airflow for orchestration, with S3 cloud storage, for scalable ingestion, transformation, and validation of large datasets.}
+    \resumeItem{Built data workflows integrating SQL Server, Azure SQL, and AWS S3, applying metadata-driven schema discovery and data-quality validation to prepare analytics-ready datasets.}
+  \resumeItemListEnd
   \resumeSingleHeading{Engineering Intern / Project Engineer, Soliton Technologies}{Jul 2022 -- Jun 2024}
   \resumeItemListStart
     \resumeItem{Designed a C\# WPF desktop application integrating C\#, Python, and LabVIEW-based test workflows for medical-device verification and validation.}
     \resumeItem{Implemented reusable object-oriented components and automated testing workflows to improve development and validation efficiency.}
-    \resumeItem{Collaborated with cross-functional engineering teams to debug system-level issues, troubleshoot application behavior, and deliver production-ready software.}
   \resumeItemListEnd
   \resumeSingleHeading{Teaching Assistant, University of Arkansas}{Sep 2024 -- May 2026}
   \resumeItemListStart

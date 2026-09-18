@@ -162,17 +162,22 @@ goes on a resume in any tense.
 
 ```
 output/Annie_Manoharan_<Company>_<NN>/
-    Annie_Manoharan_<Company>_<NN>.tex    <- the LaTeX source, Overleaf-ready
-    Annie_Manoharan_<Company>_<NN>.pdf    <- the built 1-page PDF
-    research.md
-    study-plan.md
-    job-description.txt
+    resume.tex               <- the LaTeX source, Overleaf-ready
+    resume.pdf               <- the built 1-page PDF
+    job-description.txt      <- what she was matched against
+    audit.md                 <- what was chosen, and why (written by the builder)
+    research.md              <- needs an AI model
+    study-plan.md            <- needs an AI model
     cover-letter.md          (only if asked)
 ```
 
+The **folder** carries the identity; the **files inside are always named the same**. Every tool
+in this workspace opens `resume.tex` and `resume.pdf` by those exact names — do not rename them
+per company.
+
 `<Company>` is the company name with spaces and punctuation removed (`Boston Scientific` →
-`BostonScientific`). `<NN>` is zero-padded and sequential, continuing from whatever is in
-`output/`.
+`BostonScientific`). `<NN>` is zero-padded and counts **per company**, so a second Databricks
+application is `Annie_Manoharan_Databricks_02`.
 
 **Always ship both the `.tex` and the `.pdf`.** She uses the PDF to apply and the `.tex` to edit
 in Overleaf when she wants to change something. Neither is optional.

@@ -8,18 +8,21 @@ tracker.
 
 ---
 
-## Three folders
+## The folders
 
 ```
 ├── context/     📥 YOURS — everything about you. The only folder you touch.
 ├── output/      📤 SUMMARY.md (what the system did) + one folder per application.
-└── system/      ⚙️  The machinery. Ignore it.
+├── system/      ⚙️  The machinery. Ignore it.
+└── dashboard/   🖥️  Optional local web app. Ignore it unless you want the live editor.
 ```
+
+Full map of every file and folder: **[STRUCTURE.md](STRUCTURE.md)**.
 
 | Folder | Contents |
 |--------|----------|
 | **[context/](context/)** | `01-basics` · `02-education` · `03-experience` · `04-projects` · `05-skills` · `06-achievements` · `07-preferences` · `08-voice` · `09-anything-else` · `files/` for CVs and transcripts · `QUESTIONS-FOR-YOU.md` where the AI asks you things |
-| **[output/](output/)** | **`SUMMARY.md`** — one page: resumes made, companies found, what was skipped and why, what to study · plus `NN_Company_Role/` per application (resume, research, study plan, cover letter, the job ad) |
+| **[output/](output/)** | **`SUMMARY.md`** — one page: resumes made, companies found, what was skipped and why, what to study · plus `Annie_Manoharan_<Company>_<NN>/` per application — each holding `resume.tex`, `resume.pdf`, `job-description.txt` and `audit.md` |
 | **system/** | `config/` · `modes/` · `profile/` (the tidied knowledge base built from your context) · `templates/` · `scripts/` · `SETUP.md` |
 
 Skills and agents live in `.claude/skills/` and `.github/agents/` — hidden, and read automatically.

@@ -2,14 +2,17 @@
 
 This folder finds you US jobs and writes the resumes for them.
 
-You never need to open anything under `system/`. There are only three folders, and you only
-touch one of them.
+You never need to open anything under `system/` or `dashboard/`. You only ever touch one
+folder: `context/`.
 
 | Folder | What it is |
 |--------|------------|
 | **`context/`** | **Yours.** Everything about you. The only folder you ever edit. |
 | `output/` | What you get back — resumes, PDFs, and `SUMMARY.md` |
 | `system/` | The machinery. Ignore it. |
+| `dashboard/` | Optional local web app. Ignore it unless you want the live editor. |
+
+Every file, explained on one page: **[STRUCTURE.md](STRUCTURE.md)**.
 
 ---
 
@@ -70,11 +73,12 @@ company the same resume twice.
 
 - **`output/SUMMARY.md`** — the one page. What was found, what was built, what to do next.
 - **`output/Annie_Manoharan_<Company>_<NN>/`** — one folder per application:
-  - `.pdf` — send this
-  - `.tex` — edit this in Overleaf if you want to change something
-  - `research.md` — what the company actually does
-  - `study-plan.md` — what to learn before they call
+  - `resume.pdf` — send this
+  - `resume.tex` — edit this in Overleaf if you want to change something
   - `job-description.txt` — what you were matched against
+  - `audit.md` — which experience and project were chosen, and why
+  - `research.md` — what the company actually does *(needs an AI key)*
+  - `study-plan.md` — what to learn before they call *(needs an AI key)*
 
 ## Answer the questions when you can
 

@@ -151,6 +151,12 @@ Two pages for an experienced profile, one page for a graduate or career-changer 
 expects two (check `system/config/regions.yml → cv_conventions`). Target ~95% fill of the last page. Trim
 the lowest-priority bullets first; never shrink the font below the base's setting.
 
+**A short page is a failure, not a clean look.** `build_pdf.py` only catches overflow — nothing
+stops a thin, mostly-white one-pager from compiling successfully. Before it ships, run the
+full-page checklist in `references/tailoring-playbook.md` §7: every unblocked real job on the page,
+three projects, every real skill category, every relevant module. If real content runs out, say so
+plainly — never invent a bullet or a project to fill the gap.
+
 ### Step 6 — Recruiter audit (mandatory — the draft is not the deliverable)
 Run all three passes from `references/recruiter-audit.md` **yourself**. Never hand these to the user
 as prompts to run.

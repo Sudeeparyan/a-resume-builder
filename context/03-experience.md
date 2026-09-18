@@ -6,15 +6,10 @@ Every bullet below is transcribed from a real resume. Nothing here is invented.
 ---
 
 ## InsOps Inc. — Chicago, Illinois
-**Jul 2024 – Present** (as printed; see Q2)
-
-### Two different titles are in circulation
-- `_DE` says **"Data Engineering Intern"**
-- `_DS` says **"Data Science Intern"**
-
-Same employer, same dates. Only these two of the 14 resumes list InsOps at all.
-Until Q2 is answered, use whichever title matches the track being applied for **only if** it is
-the true one — do not pick by convenience. See Q2 in `QUESTIONS-FOR-YOU.md`.
+**Data Engineering Intern** — **Jul 2024 – Present**
+Title confirmed by Annie, 2026-09-05 (see Q2 in `QUESTIONS-FOR-YOU.md`, now resolved). Use this
+title and the data-engineering framing below on every resume; the data-science framing further
+down is kept only as a historical record of what `_DS` once said, not for reuse.
 
 ### Data-engineering framing (from `_DE`)
 - Developed data pipelines in AWS using AWS Glue, Lambda, EMR, SQL, and Apache Airflow for

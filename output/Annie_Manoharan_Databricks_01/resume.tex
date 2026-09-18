@@ -1,0 +1,172 @@
+\documentclass[letterpaper,10pt]{article}
+
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{marvosym}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{verbatim}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage[
+    colorlinks=true,
+    linkcolor=black,
+    urlcolor=blue,
+    citecolor=blue
+]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\ifdefined\pdfglyphtounicode
+  \IfFileExists{glyphtounicode.tex}{\input{glyphtounicode}}{}
+\fi
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+\addtolength{\oddsidemargin}{-0.6in}
+\addtolength{\evensidemargin}{-0.6in}
+\addtolength{\textwidth}{1.2in}
+\addtolength{\topmargin}{-0.85in}
+\addtolength{\textheight}{1.5in}
+
+\urlstyle{same}
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+\setlength{\parskip}{0pt}
+
+\setlist[itemize]{topsep=0pt, itemsep=0.4pt, parsep=0pt, leftmargin=0.15in}
+
+\titleformat{\section}{
+  \vspace{2pt}\scshape\raggedright\normalsize\bfseries
+}{}{0em}{}[\color{black}\titlerule \vspace{2pt}]
+
+\ifdefined\pdfgentounicode \pdfgentounicode=1 \fi
+
+
+\newcommand{\resumeSubheading}[4]{
+  \vspace{1pt}\item
+    \begin{tabular*}{0.985\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & #2 \\
+      \textit{\small#3} & \textit{\small #4} \\
+    \end{tabular*}\vspace{1pt}
+}
+
+\newcommand{\resumeSingleHeading}[2]{
+  \vspace{1pt}\item
+    \begin{tabular*}{0.985\textwidth}{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & \small#2 \\
+    \end{tabular*}\vspace{2pt}
+}
+
+\newcommand{\resumeProjectLine}[1]{
+  \vspace{1pt}\item[]{\small\textit{#1}}\vspace{2pt}
+}
+
+\newcommand{\resumeItem}[1]{\item\small{#1}}
+
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.0in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}\vspace{-2pt}}
+\newcommand{\resumeItemListStart}{\begin{itemize}[leftmargin=0.17in]}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{2pt}}
+
+\begin{document}
+% @pages:1
+
+\begin{center}
+    \textbf{\Large \scshape Annie Prasanna Manoharan} \\ \vspace{2pt}
+    \small +1 (479) 301-1366 $|$ \href{mailto:annieprm0501@gmail.com}{\underline{annieprm0501@gmail.com}} $|$ \href{https://annie0159.github.io/Portfolio/}{\underline{annie0159.github.io/Portfolio}} $|$ \href{https://github.com/Annie0159}{\underline{github.com/Annie0159}}
+\end{center}
+
+\section{Education}
+  \resumeSubHeadingListStart
+    \resumeSubheading
+      {University of Arkansas}{Aug 2024 -- May 2026}
+      {Master of Science in Computer Engineering}{}
+      \resumeItemListStart
+        % @b:edu.1.b1
+        \resumeItem{Coursework: Artificial Intelligence, Machine Learning, Privacy Enhancing Techniques}
+      \resumeItemListEnd
+    \resumeSubheading
+      {Sri Ramakrishna Engineering College}{Aug 2019 -- May 2023}
+      {Bachelor of Engineering in Electronics and Communication}{India}
+  \resumeSubHeadingListEnd
+
+\section{Technical Skills}
+ \begin{itemize}[leftmargin=0.15in, label={}]
+    \small{\item{
+     \textbf{Languages}{: Python, SQL, C++, C\#, Embedded C, Java, Verilog} \\
+     \textbf{Data Engineering}{: Apache Kafka, Apache Flink, Apache Airflow, Databricks, Apache Spark, AWS, Flink SQL, ClickHouse, PySpark} \\
+     \textbf{Machine Learning}{: PyTorch, Scikit-learn, Computer Vision, LangChain, RAG, LSTM, YOLO11n-Pose, OC-SORT, FAISS} \\
+     \textbf{Cloud and Tools}{: AWS, Glue, Lambda, EMR, S3, Grafana, Docker, Git, Flask} \\
+     \textbf{Embedded and Test}{: LabVIEW, NI TestStand, MAVIS, Test Automation, FPGA, Microblaze, PIC16F887, Ansys HFSS} \\
+    }}
+ \end{itemize}
+
+\section{Projects}
+  \resumeSubHeadingListStart
+    \resumeSingleHeading
+      {Real-Time Medical IoT Analytics Platform}{Apache Kafka, Apache Flink, Flink SQL, Python, ClickHouse, Grafana}
+      \resumeItemListStart
+        % @b:proj.1.b1
+        \resumeItem{Developed an end-to-end, sub-second latency streaming platform using Apache Flink SQL and Apache Kafka to ingest, process, and score high-frequency medical IoT device data}
+        % @b:proj.1.b2
+        \resumeItem{Designed high-performance ClickHouse schemas using the MergeTree engine sorted by composite keys to physically align disk layouts with clinical querying patterns, isolating ingestion via an optimized Python multi-topic batch consumer}
+        % @b:proj.1.b3
+        \resumeItem{Implemented temporal Flink OVER windows partitioned by device ID to dynamically compute rolling Z-scores over 5-second sliding intervals, applying custom watermark delay strategies to cleanly handle out-of-order data streams}
+      \resumeItemListEnd
+    \resumeSingleHeading
+      {Local LLM-Powered News Research Platform}{Python, LangChain, Streamlit, FAISS, Ollama, nomic-embed-text, Llama 3.2, WebBaseLoader}
+      \resumeItemListStart
+        % @b:proj.2.b1
+        \resumeItem{RAG pipeline via LangChain orchestrating semantic queries against vectorized data using local Llama 3.2 instances}
+        % @b:proj.2.b2
+        \resumeItem{End-to-end local ETL pipeline using Streamlit and WebBaseLoader to ingest, clean, chunk, and preprocess unstructured web content on demand}
+      \resumeItemListEnd
+    \resumeSingleHeading
+      {Resume Classification Model}{Python, Scikit-learn, Pandas, TF-IDF, Logistic Regression, Flask}
+      \resumeItemListStart
+        % @b:proj.3.b1
+        \resumeItem{Deployed through a Flask REST API for real-time prediction}
+        % @b:proj.3.b2
+        \resumeItem{End-to-end NLP classification pipeline: TF-IDF feature extraction + Logistic Regression across 25 job-role categories}
+      \resumeItemListEnd
+  \resumeSubHeadingListEnd
+
+\section{Professional Experience}
+  \resumeSubHeadingListStart
+    \resumeSubheading
+      {Data Engineering Intern}{Jul 2024 -- Present}
+      {InsOps Inc.}{Chicago, Illinois}
+      \resumeItemListStart
+        % @b:emp.1.b1
+        \resumeItem{Built data workflows integrating SQL Server, Azure SQL, AWS S3, and cloud databases, preparing structured datasets for downstream data science and analytics}
+        % @b:emp.1.b2
+        \resumeItem{Developed data pipelines in AWS using AWS Glue, Lambda, EMR, SQL, and Apache Airflow for orchestration, with S3 cloud storage, for scalable data ingestion, transformation, validation, and analytics}
+        % @b:emp.1.b3
+        \resumeItem{Worked with distributed data processing and lakehouse concepts, including scalable ETL/ELT, cloud data storage, SQL transformations, and pipeline orchestration}
+      \resumeItemListEnd
+    \resumeSubheading
+      {Project Engineer}{}
+      {Soliton Technologies}{India}
+      \resumeItemListStart
+        % @b:emp.2.b1
+        \resumeItem{Developed customized software solutions for Medtronic as the sole developer, automating approximately 94\% of manual test cases while meeting medical-device quality and validation requirements --- see Q4 before using this figure}
+        % @b:emp.2.b2
+        \resumeItem{Integrated automated testing and validation workflows to improve test coverage, reduce manual execution, and support repeatable software verification}
+      \resumeItemListEnd
+    \resumeSubheading
+      {Intern}{Sep 2021 -- Oct 2021}
+      {National Institute of Technology, India}{}
+      \resumeItemListStart
+        % @b:emp.3.b1
+        \resumeItem{Conducted research on antenna design incorporating Substrate Integrated Waveguide (SIW) and deep-well cavity structures to enhance antenna performance}
+        % @b:emp.3.b2
+        \resumeItem{Designed and modeled antenna structures using Ansys HFSS for electromagnetic simulation and performance analysis}
+      \resumeItemListEnd
+  \resumeSubHeadingListEnd
+
+\end{document}

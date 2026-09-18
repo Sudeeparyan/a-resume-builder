@@ -10,7 +10,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8000",
+        target: "http://127.0.0.1:8010",
         changeOrigin: true,
         configure(proxy) {
           proxy.on("proxyReq", (outgoing, incoming) => {
@@ -19,7 +19,7 @@ export default defineConfig({
                 incoming.headers.origin || "",
               )
             )
-              outgoing.setHeader("Origin", "http://127.0.0.1:8000");
+              outgoing.setHeader("Origin", "http://127.0.0.1:8010");
           });
         },
       },

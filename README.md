@@ -6,7 +6,7 @@ It finds entry-level data, ML/AI, software and embedded/test roles; drops any po
 
 ## Start
 
-Double-click **Start Dashboard.command**. It sets itself up on first run and opens the dashboard at http://127.0.0.1:8000 (Dashboard · Daily Search · Resume Studio · Profile · Agents · Settings).
+Double-click **Start Dashboard.command**. It sets itself up on first run and opens the dashboard at http://127.0.0.1:8010 (port 8000 on this Mac is a different person's dashboard; Annie's never uses it) (Dashboard · Daily Search · Resume Studio · Profile · Agents · Settings).
 
 Or ask Claude in this folder: "find me jobs", paste a job description, or run `/hunt 10`.
 

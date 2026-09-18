@@ -11,15 +11,15 @@ cd backend
 python3.12 -m venv .venv                      # first time only
 source .venv/bin/activate
 pip install -r requirements-dev.txt           # first time only
-python run.py                                 # http://127.0.0.1:8000
+python run.py                                 # http://127.0.0.1:8010
 ```
 
 `run.py` rebuilds the React client from `../frontend` when its sources changed,
-then serves it and the API on loopback. `--port 8001` if 8000 is taken,
+then serves it and the API on loopback. `--port 8011` if 8010 is taken,
 `--no-browser` to start without opening one. Ctrl+C stops it.
 
 For frontend work, also run `npm run dev` in `../frontend`; Vite serves the UI
-on 5173 and proxies `/api` to this server on 8000.
+on 5173 and proxies `/api` to this server on 8010.
 
 ## Checks
 

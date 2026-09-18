@@ -15,7 +15,7 @@ python run.py
 ```
 
 For UI work, `npm run dev` in `frontend/` serves the client on 5173 and proxies
-`/api` to the server on 8000.
+`/api` to the server on 8010.
 
 ## API keys
 

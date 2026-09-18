@@ -35,3 +35,7 @@ TIMEZONE = "America/Chicago"
 
 APP_ID = "annie-career-workspace"
 APP_TITLE = "Annie Career Workspace"
+# Loopback port for run.py and the Vite dev proxy. 8000 belongs to another
+# dashboard on this Mac; the launcher must never open a browser on someone
+# else's app, so Annie's port is distinct and run.py checks the health id.
+DEFAULT_PORT = 8010

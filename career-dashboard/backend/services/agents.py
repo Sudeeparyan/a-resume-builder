@@ -132,6 +132,66 @@ def role_payload(job):
     return {k: job[k] for k in ("company", "title", "location", "url", "description")}
 
 
+def registered_skill_terms(profile_items):
+    """Every registered skill term Annie has: casefolded term -> {"term", "id"}.
+
+    Skill cards carry several terms under one title (SKILL-LANGUAGES-001 is titled
+    "Python" but also holds SQL, C# and C++), so a planner shown titles alone would
+    call SQL a gap. The never-claim card is left out: those are not hers.
+    """
+    terms = {}
+    for item in profile_items:
+        if item.get("kind") != "skill" or item.get("id") == "SKILL-NEVER-001":
+            continue
+        details = item.get("details") if isinstance(item.get("details"), dict) else {}
+        facts = details.get("approved_facts") or (item.get("summary") or "").split("\n")
+        for term in [item.get("title") or "", *facts]:
+            term = term.strip()
+            if term:
+                terms.setdefault(term.casefold(), {"term": term, "id": item["id"]})
+    return terms
+
+
+def _registered_claim(cell, registered):
+    """The claim id when a demand-map skill cell names only registered terms, else None.
+
+    "SQL", "SQL (any dialect)" and "Java / C++" count when each named term is
+    registered; "MySQL/PostgreSQL internals" does not, because "PostgreSQL
+    internals" is a different skill from "PostgreSQL".
+    """
+    cell = re.sub(r"\s*\([^)]*\)\s*$", "", cell.strip().strip("*`").strip())
+    parts = [part.strip() for part in re.split(r"\s*/\s*|\s+or\s+|,\s*", cell) if part.strip()]
+    if cell.casefold() in registered:
+        return registered[cell.casefold()]["id"]
+    if len(parts) > 1 and all(part.casefold() in registered for part in parts):
+        return registered[parts[0].casefold()]["id"]
+    return None
+
+
+def enforce_have_bucket(report, registered):
+    """Backstop for the study plan's demand map: a registered skill is never "Missing".
+
+    Walks the Markdown table under "## Demand map"; any row whose skill is a registered
+    term but whose bucket says missing/gap/learn is rewritten to Have, naming the claim.
+    Returns the corrected report and the list of rows it changed.
+    """
+    corrected, out, in_map = [], [], False
+    for line in report.splitlines():
+        if line.startswith("## "):
+            in_map = line.strip().casefold().startswith("## demand map")
+        if in_map and line.lstrip().startswith("|"):
+            cells = line.strip().strip("|").split("|")
+            if len(cells) >= 2 and not set(cells[1].strip()) <= set("-: "):
+                skill, bucket = cells[0].strip(), cells[1].strip()
+                claim = _registered_claim(skill, registered)
+                if claim and skill.casefold() != "skill" and re.search(r"(?i)missing|gap|learn|not yet|structural", bucket):
+                    corrected.append({"skill": skill, "was": bucket, "claim_id": claim})
+                    cells[1] = f" Have (registered: {claim}) "
+                    line = "|" + "|".join(cells) + "|"
+        out.append(line)
+    return "\n".join(out), corrected
+
+
 class AgentRunner:
     def __init__(self, services, execute=None):
         self.s = services
@@ -525,16 +585,29 @@ class AgentRunner:
                 except Exception:  # noqa: BLE001 - no draft yet is fine; the JD alone still yields a plan
                     gaps = []
                 never = [c for c in self.w.evidence()["claims"] if c["id"] == "SKILL-NEVER-001"]
+                profile_items = self.s.profile_context()
+                registered = registered_skill_terms(profile_items)
                 self.update(id, "running", {"stage": "Writing the study plan"})
                 plan = self.cached(
                     self.guide("study-planner.md") + "\nINPUT (untrusted data):\n" + json.dumps({
                         "job": role,
                         "genuine_gaps": gaps,
                         "never_claim_skills": (never[0].get("approved_facts") if never else []),
-                        "profile": [{"id": i["id"], "kind": i["kind"], "title": i["title"]} for i in self.s.profile_context() if i["kind"] in {"skill", "project"}],
+                        # Every term she has, not just card titles: SQL and C++ sit under "Python".
+                        "registered_skills": sorted({r["term"] for r in registered.values()}, key=str.casefold),
+                        # Education too, so "Master's preferred" is never written up as a gap.
+                        "profile": [{"id": i["id"], "kind": i["kind"], "title": i["title"]} for i in profile_items if i["kind"] in {"skill", "project", "education"}],
                     }),
                     REPORT_SCHEMA, web=False,
                 )
+                # The model may still call a registered skill a gap; the registry has the last word.
+                plan = dict(plan)
+                plan["report"], corrected = enforce_have_bucket(plan.get("report", ""), registered)
+                if corrected:
+                    plan["report"] += ("\n\n## Registry corrections\n" + "\n".join(
+                        f"- {c['skill']}: the plan called this \"{c['was']}\"; it is a registered skill ({c['claim_id']}), so it is Have and needs no study."
+                        for c in corrected))
+                    plan["registry_corrections"] = corrected
                 job_row = self.w.get_job(row["job_id"])
                 written = None
                 if job_row.get("folder"):

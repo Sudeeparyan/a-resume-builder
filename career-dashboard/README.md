@@ -8,7 +8,7 @@ Policy lives in [AGENTS.md](AGENTS.md). Her own facts live in [data/context/](da
 
 ## Start the dashboard
 
-On this Mac, double-click **Start Dashboard.command** (in this folder or the repo root). It creates the Python environment in `backend/.venv` on first use, builds the React client, then opens http://127.0.0.1:8000. Stop the server with Ctrl+C in its Terminal window.
+On this Mac, double-click **Start Dashboard.command** (in this folder or the repo root). It creates the Python environment in `backend/.venv` on first use, builds the React client, then opens http://127.0.0.1:8010. Port 8000 on this Mac belongs to a different dashboard; the launcher checks who answers on its port and never opens someone else's app. Stop the server with Ctrl+C in its Terminal window.
 
 Manual setup:
 
@@ -17,7 +17,7 @@ cd backend
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
-python run.py            # --port 8010 if 8000 is taken, --no-browser to skip opening a tab
+python run.py            # http://127.0.0.1:8010; --port 8011 if taken, --no-browser to skip opening a tab
 ```
 
 Needs Python 3.12, Node.js + npm (for the React client) and Tectonic (PDF builds; the launcher wires the bundle through `../daily-job-search/with_resume_runtime.py`). Research and discovery run on a signed-in Claude Code or Codex runtime, chosen in Settings; API keys for OpenAI, the Claude API, OpenRouter, Gemini or Kimi can be pasted in Settings → API keys instead. Gmail sync is optional and needs Codex signed in. The Agents tab shows every agent step by step.

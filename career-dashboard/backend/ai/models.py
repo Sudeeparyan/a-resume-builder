@@ -11,10 +11,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from backend.ai import catalog, keys
+from backend.paths import DEFAULT_PORT
 
 # OpenRouter sends these on to the upstream provider for attribution.
 OPENROUTER_HEADERS = {
-    "HTTP-Referer": "http://127.0.0.1:8000",
+    "HTTP-Referer": f"http://127.0.0.1:{DEFAULT_PORT}",
     "X-Title": "Annie career workspace",
 }
 

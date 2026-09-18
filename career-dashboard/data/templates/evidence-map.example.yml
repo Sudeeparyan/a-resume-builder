@@ -1,0 +1,57 @@
+candidate_revision: "2026-09-18.1"
+job_id: "001-company-role-short-hash"
+role_eligible: true
+job_snapshot_sha256: "replace_with_64_character_sha256_of_the_saved_job_description"
+supported_requirement_coverage: 0
+
+# Sponsorship gate result for this posting (tier S, A, B or C). An EXCLUDED posting
+# never gets a folder, so it never gets an evidence map.
+sponsor_tier: "B"
+
+requirements:
+  - id: "R01"
+    priority: "required"
+    text: "Streaming data pipelines with Kafka and Flink"
+    evidence_ids:
+      - "PROJ-P01-IOT"
+      - "SKILL-STREAMING-001"
+    strength: "strong"
+  - id: "R02"
+    priority: "preferred"
+    text: "Example requirement Annie does not have yet (goes to study-plan.md, never the resume)"
+    evidence_ids: []
+    strength: "gap"
+
+company_problem:
+  statement: "Replace with a factual, sourced JD or employer problem signal."
+  source_url: "https://example.invalid/replace-with-authoritative-source"
+  published_or_accessed: "YYYY-MM-DD"
+  evidence_class: "explicit"
+  confidence: "high"
+
+# The signature project: first in Projects, never used as the signature for another company.
+selected_project_id: "PROJ-P01-IOT"
+selected_project_reason: "Replace with the problem/skill/evidence ranking rationale."
+
+resume_claim_ids:
+  - "IDENTITY-001"
+  - "CONTACT-EMAIL-001"
+  - "CONTACT-PHONE-001"
+  - "CONTACT-PORTFOLIO-001"
+  - "CONTACT-GITHUB-001"
+  - "EDU-MS-001"
+  - "COURSEWORK-MS-001"
+  - "EDU-BE-001"
+  - "SKILL-LANGUAGES-001"
+  - "SKILL-STREAMING-001"
+  - "SKILL-CLOUD-001"
+  - "SKILL-ML-001"
+  - "EXP-INSOPS-001"
+  - "EXP-TA-001"
+  - "EXP-RA-001"
+  - "EXP-SOLITON-PE-001"
+  - "METRIC-DRAEGER-94"
+  - "PROJ-P01-IOT"
+  - "PROJ-P04-NEWS-RAG"
+
+held_claims_used: []

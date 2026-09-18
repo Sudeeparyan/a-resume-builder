@@ -14,13 +14,13 @@ What applicant tracking systems actually do to a resume, and how to survive it.
 | Non-standard section names | Section unrecognised, content unmapped | "Experience", not "Where I've Made an Impact" |
 | Unusual date formats | Employment dates lost | `Mon YYYY -- Mon YYYY` everywhere |
 | Fancy bullets / dingbats | Garbled characters | Standard bullets |
-| Ligature-heavy PDFs | "fi"/"fl" merge, breaking keyword matching | `\input{glyphtounicode}` + `\pdfgentounicode=1` (already in the bases) |
+| Ligature-heavy PDFs | "fi"/"fl" merge, breaking keyword matching | The validator fails a PDF whose text is not extractable |
 
 ## Keyword placement
 
-1. Each must-have keyword appears **at least twice**, in different sections — typically Summary +
-   Experience, or Skills + Projects.
-2. Use the JD's exact string at least once: "CI/CD pipelines", not only "deployment automation".
+1. Each must-have keyword appears **at least twice**, in different sections — typically Technical
+   Skills + Experience, or Skills + Projects. (Annie's resume has no Summary section.)
+2. Use the JD's exact string at least once, where true: "Apache Airflow orchestration", not only "workflow scheduling".
 3. Cover both forms of common pairs: "Machine Learning (ML)", "Standard Operating Procedures
    (SOPs)".
 4. Front-load: parsers and humans both weight the first third of the document.
@@ -29,25 +29,26 @@ What applicant tracking systems actually do to a resume, and how to survive it.
 
 ## Section headings that parse reliably
 
-`Summary` · `Education` · `Experience` · `Professional Experience` · `Projects` ·
+`Education` · `Experience` · `Professional Experience` · `Projects` ·
 `Technical Skills` · `Skills` · `Certifications` · `Publications` · `Awards` · `Languages`
+
+Annie's contract fixes four: Education, Technical Skills, Professional Experience, Projects. Certifications and Publications stay off until something real is on record.
 
 ## Contact block
 
-Name on its own line, then a single line of phone · email · location · links. City and country
-only — full street addresses are not needed and can trigger location filters.
+Name on its own line, then a single line of phone · email · portfolio · GitHub. Annie's resumes print no city (Q5 open) and no LinkedIn (none on record).
 
 ## File format
 
 - Submit **PDF** unless the portal explicitly asks for .docx. PDFs generated from LaTeX parse well
   when `glyphtounicode` is enabled.
-- Filename: `Firstname_Lastname_RoleTitle.pdf`. Never `resume_final_v3.pdf`.
+- The folder carries the identity (`Annie_Manoharan_<Company>_<NN>`); the file inside is always `resume.pdf`. Rename a copy to `Annie_Manoharan_Resume.pdf` when a portal shows the filename.
 - Keep it under 1 MB.
 
 ## Verify before sending
 
 ```bash
-python3 system/scripts/ats_check.py --resume output/NN_Company_Role/resume.tex --jd output/NN_Company_Role/job-description.txt
+career-dashboard/backend/.venv/bin/python career-dashboard/backend/scripts/workspace.py score --job-id JOB_ID
 ```
 
 Then the manual check that catches most parser problems: copy the text out of the built PDF into a

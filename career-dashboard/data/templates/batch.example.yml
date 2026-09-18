@@ -1,0 +1,27 @@
+run_id: "YYYYMMDD-HHMM-short-hash"
+candidate_revision: "2026-09-18.1"
+maximum_jobs: 10
+required_artifacts:
+  - "job-description.md"
+  - "evaluation.md"
+  - "company-research.md"
+  - "study-plan.md"
+  - "evidence-map.yml"
+  - "resume.tex"
+  - "resume.pdf"
+  - "resume-preview/page-01.png"
+  - "qa.json"
+
+jobs:
+  - index: 1
+    job_id: "001-company-role-short-hash"
+    source_url: "https://example.invalid/replace-with-specific-job-url"
+    artifact_dir: "data/output/batches/RUN_ID/001-company-role-short-hash"
+    snapshot_path: "data/output/batches/RUN_ID/001-company-role-short-hash/job-description.md"
+    snapshot_sha256: "replace_with_64_character_sha256"
+    status: "pending"
+    attempts: 0
+    selected_project_id: null
+    page_count: null
+    supported_requirement_coverage: null
+    error: null

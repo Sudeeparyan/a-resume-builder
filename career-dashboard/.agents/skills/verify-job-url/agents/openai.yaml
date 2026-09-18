@@ -1,0 +1,4 @@
+interface:
+  display_name: "Verify Job URL"
+  short_description: "Check whether a US job posting is still active"
+  default_prompt: "Use $verify-job-url to verify the URLs in Annie's current job pipeline."

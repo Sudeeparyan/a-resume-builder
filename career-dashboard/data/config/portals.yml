@@ -1,0 +1,173 @@
+# ============================================================
+# Where to look, and what to type. United States only.
+#
+# tracked_companies are checked DIRECTLY on their careers pages,
+# ahead of any job board — fresher listings, fewer applicants.
+# ============================================================
+
+meta:
+  last_updated: "2026-09-04"
+  scan_cadence: "weekly"
+  region: "united-states"
+
+# ------------------------------------------------------------
+# Tracked companies. `ats` lets the hunter hit the public JSON API
+# directly instead of scraping. `cap_exempt: true` ranks first —
+# those file H-1B year-round with no lottery.
+#
+# Add companies from context/07-preferences.md Q8 as they're named.
+# ------------------------------------------------------------
+tracked_companies:
+
+  # ---- CAP-EXEMPT: no H-1B lottery, files any time of year ----
+  - name: "University of Arkansas"
+    careers_url: "https://jobs.uark.edu/"
+    cap_exempt: true
+    tier: 1
+    why: "Current employer (TA + RA). Internal candidate; cap-exempt."
+    enabled: true
+
+  - name: "Oak Ridge National Laboratory"
+    careers_url: "https://jobs.ornl.gov/"
+    cap_exempt: true
+    tier: 1
+    why: "National lab; data/ML engineering roles; cap-exempt. Note: some roles require citizenship — the Group 2 screen catches those."
+    enabled: true
+
+  - name: "Mayo Clinic"
+    careers_url: "https://jobs.mayoclinic.org/"
+    cap_exempt: true
+    tier: 1
+    why: "Academic medical center; medical-device and clinical data work matches her domain."
+    enabled: true
+
+  - name: "Broad Institute"
+    careers_url: "https://broadinstitute.avature.net/careers"
+    cap_exempt: true
+    tier: 1
+    why: "Nonprofit research institute; heavy computational/data engineering hiring."
+    enabled: true
+
+  - name: "Allen Institute"
+    careers_url: "https://alleninstitute.org/careers/"
+    cap_exempt: true
+    tier: 1
+    why: "Nonprofit research; computer vision and scientific data pipelines."
+    enabled: true
+
+  # ---- Medical device / health tech: matches her strongest domain thread ----
+  - name: "Medtronic"
+    careers_url: "https://jobs.medtronic.com/"
+    cap_exempt: false
+    tier: 1
+    why: "She already delivered a project FOR Medtronic via Soliton. Strongest narrative fit in the whole list."
+    enabled: true
+
+  - name: "Boston Scientific"
+    careers_url: "https://jobs.bostonscientific.com/"
+    cap_exempt: false
+    tier: 2
+    why: "Medical device; test automation and V&V roles match Track D."
+    enabled: true
+
+  - name: "Abbott"
+    careers_url: "https://www.jobs.abbott/"
+    cap_exempt: false
+    tier: 2
+    why: "Medical device; embedded and data roles."
+    enabled: true
+
+  - name: "Dexcom"
+    careers_url: "https://careers.dexcom.com/"
+    cap_exempt: false
+    tier: 2
+    why: "Continuous glucose monitoring — device telemetry streaming, close to her P1 project."
+    enabled: true
+
+  # ---- Data / streaming platform companies: direct P1 relevance ----
+  - name: "Databricks"
+    careers_url: "https://www.databricks.com/company/careers/open-positions"
+    ats: "greenhouse"
+    ats_token: "databricks"
+    cap_exempt: false
+    tier: 2
+    why: "She uses Databricks/Spark/Delta Lake at InsOps."
+    enabled: true
+
+  - name: "Confluent"
+    careers_url: "https://www.confluent.io/careers/"
+    ats: "ashby"
+    ats_token: "confluent"
+    cap_exempt: false
+    tier: 2
+    why: "Kafka company. Her P1 streaming platform is the portfolio piece for this."
+    enabled: true
+
+  - name: "Snowflake"
+    careers_url: "https://careers.snowflake.com/"
+    cap_exempt: false
+    tier: 3
+    why: "Large data employer, consistent sponsor. Note: Snowflake itself is a listed gap in her skills."
+    enabled: true
+
+# ------------------------------------------------------------
+# Search queries. {{TOKENS}} come from system/config/profile.yml.
+# ------------------------------------------------------------
+search_queries:
+
+  track_a_data:
+    - '"Data Engineer" ("new grad" OR "entry level" OR "Engineer I" OR "Junior") "United States" -senior -staff -principal'
+    - '"Analytics Engineer" OR "Data Platform Engineer" "Remote" United States {{CURRENT_YEAR}}'
+    - '("Data Engineer") ("Airflow" OR "Kafka" OR "Flink" OR "Databricks") (site:greenhouse.io OR site:lever.co OR site:jobs.ashbyhq.com)'
+
+  track_b_ml:
+    - '"Machine Learning Engineer" ("new grad" OR "entry level" OR "I") "United States" -senior -staff'
+    - '"Computer Vision Engineer" OR "AI Engineer" "United States" {{CURRENT_YEAR}} -senior'
+    - '("MLOps" OR "Applied Scientist") "entry" OR "new grad" (site:greenhouse.io OR site:lever.co)'
+
+  track_c_software:
+    - '"Software Engineer" ("new grad" OR "Engineer I" OR "entry level") "United States" -senior -staff -principal'
+    - '"Software Engineer" ("C#" OR ".NET" OR "C++") "United States" -senior'
+
+  track_d_embedded:
+    - '"Embedded Software Engineer" OR "Firmware Engineer" "United States" -senior -staff'
+    - '("Test Automation Engineer" OR "SDET" OR "V&V Engineer") ("medical device" OR "LabVIEW" OR "TestStand") "United States"'
+    - '"FPGA Engineer" OR "Embedded Engineer" ("entry" OR "new grad") "United States"'
+
+  cap_exempt:
+    - '("Research Engineer" OR "Data Engineer" OR "Software Engineer") site:*.edu careers {{CURRENT_YEAR}}'
+    - '("Scientific Software" OR "Research Software Engineer") ("national laboratory" OR "research institute")'
+    - '"Research Engineer" ("nonprofit research" OR "research institute") "United States"'
+
+  sponsorship_positive:
+    # Finds postings that SAY they sponsor. Highest-value query in the file.
+    - '"visa sponsorship available" ("Data Engineer" OR "Software Engineer" OR "Machine Learning Engineer") "United States"'
+    - '"will sponsor" H-1B ("new grad" OR "entry level") engineer {{CURRENT_YEAR}}'
+    - '"we sponsor" OR "sponsorship provided" software engineer "United States"'
+
+# ------------------------------------------------------------
+# Pre-scoring filters.
+# ------------------------------------------------------------
+filters:
+  max_posting_age_days: 30
+  exclude_title_words:
+    - "Senior"
+    - "Sr."
+    - "Staff"
+    - "Principal"
+    - "Lead"
+    - "Manager"
+    - "Head of"
+    - "Director"
+    - "VP"
+    - "Architect"
+    - "Distinguished"
+    - "Fellow"
+  exclude_if_requires_years_over: 4
+  require_us_location: true
+  drop_if_in_applied_list: true
+  drop_if_rejected_within_days: 180
+  drop_agency_reposts: true
+
+  # The hard sponsorship gate lives in system/config/sponsorship.yml.
+  apply_sponsorship_screen: true

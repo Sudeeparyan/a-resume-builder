@@ -1,151 +1,36 @@
 ---
 name: job-hunter
 description: >-
-  Find, verify, sponsorship-screen, score and track US job openings for Annie. Use when asked to
+  Find, verify, sponsorship-screen, rank and save US job openings for Annie. Use when asked to
   "find jobs", "search for roles", "what should I apply to this week", "scan companies", "refresh
-  the job list", "give me 10 jobs", or to check a specific company's openings. Reads context/ for
-  what she actually wants, applies the hard sponsorship gate, checks the tracker so an already-applied
-  or already-rejected company is never surfaced again, and writes results to output/SUMMARY.md.
-  United States only. Never invents a listing or a link.
+  the job list", "give me 10 jobs", or to check a specific company's openings. Runs the hard
+  sponsorship gate and the never-re-apply rules through the career-dashboard app, so an excluded,
+  already-applied or recently-rejecting company is never surfaced. United States only. Never
+  invents a listing or a link.
 ---
 
 # Job hunter
 
-## Read first, in this order
+Everything runs through the app in `career-dashboard/`; `PY` means `career-dashboard/backend/.venv/bin/python`, `WS` means `$PY career-dashboard/backend/scripts/workspace.py`.
 
-1. `context/01-basics.md` — work authorization. She is on **active F-1 OPT** and **is authorized
-   to work now**.
-2. `context/07-preferences.md` — the search query itself: titles, seniority, the sponsorship rule.
-3. `context/05-skills.md` — what "a good match" means. Score against what she has, not the ideal.
-4. `system/config/portals.yml` — tracked companies and search queries.
-5. `system/config/regions.yml` — the US pack: boards, hubs, cap-exempt categories.
-6. `system/config/sponsorship.yml` — the gate.
-7. `system/modes/_shared.md` then `_profile.md` — scoring. `_profile.md` wins.
+## Read first
 
-## Step 0 — exclusions, before anything else
+`career-dashboard/AGENTS.md`, then `career-dashboard/data/context/` (especially `07-preferences.md` and `01-basics.md`), `data/config/profile.yml`, and `backend/workflows/modes/scan.md` (the full procedure). If a preference is still open in `QUESTIONS-FOR-YOU.md`, ask her plainly and offer to record the answer.
 
-```
-python system/scripts/track.py --age          # flip 21-day-silent applications to GHOSTED
-python system/scripts/track.py --exclusions   # what must never be surfaced
-```
+## The rules you enforce
 
-Nothing on that list appears in the output. Not in the shortlist, not in "considered", nowhere.
+- **Sponsorship gate** (`WS sponsor-check --company "<name>" --file <jd.txt>`): an explicit refusal, or a citizenship/clearance/ITAR/EAR/permanent-residency requirement, excludes the posting; it is logged with its sentence. Silence is shown. "Must be authorized to work in the US" never excludes: she is authorized (F-1 OPT).
+- **Never re-apply** (`WS check-reapply --company "<name>" --title "<role>"`): same company and role never again; rejected → company hidden 180 days; ghosted → different role only, after 90 days.
+- **Role fit**: four tracks, entry level, ≤4 years, United States or Remote (US).
+- **Ranking**: tier S (cap-exempt) → A (says it sponsors) → B (proven H-1B sponsor) → C (silent), then score.
 
-## Step 1 — discover
+## Steps
 
-Work down this list. Direct sources first: a company's own posting is fresher and less contested
-than an aggregator copy.
+1. Tracked career pages: `WS run --kind discovery --preset portals` (no AI call).
+2. AI discovery: `WS run --kind discovery` (or `--preset balanced_five`).
+3. By hand: Indeed `search_jobs` (country `US`) and `get_job_details` for the full JD; employer/ATS pages beat aggregators. Quote restrictive sentences verbatim.
+4. Gate, then save: `$PY career-dashboard/backend/scripts/career.py add --file <job.json>` (it runs the gate and the re-apply check itself).
+5. Verify links with the `verify-job-url` skill.
+6. Report a ranked table (tier, score, company, role, location, link), the excluded postings with their sentences, and one plain next step. `career-dashboard/data/output/SUMMARY.md` refreshes itself.
 
-### a. Tracked companies, direct
-Walk `tracked_companies` in `portals.yml` where `enabled: true`. **Cap-exempt entries first.**
-Where a company has an `ats` token, hit the public JSON API — no auth, no scraping:
-
-- Greenhouse: `https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true`
-- Lever: `https://api.lever.co/v0/postings/{company}?mode=json`
-- Ashby: `https://api.ashbyhq.com/posting-api/job-board/{company}`
-
-### b. Indeed — the primary volume channel
-```
-mcp__claude_ai_Indeed__search_jobs(search="<title>", location="<hub or 'remote'>",
-                                   country_code="US", job_type="fulltime")
-```
-Run it once per target title from `context/07-preferences.md`, across Remote plus the hubs.
-Aim for ~1.5× the number of roles she asked for, because the gate will cut some.
-
-### c. Cap-exempt sweep — do not skip this
-Run the `cap_exempt` queries in `portals.yml`. Universities, national labs, nonprofit research
-institutes and academic medical centers file H-1B **year-round with no lottery**. Aggregators index
-these poorly, so they need their own pass.
-
-### d. The sponsorship-positive queries
-Run the `sponsorship_positive` queries. Postings that say "visa sponsorship available" are
-uncommon and convert far better than anything else in the list.
-
-## Step 2 — get the full job description
-
-For every candidate role:
-```
-mcp__claude_ai_Indeed__get_job_details(job_id="<id>")
-```
-or fetch the ATS posting. **You need the full text**, not the search-result summary — it feeds both
-the gate and the tailoring step. Save it to `job-description.txt` in the application folder.
-
-## Step 3 — the sponsorship gate (hard)
-
-```
-python system/scripts/sponsor_check.py --jd <jd.txt> --company "<name>" --json
-```
-
-| Verdict | Meaning |
-|---|---|
-| `EXCLUDED` / `no_sponsorship` | Posting explicitly refuses to sponsor. **Drop it.** |
-| `EXCLUDED` / `cannot_hire` | Citizenship, clearance, ITAR/EAR, or permanent residency required. **Drop it.** |
-| `KEEP` tier `A` | Posting explicitly offers sponsorship. Rank top. |
-| `KEEP` tier `S` | Cap-exempt employer. Rank top. |
-| `KEEP` tier `B` | Proven H-1B sponsor, posting silent. |
-| `KEEP` tier `C` | Silent, no record. **Keep it.** This is the normal case and the largest bucket. |
-
-**Do not over-filter.** "Must be authorized to work in the United States" is not a refusal — she
-is authorized. Only an explicit refusal counts.
-
-**Absence of H-1B history never excludes.** Most employers never appear in USCIS data, and many
-sponsor once a candidate has cleared the interviews.
-
-Every exclusion gets logged in `SUMMARY.md` with **the sentence that triggered it**, so a wrong
-exclusion is visible and can be overridden.
-
-## Step 4 — verify the link is live
-
-```
-python system/scripts/verify_job_url.py --url "<url>"
-```
-`EXPIRED` or `BROKEN` → drop it. Never publish a link you have not checked.
-
-## Step 5 — score
-
-Weights from `_shared.md`, with `_profile.md` overrides. Eligibility is now a **gate in Step 3**,
-not a weight — redistribute it across skill match and competition.
-
-Then order by sponsorship tier first, score second: **S → A → B → C**.
-
-Tiers: 80+ apply today · 70–79 this week · 55–69 only if competition is low · below 55 skipped
-with a one-line reason.
-
-## Step 6 — write it up
-
-Update `output/SUMMARY.md`:
-
-- `Last run:` — what you did, when, how many found/kept/excluded
-- **Your resumes** — one row per prepared application
-- **Pipeline** — what's out, how long it's been quiet, what needs a nudge
-- **Companies found, no resume yet** — the ranked shortlist, links verified
-- **Excluded** — company, role, and the triggering sentence
-- **What to study this week**
-
-Append one row per scan to `system/data/scan-history.tsv`.
-
-## Step 7 — record what you prepared
-
-```
-python system/scripts/track.py --add --company "X" --role "Y" --url "..." \
-    --tier B --score 82 --track track_a --folder Annie_Manoharan_X_01
-python system/scripts/track.py --sync-applied-companies
-```
-
-## Output table
-
-| # | Company | Role | Tier | Score | Location | Posted | Apply |
-|---|---------|------|------|-------|----------|--------|-------|
-
-Follow it with the honesty line from `sponsorship.yml → disclaimer`, every time.
-
-## Rules
-
-- **Never invent a listing, a company, or a URL.** If you could not verify it, it does not ship.
-- **Never surface anything on the exclusion list**, in any section.
-- **Never exclude for a reason other than the two in Step 3.** No silent drops.
-- **US only.** A non-US role is not searched for, not ranked, not listed as skipped.
-- **Log every exclusion with its triggering sentence.** She must be able to see and overrule it.
-- **Cap-exempt employers rank first**, whatever track they belong to.
-- If a scan returns fewer than asked, say so plainly and say why. Do not pad the list with roles
-  that failed the gate or repeat companies already in the tracker.
+For "give me N jobs **and** resumes", switch to `/hunt`.

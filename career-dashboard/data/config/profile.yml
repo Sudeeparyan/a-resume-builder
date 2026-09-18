@@ -1,0 +1,388 @@
+schema_version: 2
+candidate_revision: 2026-09-18.1
+candidate:
+  full_name: Annie Prasanna Manoharan
+  preferred_name: Annie
+  email: annieprm0501@gmail.com
+  phone: +1 (479) 301-1366
+  phone_external_resume_policy: include_exactly_as_supplied
+  location: United States
+  city_as_inferred: Fayetteville, AR
+  city_external_resume_policy: omit; no resume prints a city (Q5 open)
+  timezone: America/Chicago
+  linkedin: ''
+  portfolio_url: https://annie0159.github.io/Portfolio/
+  github: https://github.com/Annie0159
+  work_authorization: F-1 OPT, active (confirmed Sept 2026). Authorized to work in the US now.
+  work_authorization_external_resume_policy: omit_unless_form_requires; never write "no sponsorship required"
+  sponsorship_need: STEM OPT extension available at an E-Verify employer; H-1B or cap-exempt sponsorship needed later
+  citizenship: India
+  current_status: MS Computer Engineering completed May 2026 (University of Arkansas); Data Engineering Intern at InsOps Inc. since Jul 2024; seeking a full-time US role
+  most_recent_role: Data Engineering Intern at InsOps Inc. (Jul 2024 - Present)
+  dated_professional_experience: 'Never state a total. Soliton: Engineering Intern Jul 2022 - May 2023, Project Engineer Jun 2023 - Jun 2024 (confirmed 2026-09-18). InsOps, TA and RA overlap 2024-2026.'
+  education_summary: MS Computer Engineering, University of Arkansas (Aug 2024 - May 2026); BE Electronics and Communication, Sri Ramakrishna Engineering College (Aug 2019 - May 2023). No GPA on record.
+  availability: Presumed immediately available; unconfirmed (Q9)
+professional_identity:
+  primary: Data / Analytics Engineer and ML / AI Engineer (entry level)
+  secondary: Software Engineer; Embedded / Test Automation Engineer
+  summary: Computer Engineering graduate with production AWS data-pipeline internship work,
+    a sub-second Kafka/Flink/ClickHouse streaming project, measured computer-vision research
+    (MiGa, DualFit) at the AICV Lab, and shipped medical-device test-automation software at
+    Soliton Technologies for Dräger.
+identity_guardrails:
+  never_position_as:
+  - Senior, Staff, Lead or Principal engineer
+  - Candidate with a stated total of N years of experience (Q1 rule)
+  - Published researcher (until PUB-001 leaves hold)
+  - Full-stack or web developer
+  - DevOps, platform or infrastructure engineer
+  do_not_imply:
+  - A publication, paper or conference acceptance
+  - A total years-of-experience figure
+  - That MiGa or DualFit were personal side projects (they are AICV Lab research)
+  - That the InsOps role is anything other than an internship
+  - Production Spark or Databricks work (only the superseded _DS framing mentions them)
+  - Docker, CI/CD or Kubernetes work (skills-list only or not in the bank)
+  data_science_rule: Present MiGa and DualFit as research with their measured results; label
+    the Resume Classification model as a project with its test metrics.
+target_roles:
+  primary:
+  - Data Engineer
+  - Analytics Engineer
+  - Data Platform Engineer
+  - Machine Learning Engineer
+  - AI Engineer
+  - Computer Vision Engineer
+  - Software Engineer
+  - Embedded Software Engineer
+  - Test Automation Engineer
+  secondary:
+  - ETL Developer
+  - Big Data Engineer
+  - Applied Scientist
+  - NLP Engineer
+  - MLOps Engineer
+  - Software Development Engineer
+  - Backend Engineer
+  - Application Engineer
+  - Firmware Engineer
+  - V&V Engineer
+  - SDET
+  - FPGA Engineer
+  - Research Engineer
+  seniority:
+  - New Grad
+  - Entry Level
+  - Junior
+  - Engineer I
+  - Engineer II
+  - Associate
+  excluded:
+  - Titles containing Senior, Sr., Staff, Principal, Lead, Manager, Head of, Director, VP, Architect, Distinguished, Fellow
+  - Postings requiring more than 4 years of experience
+  - Postings that explicitly refuse visa sponsorship
+  - Postings requiring US citizenship, permanent residency, a security clearance, ITAR/EAR or US-person status
+  max_years_required: 4
+role_tracks:
+- name: Data / Analytics Engineering
+  code: A
+  evidence: Professional (InsOps) plus PROJ-P01-IOT
+  lead_section: Professional Experience
+  signature_pool: [PROJ-P01-IOT, PROJ-P04-NEWS-RAG, PROJ-P06-EXPENSE]
+  signals:
+  - data engineer
+  - analytics engineer
+  - data platform
+  - etl
+  - elt
+  - pipeline
+  - airflow
+  - spark
+  - databricks
+  - kafka
+  - flink
+  - sql
+  - warehouse
+  - lakehouse
+  - ingestion
+  - streaming
+  - dbt
+- name: ML / AI Engineering
+  code: B
+  evidence: Research (AICV Lab) plus PROJ-P04-NEWS-RAG and PROJ-P05-RESUME
+  lead_section: Projects
+  signature_pool: [PROJ-P02-MIGA, PROJ-P03-DUALFIT, PROJ-P04-NEWS-RAG, PROJ-P05-RESUME]
+  signals:
+  - machine learning
+  - ml engineer
+  - ai engineer
+  - deep learning
+  - computer vision
+  - pytorch
+  - llm
+  - generative ai
+  - rag
+  - nlp
+  - model training
+  - inference
+  - mlops
+  - applied scientist
+- name: Software Engineering
+  code: C
+  evidence: Professional (Soliton) plus candidate projects
+  lead_section: Professional Experience
+  signature_pool: [PROJ-P01-IOT, PROJ-P06-EXPENSE, PROJ-P05-RESUME]
+  signals:
+  - software engineer
+  - software developer
+  - sde
+  - backend
+  - oop
+  - c++
+  - c#
+  - .net
+  - data structures
+  - algorithms
+  - design patterns
+  - api
+  - sdlc
+- name: Embedded / Test Automation
+  code: D
+  evidence: Professional (Soliton V&V) plus PROJ-P07-FPGA, PROJ-P08-ELEVATOR
+  lead_section: Projects
+  signature_pool: [PROJ-P07-FPGA, PROJ-P08-ELEVATOR, PROJ-P09-ANTENNA]
+  signals:
+  - embedded
+  - firmware
+  - rtos
+  - microcontroller
+  - fpga
+  - verilog
+  - labview
+  - teststand
+  - v&v
+  - verification
+  - validation
+  - sdet
+  - test automation
+  - hardware
+narrative:
+  headline: Data and AI engineer with production AWS pipeline work, a sub-second streaming
+    platform, measured computer-vision research, and shipped medical-device test automation
+  career_story: Moved from electronics and embedded systems, through professional software test
+    automation at Soliton Technologies (Dräger medical-device applications), into computer-vision
+    research at the University of Arkansas AICV Lab and production data engineering at InsOps Inc.
+    The range runs from FPGA firmware to RAG pipelines, with shipped work at every layer.
+  proof_points:
+  - Sub-second Kafka/Flink SQL/ClickHouse streaming platform with event-time OVER windows and watermark strategies (PROJ-P01-IOT)
+  - MiGa keypoint mAP 91.83% at 1,250 FPS, 0.93 MOTA, 0.91 IDF1 (PROJ-P02-MIGA)
+  - DualFit on VITON-HD at 24.9 PSNR, 0.913 SSIM, 5.261 FID (PROJ-P03-DUALFIT)
+  - Resume classifier at 89.48% test accuracy and 88% macro F1 across 25 categories (PROJ-P05-RESUME)
+  - Sole developer of the Dräger WPF application; approximately 94% of manual test cases automated (EXP-SOLITON-PE-001, METRIC-DRAEGER-94)
+  - Already inside a cap-exempt employer as TA and RA at the University of Arkansas
+claim_policy:
+  safe_when_attributed_to_user_context:
+  - All bullets transcribed in data/context/03-experience.md and 04-projects.md
+  - Soliton split dates (confirmed 2026-09-18)
+  - The approximately 94% figure attached to Dräger (confirmed 2026-09-18)
+  require_confirmation_before_external_use:
+  - Any publication (PUB-001 hold)
+  - Whether the 94% figure is measured or estimated
+  - Whether Annie is still at InsOps and in what capacity
+  - City, relocation and remote preferences (Q5)
+  - Salary expectations (Q6)
+  never_invent:
+  - A total years-of-experience figure
+  - Publications, awards or certifications
+  - Web/full-stack, Kubernetes/Terraform, dbt/Snowflake or CI/CD work
+  - Production Spark/Databricks bullets
+  - Project metrics not present in data/context/04-projects.md
+  client_name_disclosure: client names appear on Annie's own resumes
+  external_client_labels:
+    Dräger: Dräger
+    Medtronic: Medtronic
+location_preferences:
+  country: United States
+  preferred:
+  - Remote (US)
+  - San Francisco Bay Area, CA
+  - Seattle, WA
+  - Austin, TX
+  - New York, NY
+  - Boston, MA
+  - Chicago, IL
+  - Raleigh-Durham, NC
+  - Minneapolis, MN
+  arrangements:
+  - On-site
+  - Hybrid
+  - Remote
+  rule: Search all hubs plus Remote (US); do not down-rank on location until Q5 is answered. Never search outside the United States.
+sponsorship:
+  rule:
+    explicit_refusal: EXCLUDE - never shown in any list; logged with the triggering sentence
+    silent: SHOW - most postings; where most offers come from
+    explicit_offer: SHOW and rank top
+    citizenship_clearance_itar: EXCLUDE - cannot lawfully be hired regardless of interview outcome
+    authorized_to_work_required: SHOW - she is authorized (F-1 OPT)
+    no_h1b_history: SHOW - history is a ranking signal only
+  tiers:
+    S: Cap-exempt employer (no lottery, files year-round)
+    A: Posting says it sponsors
+    B: Proven H-1B sponsor, silent posting
+    C: Silent posting, no record (the normal case)
+  config: data/config/sponsorship.yml
+  index: data/sponsors/sponsors-uscis.csv
+reapply:
+  ghost_after_days: 21
+  reject_cooldown_days: 180
+  ghost_cooldown_days: 90
+  rule: Same company and role is never surfaced again at any status. A rejection hides the company
+    for 180 days. An application silent for 21 days becomes ghosted; the company is eligible again
+    after 90 days for a different role only.
+competition_strategy:
+  prefer:
+  - Cap-exempt employers (universities, national labs, nonprofit research institutes, academic medical centers)
+  - Postings that explicitly offer sponsorship
+  - Companies under 200 employees
+  - Postings less than 7 days old
+  - Medical-device and health-tech employers (Soliton/Dräger history plus ventilator-telemetry project)
+  - Embedded / test-automation roles (least contested track)
+  - Roles needing an uncommon skill combination she has (Flink event-time semantics, LabVIEW+Python V&V, FPGA plus data)
+  avoid:
+  - Roles demanding more than 4 years
+  - Postings older than 30 days with no re-post
+  - Senior/Staff/Principal/Lead titles
+  - Staffing-agency reposts of the same role
+project_selection:
+  registry: data/context/evidence.yml
+  allow_only_resume_ready_projects: true
+  signature_first: true
+  signature_rule: Exactly one signature project per company, first in Projects, never repeated
+    across companies. Supporting projects may repeat. Registry table data/signature-projects.md.
+  current_problem_sources:
+  - Verified job-description snapshot
+  - Target employer official website
+  - Target employer official newsroom or filing
+  - Target employer engineering or product documentation
+  ranking_weights:
+    problem_similarity: 35
+    required_skill_evidence: 30
+    evidence_strength: 20
+    domain_and_stakeholder_similarity: 10
+    recency: 5
+  safeguards:
+  - Company research ranks real projects; it never creates candidate experience.
+  - Keep the original project identity, evidence type, ownership, and completion status.
+  - Do not imply the project was built for the target employer.
+  - If no project is a strong analogue, disclose the gap, ship the strongest real project, and write a build-now spec into study-plan.md.
+  required_selected_projects: 2
+ten_company_request:
+  trigger_examples:
+  - give me 10 companies
+  - find 10 matching companies
+  - make 10 tailored resumes
+  - /hunt
+  default_scope: End-to-end discovery, sponsorship gate, tracker check, verification, ranking,
+    tailoring, compilation, visual QA, study plan, and delivery; not list-only.
+  target_release_count: 10
+  batch_mix:
+    A: 4
+    B: 2
+    C: 2
+    D: 2
+  discovery_rule: Continue replacing excluded, rejected, duplicate, expired, or inaccessible leads
+    until ten distinct eligible live JDs are secured or the honest market search is exhausted.
+  deliverables:
+  - Ranked table of company, role, location, posting URL, sponsorship tier, fit decision, supported requirement coverage, and key gap
+  - Ten isolated one-page tailored resume artifact folders named Annie_Manoharan_<Company>_<NN>
+  - Direct paths to every released resume PDF and job folder
+  application_rule: Never submit an application or send outreach without explicit authorization. This workspace prepares; Annie submits.
+resume_contract:
+  template: data/templates/resume-base.tex
+  paper: letter
+  layout: single_column
+  required_pages: 1
+  minimum_body_font_pt: 10
+  maximum_body_font_pt: 11
+  fit_rule: Fit by cutting content in the documented order, never by shrinking margins or fonts below 10pt.
+  cut_order:
+  - Third bullet of the supporting project
+  - Last bullet of the oldest role (repeats up the list)
+  - Coursework line
+  - Second degree
+  required_sections:
+  - Education
+  - Technical Skills
+  - Professional Experience
+  - Projects
+  section_order_by_track:
+    A: [Education, Technical Skills, Professional Experience, Projects]
+    B: [Education, Technical Skills, Projects, Professional Experience]
+    C: [Education, Technical Skills, Professional Experience, Projects]
+    D: [Education, Technical Skills, Projects, Professional Experience]
+  header_fields:
+  - full_name
+  - phone
+  - email
+  - portfolio_url
+  - github
+  omitted_by_default:
+  - Summary or objective section
+  - City
+  - LinkedIn
+  - Work authorization line
+  - GPA
+  prohibited_filler:
+  - References available upon request
+  - Generic objective statements
+  - Unsupported extracurriculars
+  - passionate about
+  - results-oriented
+  - proven track record
+  - leveraged
+  - spearheaded
+  - synergies
+  - robust
+  - seamless
+  - cutting-edge
+  - dynamic professional
+  - Responsible for
+  - Worked on
+  - Helped with
+  - Involved in
+  - Tasked with
+  - significantly
+  - greatly
+  - substantially
+  - highly
+  diagnostics:
+    job_fit_score: Opportunity decision only
+    supported_requirement_coverage: Required/preferred JD requirements backed by evidence IDs
+    artifact_qa: Binary hard gates; never averaged into a score
+  release_command: python3 backend/scripts/validate_resume.py <resume.tex> --compile --output
+    <resume.pdf> --render-dir <resume-preview> --qa-json <qa.json>
+  required_selected_projects: 2
+batch_contract:
+  maximum_jobs: 10
+  isolated_job_folders: true
+  folder_name_pattern: Annie_Manoharan_<CompanyNoSpaces>_<NN>
+  retry_limit: 3
+  required_artifacts:
+  - job-description.md
+  - evaluation.md
+  - company-research.md
+  - study-plan.md
+  - evidence-map.yml
+  - resume.tex
+  - resume.pdf
+  - resume-preview/page-01.png
+  - qa.json
+  cross_batch_invariants:
+  - identity
+  - contact details
+  - employment titles and dates
+  - education status and dates
+  - metrics and attribution
+  discovery_replacement_policy: Excluded/rejected/expired/duplicate leads do not consume the
+    requested release count; continue searching for replacements where possible.

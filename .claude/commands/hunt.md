@@ -1,133 +1,64 @@
 ---
-description: Find sponsorship-safe US jobs and build a tailored one-page resume (LaTeX + PDF) for each
+description: Find sponsorship-safe US jobs for Annie and build a tailored one-page resume (LaTeX + PDF) and study plan for each
 argument-hint: "[count] [track|remote|cap-exempt|role title]"
 ---
 
 # /hunt — the whole loop, one command
 
-Arguments: `$ARGUMENTS` (may be empty)
-
-Parse them loosely:
+Arguments: `$ARGUMENTS` (may be empty). Parse loosely:
 - a bare number → how many applications to prepare (default **10**)
 - `remote` → Remote (US) only
-- `cap-exempt` → universities, national labs, nonprofit research, academic medical centers only
-- anything else → treat as a role/track filter (e.g. `data engineer`, `embedded`)
+- `cap-exempt` → universities, national labs, nonprofit research institutes, academic medical centers only
+- anything else → a role/track filter (e.g. `data engineer`, `embedded`)
 
-Run every step. Do not ask permission between steps — she asked for the whole thing.
-
----
+Run every step without asking permission in between; she asked for the whole thing. `PY` below means `career-dashboard/backend/.venv/bin/python` and `WS` means `$PY career-dashboard/backend/scripts/workspace.py`.
 
 ## 1. Load the facts
 
-Read `context/` — all nine files plus `QUESTIONS-FOR-YOU.md`. Then `system/profile/`,
-`system/config/profile.yml`, `portals.yml`, `regions.yml`, `sponsorship.yml`, and
-`system/modes/_shared.md` → `_profile.md`.
+Read `career-dashboard/AGENTS.md`, then `career-dashboard/data/context/` (all nine files plus `QUESTIONS-FOR-YOU.md`), `data/config/profile.yml`, `portals.yml`, `regions.yml`, `sponsorship.yml`, and `backend/workflows/modes/_shared.md` → `_profile.md` → `batch-resumes.md`. She is on **active F-1 OPT**: authorized to work now, sponsorship needed later.
 
-She is on **active F-1 OPT**: authorized to work now, needs H-1B later.
+## 2. Age the tracker
 
-## 2. Clear the exclusions
+`WS age` (applications quiet 21 days become ghosted). `WS summary` shows what is saved, applied and excluded.
 
-```
-python system/scripts/track.py --age
-python system/scripts/track.py --exclusions
-```
-Nothing on that list may appear anywhere in the output.
+## 3. Find roles (~1.5× the target, the gate will cut some)
 
-## 3. Find roles
+1. Tracked career pages first, no AI: `WS run --kind discovery --preset portals`.
+2. Then AI discovery (`WS run --kind discovery`) and live search (Indeed `search_jobs` with country `US`, then the employer/ATS page). Always include a cap-exempt pass and sponsorship-positive queries.
+3. Unless the arguments narrow it, aim for the batch mix in `profile.yml`: **4 Data · 2 ML/AI · 2 Software · 2 Embedded**.
 
-Follow `.claude/skills/job-hunter/SKILL.md` Step 1. Gather **~1.5×** the target count, because
-the gate will cut some.
+## 4. Pull the full JD and gate it
 
-Unless the arguments narrow it, use the batch mix from `profile.yml`:
-**4 Data · 2 ML/AI · 2 Software · 2 Embedded**.
+For each lead found by hand, save the full JD to a scratch file and run `WS sponsor-check --company "<name>" --file <jd.txt>` and `WS check-reapply --company "<name>" --title "<role>"`. Save survivors (and exclusions, so they are logged with their sentence) with `$PY career-dashboard/backend/scripts/career.py add --file <job.json>` (fields: company, title, location, url, description, requisition_id). Leads found by the app were gated already.
 
-Always include a cap-exempt pass and the sponsorship-positive queries.
+## 5. Verify the link
 
-## 4. Pull the full JD for each
+`$PY career-dashboard/.agents/skills/verify-job-url/scripts/verify_job_url.py --url "<url>"`. Drop dead links.
 
-`mcp__claude_ai_Indeed__get_job_details`, or fetch the ATS posting. Save each to
-`job-description.txt` in that application's folder.
+## 6. Rank and pick
 
-## 5. Gate on sponsorship
+Tier first (**S → A → B → C**), then score. Take the top N **distinct companies**. Assign N different signature projects across the batch (`career-dashboard/data/signature-projects.md` shows who already owns what; Pacman coursework can only support).
 
-```
-python system/scripts/sponsor_check.py --jd <jd.txt> --company "<name>" --json
-```
+## 7. Build each application
 
-Drop `EXCLUDED`. Keep everything else, including tier `C`. Record the triggering sentence for
-every exclusion.
+1. `$PY career-dashboard/backend/scripts/career.py prepare JOB_ID [--project PROJ-ID]` → `data/output/applications/Annie_Manoharan_<Company>_<NN>/`.
+2. Research → `company-research.md` (`modes/deep.md`). Mandatory, every time.
+3. Tailor with the `resume-tailor` skill: registry facts only, recruiter audit, fit exactly **one US Letter page** (cut content in the documented order; never shrink fonts below 10pt or touch margins).
+4. Validate: `$PY career-dashboard/backend/scripts/validate_resume.py <folder>/resume.tex --compile --output <folder>/resume.pdf --render-dir <folder>/resume-preview --qa-json <folder>/qa.json`. Look at `page-01.png`.
+5. Study plan → `study-plan.md`: `WS run --kind study_plan --job-id JOB_ID` (or `modes/upskill.md` by hand).
 
-## 6. Verify the link
+## 8. Report back
 
-```
-python system/scripts/verify_job_url.py --url "<url>"
-```
-Drop dead links.
-
-## 7. Rank and pick
-
-Order by tier (**S → A → B → C**), then score. Take the top N **distinct companies**.
-
-## 8. For each company, build the application
-
-Folder: `output/Annie_Manoharan_<Company>_<NN>/`
-`<Company>` = name with spaces and punctuation stripped. `<NN>` = zero-padded, continuing from
-what's already in `output/`.
-
-1. **Research** the company → `research.md` (`system/modes/deep.md`). Mandatory, every time.
-2. **Pick the signature project** — one per company, never reused. Check and update
-   `system/data/signature-projects.md`.
-3. **Tailor** from `system/templates/latex/resume-track-*.tex` using only facts in `context/`.
-   Obey the do-not-claim list in `system/profile/master-profile.md`.
-4. **Recruiter audit**, three passes (`references/recruiter-audit.md`).
-5. Write it to `Annie_Manoharan_<Company>_<NN>.tex`.
-6. **Build and verify one page:**
-   ```
-   python system/scripts/build_pdf.py output/Annie_Manoharan_<Company>_<NN>/Annie_Manoharan_<Company>_<NN>.tex
-   ```
-   If it fails on page count, cut content in the order the script prints. **Never** shrink
-   margins or fonts.
-7. **ATS check:**
-   ```
-   python system/scripts/ats_check.py --resume <tex> --jd <jd.txt>
-   ```
-8. **Study plan** → `study-plan.md` (`system/modes/upskill.md`).
-9. **Record it:**
-   ```
-   python system/scripts/track.py --add --company "X" --role "Y" --url "..." \
-       --tier <T> --score <N> --track <track> --folder Annie_Manoharan_X_NN
-   ```
-
-## 9. Write the summary
-
-Update `output/SUMMARY.md` — every section in `CLAUDE.md → Output conventions`, including
-**Excluded** with the triggering sentence for each.
-
-```
-python system/scripts/track.py --sync-applied-companies
-```
-Append a row to `system/data/scan-history.tsv`.
-
-## 10. Report back
-
-Print the table:
+`data/output/SUMMARY.md` regenerates itself. Print:
 
 | # | Company | Role | Tier | Score | Location | Folder | Apply |
 
-Then, briefly:
-- how many were found, kept, and excluded — **and why they were excluded**
-- the honesty line from `sponsorship.yml → disclaimer`
-- the single skill most of these roles wanted that she doesn't have yet
-- **one plain next step**
-
----
+Then briefly: how many were found, kept and excluded, **and the sentence behind each exclusion**; the single skill most of these roles wanted that she does not have yet; **one plain next step**.
 
 ## Non-negotiable
 
-- Both a **`.tex`** and a **`.pdf`** in every folder. The PDF to send, the LaTeX to edit in
-  Overleaf. Neither is optional.
-- **Every resume exactly one page.** Verified, not assumed.
-- **Ten companies means ten different signature projects**, not one resume with the name changed.
-- Never surface an excluded, applied-to, or rejected company.
-- Never invent a listing, a link, or a fact.
-- If you can only find fewer than asked, say so and say why. Do not pad.
+- Both `resume.tex` and `resume.pdf` in every folder.
+- Every resume exactly one page, verified.
+- Ten companies means ten different signature projects.
+- Never surface an excluded, already-applied or recently-rejecting company.
+- Never invent a listing, a link or a fact. If fewer than asked, say so and why. Never apply for her.

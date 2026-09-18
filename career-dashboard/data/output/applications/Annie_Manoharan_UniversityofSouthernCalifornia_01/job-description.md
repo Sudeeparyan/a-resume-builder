@@ -1,0 +1,26 @@
+# University of Southern California — Research Engineer (CIC, neuroimaging ML)
+
+Location: Los Angeles, CA
+Source: https://usccareers.usc.edu/job/los-angeles/research-engineer/1209/98849730016
+Saved: 2026-09-18T14:26:06+00:00
+Verification: not verified; user-supplied snapshot.
+
+University of Southern California - Research Engineer
+Team: Center for Integrative Connectomics, Mark and Mary Stevens Neuroimaging and Informatics Institute
+Location: Los Angeles, CA
+
+Role focus
+- Process and analyze high-resolution 3D microscopy datasets.
+- Apply machine learning and AI to image-pipeline development.
+- Build data visualization for model interpretability.
+- Document methods on GitHub and train colleagues in the methodologies.
+
+Required qualifications
+- Master's degree in Computer Science, Engineering, Biomedical Engineering, Neuroimaging, or a related field.
+- Machine learning, deep learning for biomedical imaging, computer vision, AI, image analysis, and data visualization.
+- Experience with large-scale neuroimaging and genetics data.
+- Design, development, and maintenance of machine-learning and deep-learning pipelines/tools for neuroimaging applications.
+- Clear written and oral communication; laboratory research experience.
+
+Source: USC Research Engineer, REQ20178572, posted 2026-08-06.
+https://usccareers.usc.edu/job/los-angeles/research-engineer/1209/98849730016

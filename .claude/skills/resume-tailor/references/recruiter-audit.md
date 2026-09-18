@@ -35,7 +35,7 @@ whether it sits under "required". For each one, say which of two things it is:
 
 - **In the profile but not on this page** — a writing problem. Fix it in Pass 2.
 - **Not held at all** — a truth problem. It becomes a gap in the Match Assessment and a line in
-  `output/NN_Company_Role/study-plan.md`. It never gets written onto the resume.
+  `career-dashboard/data/output/applications/Annie_Manoharan_<Company>_<NN>/study-plan.md`. It never gets written onto the resume.
 
 That distinction is the whole game.
 
@@ -69,7 +69,7 @@ plan.
 
 ## Pass 2 — Rewrite the experience section
 
-Rewrite every bullet in Experience, and apply the same rules to Projects, under these rules:
+Rework every Experience bullet under these rules. Wording stays inside what the registry's approved facts for that role say; you may select, reorder and tighten, never add a fact. Project blocks use the registry wording exactly (the validator checks it).
 
 1. **Weave in the missing keywords from Pass 1 — but only the true ones.** They must read as a
    natural part of the sentence. A keyword that cannot be inserted truthfully is *not* inserted: it
@@ -78,11 +78,11 @@ Rewrite every bullet in Experience, and apply the same rules to Projects, under 
    unexplained gap may need a real answer rather than a rewrite.
 3. **Google XYZ formula on every bullet:** *"Accomplished [X] as measured by [Y] by doing [Z]."* In
    this workspace's wording that is `action verb → what changed → measured by what → using which
-   method`. Same shape as the house rule in `system/modes/_shared.md`; XYZ just insists the measurement is
+   method`. Same shape as the house rule in `career-dashboard/backend/workflows/modes/_shared.md`; XYZ just insists the measurement is
    actually present.
 4. **Strong action verb first.** Never "Responsible for", "Helped with", "Worked on", "Assisted in",
-   "Tasked with", and never the banned filler listed in `system/modes/_shared.md`.
-5. **Numbers wherever they exist.** If `system/profile/master-profile.md` records a number, use it. If it
+   "Tasked with", and never the banned filler listed in `career-dashboard/backend/workflows/modes/_shared.md`.
+5. **Numbers wherever they exist.** If `career-dashboard/data/context/` (and its registry, `evidence.yml`) records a number, use it. If it
    does not, leave a loud marker — `[FILL IN: approx. records processed per day]` — suggesting the
    realistic *unit* with the value left empty. **Never write a plausible number, and never fill one
    in as a guess.** The marker is the honest way to ask the candidate for something only they know.
@@ -93,7 +93,7 @@ Rewrite every bullet in Experience, and apply the same rules to Projects, under 
 
 After rewriting, collect every `[FILL IN: …]` into one block and ask the candidate for those numbers
 directly, in plain language. There are usually about five, and answering them is the single biggest
-score lift available. Write whatever they answer straight back into `system/profile/master-profile.md`, so
+score lift available. Write whatever they answer straight back into `career-dashboard/data/context/` (and its registry, `evidence.yml`), so
 the question is never asked twice and every future resume inherits the number.
 
 ---
@@ -108,7 +108,7 @@ the question is never asked twice and every future resume inherits the number.
 - **Formatting risks** — tables, columns, headers or footers carrying content, images, text boxes,
   unusual glyphs, non-standard section names, inconsistent dates. Check against `ats-rules.md`.
 - Back this with the real tool rather than eyeballing it, and run it yourself:
-  `python3 system/scripts/ats_check.py --resume output/NN_Company_Role/resume.tex --jd output/NN_Company_Role/job-description.txt`
+  `career-dashboard/backend/.venv/bin/python career-dashboard/backend/scripts/workspace.py score --job-id JOB_ID`
 
 ### 3b. As a hiring manager on resume 147 of 200
 
@@ -119,7 +119,7 @@ the question is never asked twice and every future resume inherits the number.
 
 ### Then deliver the final version
 
-Apply every Pass 3 fix and save the result. The file in `output/` is always the post-audit version;
+Apply every Pass 3 fix and save the result. The `resume.tex` in the application folder is always the post-audit version;
 the pre-audit draft is never the deliverable.
 
 ---
@@ -136,7 +136,7 @@ Before: NN/100   After fixes: NN/100   Verdict: <yes | maybe | no> pile
 Fixed          — red flags and keyword gaps closed, one line each
 Still open     — what could not be fixed truthfully, and why
 Need from you  — every [FILL IN] number, asked as a plain question
-ATS check      — pass or fail, plus anything ats_check.py flagged
+ATS check      — the Build & score readiness and coverage results, plus anything flagged
 ```
 
 ## Honesty gates
@@ -145,8 +145,8 @@ ATS check      — pass or fail, plus anything ats_check.py flagged
   fixes moved it four points, report four.
 - A keyword counts as "now present" only if it is truthfully present in real experience.
 - `[FILL IN: …]` markers must never survive into a sent resume. Flag any that remain, loudly, every
-  time the file is touched. `system/scripts/build_pdf.sh` refuses to build a file with leftover
-  placeholders — that is the backstop, not the plan.
+  time the file is touched. `validate_resume.py` fails any resume with a leftover
+  placeholder — that is the backstop, not the plan.
 - If Pass 1 scores below 55/100 and the gaps are structural, say plainly that this application is a
   long shot and what would make it viable. A resume cannot fix a role mismatch, and pretending
   otherwise wastes the candidate's week.

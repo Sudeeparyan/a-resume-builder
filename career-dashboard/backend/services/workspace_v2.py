@@ -1,0 +1,1401 @@
+"""Application services. SQLite owns mutable state; original evidence is preserved."""
+
+from __future__ import annotations
+import hashlib, json, re, uuid
+from datetime import datetime, timezone, date
+from pathlib import Path
+from zoneinfo import ZoneInfo
+from backend.paths import TIMEZONE
+from backend.services.planning import plan
+from backend.services.postings import canonical_url, posting_key
+
+KINDS = {
+    "personal",
+    "skill",
+    "project",
+    "experience",
+    "education",
+    "certification",
+    "fact",
+}
+AGENTS = [
+    {'id': 'orchestrator', 'name': 'Main orchestrator', 'reads': 'Saved instructions, job IDs, draft versions and worker states', 'profile_access': True,
+     'does': 'Serializes build/score and AI work, persists progress and failures, deduplicates active runs, recovers interrupted work and enforces the shared AI budget.',
+     'implementation': 'Deterministic dispatcher and monitor; no monitoring AI calls', 'guide': 'docs/AGENT-ARCHITECTURE.md'},
+    {'id': 'instruction_tracker', 'name': 'Instruction chat', 'reads': 'User messages and the selected draft', 'profile_access': True,
+     'does': 'Applies precise edits, captures profile facts for reconciliation and retains unresolved messages.',
+     'implementation': 'Rules and SQLite; zero AI calls', 'guide': 'backend/services/instruction_tracker.py'},
+    {'id': 'resume_match', 'name': 'Independent resume matcher', 'reads': 'Finished PDF text and saved JD only', 'profile_access': False,
+     'does': 'Scores document term coverage for free; optional cached AI review explains matches and gaps independently.',
+     'implementation': 'Pure document scorer plus optional isolated Codex process', 'guide': 'backend/services/resume_match.py'},
+    {
+        "id": "resume_advisor", "name": "Agent 1 · Resume advisor",
+        "reads": "Saved JD and recent public company research only", "profile_access": False,
+        "does": "Suggests resume priorities, convincing project evidence and skills; proposed projects remain ideas, never candidate claims.",
+        "implementation": "Two isolated Codex processes with dated sources; explicit opt-in; shared persistent stage cache",
+        "guide": "backend/workflows/agents/resume-advisor.md",
+    },
+    {
+        "id": "resume_tracker", "name": "Agent 2 · Resume tracker",
+        "reads": "User edits to resume project fields and skills", "profile_access": True,
+        "does": "Tracks versions, flags missing projects, and captures new projects/skills in Profile for evidence review.",
+        "implementation": "Deterministic rules in the shared database on every save",
+        "guide": "backend/services/resume_studio.py",
+    },
+    {
+        "id": "research",
+        "name": "Company researcher",
+        "reads": "Saved job description and public company sources",
+        "profile_access": False,
+        "does": "Investigates the business, role outcomes, team, skills and company projects; cites sources and labels uncertainty.",
+        "implementation": "Independent Codex run with web search",
+        "guide": "backend/workflows/agents/company-researcher.md",
+    },
+    {
+        "id": "hiring",
+        "name": "Independent hiring manager",
+        "reads": "Job description and completed company research only",
+        "profile_access": False,
+        "does": "Defines expected skills, experience, convincing project evidence and interview preparation. It cannot promise a shortlist.",
+        "implementation": "Fresh isolated Codex run; no profile, files, email or previous conversation",
+        "guide": "backend/workflows/agents/hiring-manager.md",
+    },
+    {
+        "id": "match",
+        "name": "Profile comparison",
+        "reads": "Your active profile and the independent hiring review",
+        "profile_access": True,
+        "does": "Separates supported strengths, partial evidence, missing skills and practical next steps.",
+        "implementation": "Separate Codex run after the independent review",
+        "guide": "backend/workflows/agents/profile-comparison.md",
+    },
+    {
+        "id": "discovery",
+        "name": "Job discovery",
+        "reads": "Active skills, experience, role preferences and previously seen job IDs",
+        "profile_access": True,
+        "does": "Finds current US postings in the four target families, quotes their sponsorship wording verbatim, verifies requirements and removes previously seen postings. The 'portals' mix reads tracked companies' ATS feeds with no AI call.",
+        "implementation": "Claude Code or Codex with web search, or direct Greenhouse/Lever/Ashby feeds; persistent unique posting store",
+        "guide": "backend/workflows/agents/job-discovery.md",
+    },
+    {
+        "id": "sponsorship",
+        "name": "Sponsorship gate",
+        "reads": "Each posting's own words, the employer name and domain, and the USCIS H-1B index (83,624 employers)",
+        "profile_access": False,
+        "does": "Excludes postings that refuse sponsorship or require citizenship/clearance/ITAR, logging the exact sentence; ranks the rest S (cap-exempt), A (says yes), B (proven sponsor), C (silent). Never excludes for silence.",
+        "implementation": "Deterministic patterns in data/config/sponsorship.yml plus a SQLite index; zero AI calls",
+        "guide": "backend/services/sponsorship.py",
+    },
+    {
+        "id": "reapply",
+        "name": "Never-re-apply tracker",
+        "reads": "Saved, removed, excluded and rejected jobs with their dates",
+        "profile_access": False,
+        "does": "Blocks the same company and role forever, a rejecting company for 180 days, marks applications silent for 21 days as ghosted and allows a different role there after 90 days.",
+        "implementation": "Deterministic rules over the jobs table; zero AI calls",
+        "guide": "backend/services/reapply.py",
+    },
+    {
+        "id": "study_plan",
+        "name": "Study planner",
+        "reads": "Saved JD, the match check's genuine gaps and registered skill/project titles",
+        "profile_access": True,
+        "does": "Writes study-plan.md for this company: what they will probe and what to learn before they call. Everything in it is a skill not yet held; it never reaches the resume.",
+        "implementation": "One AI call without web; writes into the application folder",
+        "guide": "backend/workflows/agents/study-planner.md",
+    },
+    {
+        "id": "email",
+        "name": "Email evidence reviewer",
+        "reads": "Job-related Gmail messages and the saved company/role/URL list",
+        "profile_access": False,
+        "does": "Finds confirmations and status updates; uncertain matches wait for review. No sending or mailbox changes.",
+        "implementation": "Connected Gmail read tools through Codex; application service validates and applies evidence",
+        "guide": "backend/workflows/agents/email-reviewer.md",
+    },
+    {
+        "id": "resume",
+        "name": "Resume validator",
+        "reads": "Approved registry, profile, selected JD and generated PDF",
+        "profile_access": True,
+        "does": "Checks evidence, the one-page US Letter layout, signature and supporting project selection and current artifact hashes.",
+        "implementation": "Python evidence validation; versioned Resume Studio drafts and PDF previews",
+        "guide": "backend/workflows/TAILORING.md",
+    },
+]
+
+
+class CareerServices:
+    def __init__(self, workspace):
+        self.w = workspace
+        projections_changed = False
+        with self.w.connect() as db:
+            db.executescript(
+                """
+            CREATE TABLE IF NOT EXISTS preferences(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS knowledge(id TEXT PRIMARY KEY,kind TEXT NOT NULL,title TEXT NOT NULL,summary TEXT NOT NULL,data TEXT NOT NULL,source TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1,deleted INTEGER NOT NULL DEFAULT 0,review_state TEXT NOT NULL DEFAULT 'registered',updated_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS mail_evidence(id TEXT PRIMARY KEY,job_id TEXT REFERENCES jobs(id),company TEXT NOT NULL,role TEXT NOT NULL,kind TEXT NOT NULL,subject TEXT NOT NULL,sender TEXT NOT NULL,received_at TEXT NOT NULL,submission_date TEXT,excerpt TEXT NOT NULL,reason TEXT NOT NULL,confidence TEXT NOT NULL,state TEXT NOT NULL DEFAULT 'pending',created_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS agent_runs(id TEXT PRIMARY KEY,kind TEXT NOT NULL,job_id TEXT REFERENCES jobs(id),state TEXT NOT NULL,input TEXT NOT NULL,result TEXT,error TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
+            CREATE INDEX IF NOT EXISTS idx_agent_runs_state ON agent_runs(state,created_at);
+            CREATE TABLE IF NOT EXISTS posting_identities(identity TEXT PRIMARY KEY,job_id TEXT NOT NULL REFERENCES jobs(id));
+            CREATE TABLE IF NOT EXISTS application_evidence(job_id TEXT PRIMARY KEY REFERENCES jobs(id),source TEXT NOT NULL,confirmed_at TEXT NOT NULL,submission_date TEXT,message_id TEXT);
+            CREATE TABLE IF NOT EXISTS cover_letters(job_id TEXT NOT NULL REFERENCES jobs(id),version INTEGER NOT NULL,content TEXT NOT NULL,path TEXT NOT NULL,created_at TEXT NOT NULL,evidence_revision TEXT NOT NULL,PRIMARY KEY(job_id,version));
+            """
+            )
+            for j in self.w.jobs():
+                db.execute(
+                    "INSERT OR IGNORE INTO posting_identities VALUES(?,?)",
+                    (posting_key(j["url"]), j["id"]),
+                )
+                from backend.job_quality import company_id, normalize_company
+                cid = company_id(j["company"])
+                db.execute(
+                    "INSERT OR IGNORE INTO companies(id,normalized_name,display_name,created_at,updated_at) VALUES(?,?,?,?,?)",
+                    (cid, normalize_company(j["company"]), j["company"], self.now(), self.now()),
+                )
+                db.execute("UPDATE jobs SET company_id=COALESCE(company_id,?) WHERE id=?", (cid, j["id"]))
+            if not db.execute("SELECT 1 FROM preferences WHERE key='goals'").fetchone():
+                self.set_pref(
+                    "goals",
+                    {
+                        "weekly_target": 30,
+                        "workdays": [0, 1, 2, 3, 4, 5],
+                        "start_date": self.today(),
+                    },
+                    db,
+                )
+            if not db.execute(
+                "SELECT 1 FROM preferences WHERE key='profile_initialized'"
+            ).fetchone():
+                self.seed_profile(db)
+            for field in ("target_roles", "location_preferences"):
+                config = self.w.profile().get(field, {})
+                db.execute(
+                    "INSERT OR IGNORE INTO knowledge(id,kind,title,summary,data,source,updated_at) VALUES(?,?,?,?,?,?,?)",
+                    (
+                        "personal:" + field,
+                        "personal",
+                        field.replace("_", " ").capitalize(),
+                        json.dumps(config, ensure_ascii=False, indent=2),
+                        json.dumps({"field": field, "value": config}),
+                        "data/config/profile.yml > " + field,
+                        self.now(),
+                    ),
+                )
+            # Enrich only untouched imported entries; user edits always win.
+            for claim in self.w.evidence()["claims"]:
+                facts = claim.get("approved_facts", [])
+                if facts:
+                    db.execute(
+                        "UPDATE knowledge SET title=?,summary=? WHERE id=? AND review_state='registered' AND summary=''",
+                        (
+                            claim.get("title") or facts[0][:150],
+                            "\n".join(facts),
+                            claim["id"],
+                        ),
+                    )
+            projections_changed = self.retire_malformed_skill_fragments(db)
+        if projections_changed:
+            self.sync_projections()
+
+    @staticmethod
+    def now():
+        return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    @staticmethod
+    def today():
+        return datetime.now(ZoneInfo(TIMEZONE)).date().isoformat()
+
+    def retire_malformed_skill_fragments(self, db):
+        """Soft-retire fragments created by the former comma-based parser."""
+        if db.execute("SELECT 1 FROM preferences WHERE key='skill_fragment_cleanup_v1'").fetchone():
+            return False
+        rows = db.execute(
+            "SELECT * FROM knowledge WHERE kind='skill' AND deleted=0 AND source LIKE 'User edit in Resume Studio%'"
+        ).fetchall()
+        retired = []
+        for row in rows:
+            title = row["title"]
+            if title.count("(") == title.count(")"):
+                continue
+            db.execute(
+                "UPDATE knowledge SET deleted=1,revision=revision+1,review_state='retired_malformed',updated_at=? WHERE id=?",
+                (self.now(), row["id"]),
+            )
+            retired.append(row["id"])
+        self.set_pref("skill_fragment_cleanup_v1", {"retired_ids": retired, "applied_at": self.now()}, db)
+        if retired:
+            self.w.record_event(db, "malformed_skill_fragments_retired", entry_ids=retired, recoverable=True)
+        return bool(retired)
+
+    def pref(self, key, default=None):
+        with self.w.connect() as db:
+            r = db.execute(
+                "SELECT value FROM preferences WHERE key=?", (key,)
+            ).fetchone()
+        return json.loads(r[0]) if r else default
+
+    def set_pref(self, key, value, db=None):
+        if db is None:
+            with self.w.connect() as db:
+                self.set_pref(key, value, db)
+        else:
+            db.execute(
+                "INSERT INTO preferences VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (key, json.dumps(value)),
+            )
+
+    def seed_profile(self, db):
+        profile = self.w.profile()
+        evidence = self.w.evidence()
+
+        def insert(id, kind, title, summary, data, source):
+            db.execute(
+                "INSERT OR IGNORE INTO knowledge(id,kind,title,summary,data,source,updated_at) VALUES(?,?,?,?,?,?,?)",
+                (
+                    id,
+                    kind,
+                    str(title),
+                    str(summary),
+                    json.dumps(data, ensure_ascii=False),
+                    source,
+                    self.now(),
+                ),
+            )
+
+        for key, value in profile["candidate"].items():
+            insert(
+                "personal:" + key,
+                "personal",
+                key.replace("_", " ").capitalize(),
+                value,
+                {"field": key, "value": value},
+                "data/config/profile.yml > candidate > " + key,
+            )
+        for claim in evidence["claims"]:
+            cat = claim.get("category", "fact")
+            kind = {
+                "employment": "experience",
+                "education": "education",
+                "certification": "certification",
+                "skill": "skill",
+            }.get(cat, "fact")
+            title = (
+                claim.get("title")
+                or claim.get("institution")
+                or claim.get("value")
+                or (claim.get("approved_facts") or [claim["id"]])[0][:150]
+            )
+            summary = (
+                claim.get("value")
+                or claim.get("value_as_supplied")
+                or "\n".join(claim.get("approved_facts", []))
+                or " · ".join(
+                    str(claim[k])
+                    for k in ("employer", "dates", "degree_as_supplied", "status_text")
+                    if k in claim
+                )
+            )
+            insert(
+                claim["id"],
+                kind,
+                title,
+                summary,
+                claim,
+                "data/context/evidence.yml > " + claim["id"],
+            )
+        for project in evidence["projects"]:
+            content = project.get("resume_content", {})
+            insert(
+                project["id"],
+                "project",
+                content.get("title") or project.get("name") or project["id"],
+                "\n".join(content.get("bullets", [])),
+                project,
+                "data/context/evidence.yml > " + project["id"],
+            )
+        # Seed known technologies only from the existing explicit skills claims.
+        for claim in evidence["claims"]:
+            if "skill" in claim.get("category", "") or claim["id"].startswith("SKILL"):
+                for skill in claim.get("values", claim.get("skills", [])):
+                    if isinstance(skill, str):
+                        insert(
+                            "skill:" + hashlib.sha256(skill.encode()).hexdigest()[:12],
+                            "skill",
+                            skill,
+                            claim.get("approved_external_use", ""),
+                            {"value": skill, "evidence_id": claim["id"]},
+                            "data/context/evidence.yml > " + claim["id"],
+                        )
+        self.set_pref("profile_initialized", True, db)
+
+    def knowledge(self, include_deleted=False):
+        with self.w.connect() as db:
+            rows = db.execute(
+                "SELECT * FROM knowledge "
+                + ("" if include_deleted else "WHERE deleted=0 ")
+                + "ORDER BY kind,title"
+            ).fetchall()
+        return [{**dict(r), "data": json.loads(r["data"])} for r in rows]
+
+    def save_knowledge(self, item, id=None):
+        kind = item["kind"]
+        title = item["title"].strip()
+        summary = item.get("summary", "").strip()
+        if kind not in KINDS or not title:
+            raise ValueError("Choose a category and enter a title")
+        if len(title) > 250 or len(summary) > 30000:
+            raise ValueError("Profile entry is too long")
+        with self.w.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            old = (
+                db.execute("SELECT * FROM knowledge WHERE id=?", (id,)).fetchone()
+                if id
+                else None
+            )
+            if id and not old:
+                raise ValueError("Profile entry not found")
+            if old and item.get("revision") != old["revision"]:
+                raise ValueError("This entry changed elsewhere. Reload before saving.")
+            key = id or "user:" + uuid.uuid4().hex[:16]
+            data = item.get("data", json.loads(old["data"]) if old else {})
+            if not isinstance(data, dict):
+                raise ValueError("Entry details must be an object")
+            if old and old["kind"] == "personal":
+                data = {**data, "value": summary}
+            source = old["source"] if old else "User supplied in Profile"
+            revision = old["revision"] + 1 if old else 1
+            db.execute(
+                "INSERT INTO knowledge VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind,title=excluded.title,summary=excluded.summary,data=excluded.data,revision=excluded.revision,deleted=0,review_state=excluded.review_state,updated_at=excluded.updated_at",
+                (
+                    key,
+                    kind,
+                    title,
+                    summary,
+                    json.dumps(data, ensure_ascii=False),
+                    source,
+                    revision,
+                    0,
+                    "user_updated",
+                    self.now(),
+                ),
+            )
+            self.w.record_event(
+                db,
+                "profile_entry_saved",
+                entry_id=key,
+                before=dict(old) if old else None,
+                after=item,
+            )
+            self.bump_profile_revision(db)
+        self.export_profile()
+        self.w.export_tracking()
+        return next(i for i in self.knowledge() if i["id"] == key)
+
+    def delete_knowledge(self, id):
+        with self.w.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            old = db.execute(
+                "SELECT * FROM knowledge WHERE id=? AND deleted=0", (id,)
+            ).fetchone()
+            if not old:
+                raise ValueError("Profile entry not found")
+            db.execute(
+                "UPDATE knowledge SET deleted=1,revision=revision+1,review_state='user_updated',updated_at=? WHERE id=?",
+                (self.now(), id),
+            )
+            self.w.record_event(
+                db, "profile_entry_removed", entry_id=id, before=dict(old)
+            )
+            self.bump_profile_revision(db)
+        self.export_profile()
+        self.w.export_tracking()
+        return {"deleted": True}
+
+    def pending_knowledge(self):
+        """Entries edited by the user (including removals) that still block new drafts."""
+        return [
+            {"id": i["id"], "kind": i["kind"], "title": i["title"], "deleted": bool(i["deleted"]), "source": i["source"]}
+            for i in self.knowledge(True)
+            if i["review_state"] == "user_updated"
+        ]
+
+    def reconcile_knowledge(self, ids=None):
+        """Confirm reviewed profile edits so new drafts can be created again.
+
+        Every edit, removal or Studio capture parks an entry in 'user_updated', and
+        profile_dirty() blocks new resumes until the user has looked at it. This is
+        that review step: it only changes review_state, never the wording or the
+        evidence registry.
+        """
+        pending = self.pending_knowledge()
+        chosen = [p for p in pending if ids is None or p["id"] in set(ids)]
+        if ids is not None and len(chosen) != len(set(ids)):
+            raise ValueError("Some entries are no longer pending. Reload the Profile and try again.")
+        if not chosen:
+            return {"reconciled": [], "profile_dirty": self.profile_dirty(), "revision": self.profile_revision()}
+        with self.w.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            for entry in chosen:
+                db.execute(
+                    "UPDATE knowledge SET review_state='registered',updated_at=? WHERE id=? AND review_state='user_updated'",
+                    (self.now(), entry["id"]),
+                )
+            self.w.record_event(db, "profile_reconciled", entry_ids=[e["id"] for e in chosen])
+            self.bump_profile_revision(db)
+        self.export_profile()
+        self.w.export_tracking()
+        return {"reconciled": [e["id"] for e in chosen], "profile_dirty": self.profile_dirty(), "revision": self.profile_revision()}
+
+    def export_profile(self):
+        from career import atomic_write
+
+        atomic_write(
+            self.w.root / "data/active-profile.json",
+            json.dumps(self.knowledge(True), indent=2, ensure_ascii=False) + "\n",
+        )
+
+    def profile_revision(self):
+        return int(self.pref("profile_state_revision", 1))
+
+    def bump_profile_revision(self, db):
+        row = db.execute("SELECT value FROM preferences WHERE key='profile_state_revision'").fetchone()
+        revision = int(json.loads(row[0])) + 1 if row else 2
+        self.set_pref("profile_state_revision", revision, db)
+        return revision
+
+    def export_state(self):
+        from career import atomic_write
+
+        # A readable audit projection; SQLite remains authoritative.
+        with self.w.connect() as db:
+            preferences = {
+                r["key"]: json.loads(r["value"])
+                for r in db.execute("SELECT * FROM preferences")
+            }
+        atomic_write(
+            self.w.root / "data/workspace-state.json",
+            json.dumps(
+                {"preferences": preferences, "mail": self.mail(), "runs": self.runs()},
+                indent=2,
+                ensure_ascii=False,
+            )
+            + "\n",
+        )
+
+    def sync_projections(self):
+        """Regenerate every readable projection from the committed SQLite state."""
+        self.w.export_tracking()
+        self.export_profile()
+        self.export_state()
+
+    def profile_context(self):
+        return [
+            {
+                "id": i["id"],
+                "kind": i["kind"],
+                "title": i["title"],
+                "summary": i["summary"],
+                "details": (
+                    i["data"]
+                    if i["review_state"] == "registered"
+                    else {"user_supplied": True}
+                ),
+                "review_state": i["review_state"],
+            }
+            for i in self.knowledge()
+            if i["kind"] != "personal"
+            or i["id"]
+            in {
+                "personal:location",
+                "personal:current_status",
+                "personal:most_recent_role",
+                "personal:target_roles",
+                "personal:location_preferences",
+            }
+        ]
+
+    def profile_dirty(self):
+        return any(i["review_state"] == "user_updated" for i in self.knowledge(True))
+
+    def goals(self, on=None):
+        with self.w.connect() as db:
+            dates = [
+                r[0]
+                for r in db.execute(
+                    "SELECT COALESCE(j.application_date,a.submission_date,substr(a.confirmed_at,1,10)) FROM jobs j LEFT JOIN application_evidence a ON a.job_id=j.id WHERE j.application_date IS NOT NULL OR a.job_id IS NOT NULL"
+                )
+            ]
+        return plan(self.pref("goals"), dates, on or date.fromisoformat(self.today()))
+
+    def save_goals(self, values):
+        if (
+            not isinstance(values["weekly_target"], int)
+            or not 1 <= values["weekly_target"] <= 200
+        ):
+            raise ValueError("Choose a weekly target from 1 to 200")
+        days = values["workdays"]
+        if (
+            not days
+            or len(set(days)) != len(days)
+            or any(not isinstance(d, int) or not 0 <= d <= 6 for d in days)
+        ):
+            raise ValueError("Choose at least one distinct workday")
+        start = date.fromisoformat(values["start_date"])
+        if start > date.fromisoformat(self.today()):
+            raise ValueError("Goal tracking cannot start in the future")
+        self.set_pref("goals", {**values, "workdays": sorted(days)})
+        with self.w.connect() as db:
+            self.w.record_event(db, "goal_updated", settings=values)
+        self.w.export_tracking()
+        self.export_state()
+        return self.goals()
+
+    def add_posting(self, values, source="manual", verdict=None):
+        """Save a posting unless the sponsorship gate or the never-re-apply rules say no.
+
+        Returns {"job", "duplicate"} on success, {"excluded": True, ...} when the posting's
+        own words exclude it (it is recorded in excluded_postings, never in jobs), or
+        {"blocked": True, ...} when Annie already applied to / was rejected by this company.
+        """
+        from backend.services import reapply, sponsorship
+        title = values.get("title", values.get("role", ""))
+        verdict = verdict or sponsorship.evaluate(
+            values["company"], values.get("description", ""), values.get("url", ""), values.get("location", ""),
+            extra_sentences=[values.get("restriction_quote", "")] if values.get("restriction_quote") else None,
+            employer_type=values.get("employer_type", ""),
+        )
+        if verdict.excluded:
+            record = self.record_excluded(values, verdict, source)
+            return {"excluded": True, "job": None, "duplicate": False, "reason": verdict.screen.reason,
+                    "reason_label": verdict.screen.reason_label, "sentence": verdict.screen.sentence, "record": record}
+        clean = canonical_url(values["url"])
+        keys = {
+            posting_key(clean, values["company"], values.get("requisition_id", "")),
+            posting_key(clean),
+        }
+        normalize = lambda text: re.sub(r"[^a-z0-9]+", "", text.casefold())
+        # The same posting again is a duplicate of its existing record, not a re-apply.
+        with self.w.connect() as db:
+            for key in keys:
+                found = db.execute("SELECT job_id FROM posting_identities WHERE identity=?", (key,)).fetchone()
+                if found:
+                    return {"job": self.w.get_job(found[0]), "duplicate": True}
+        # A Gmail-tracked application being completed with its posting is an upgrade, not a new role.
+        upgrading = any(
+            job.get("record_source") == "gmail"
+            and normalize(job["company"]) == normalize(values["company"])
+            and normalize(job["title"]) == normalize(title)
+            for job in self.w.jobs()
+        )
+        gate = {"blocked": False, "note": ""} if upgrading else reapply.check(
+            values["company"], title, self.reapply_memory(), self.excluded(), self.w.profile()
+        )
+        if gate["blocked"]:
+            return {"blocked": True, "job": None, "duplicate": False, "rule": gate["rule"], "note": gate["note"]}
+        values = {**values, "_sponsor": verdict, "_reapply_note": gate.get("note", "")}
+        email_only = [
+            job
+            for job in self.w.jobs()
+            if job.get("record_source") == "gmail"
+            and normalize(job["company"]) == normalize(values["company"])
+            and normalize(job["title"])
+            == normalize(values.get("title", values.get("role", "")))
+        ]
+        if len(email_only) == 1:
+            job = email_only[0]
+            with self.w.connect() as db:
+                db.execute("BEGIN IMMEDIATE")
+                duplicate = next(
+                    (
+                        found
+                        for key in keys
+                        if (
+                            found := db.execute(
+                                "SELECT job_id FROM posting_identities WHERE identity=? AND job_id<>?",
+                                (key, job["id"]),
+                            ).fetchone()
+                        )
+                    ),
+                    None,
+                )
+                if duplicate:
+                    raise ValueError("This posting is already saved")
+                db.execute(
+                    "UPDATE jobs SET company=?,title=?,location=?,url=?,description=?,record_source='posting+gmail',verification='email_verified',updated_at=? WHERE id=?",
+                    (
+                        values["company"].strip(),
+                        values.get("title", values.get("role", "")).strip(),
+                        values["location"].strip(),
+                        clean,
+                        values["description"].strip(),
+                        self.now(),
+                        job["id"],
+                    ),
+                )
+                for key in keys:
+                    db.execute(
+                        "INSERT OR IGNORE INTO posting_identities VALUES(?,?)",
+                        (key, job["id"]),
+                    )
+                self.w.record_event(
+                    db,
+                    "email_application_posting_added",
+                    job["id"],
+                    company=values["company"],
+                    title=values.get("title", values.get("role", "")),
+                    url=clean,
+                )
+            self.w.export_tracking()
+            return {"job": self.w.get_job(job["id"]), "duplicate": False, "upgraded": True}
+        try:
+            job = self.w.add_job(
+                values["company"],
+                values.get("title", values.get("role", "")),
+                values["location"],
+                clean,
+                values["description"],
+                values.get("requisition_id", ""),
+            )
+            from backend.job_quality import JobQualityService
+            cid = JobQualityService(self).ensure_company(job["company"])
+            with self.w.connect() as db:
+                db.execute("UPDATE jobs SET company_id=? WHERE id=?", (cid, job["id"]))
+            self.store_sponsorship(job["id"], values["_sponsor"])
+            if values.get("_reapply_note"):
+                self.w.update_job(job["id"], job["status"], notes=values["_reapply_note"])
+            self.w.export_tracking()  # the front page must show the tier that was just stored
+            job = self.w.get_job(job["id"])
+            return {"job": job, "duplicate": False}
+        except ValueError as exc:
+            if "already saved" not in str(exc):
+                raise
+            with self.w.connect() as db:
+                for key in keys:
+                    duplicate = db.execute(
+                        "SELECT job_id FROM posting_identities WHERE identity=?", (key,)
+                    ).fetchone()
+                    if duplicate:
+                        return {"job": self.w.get_job(duplicate[0]), "duplicate": True}
+            raise
+
+    # ---- Sponsorship gate bookkeeping -------------------------------------------
+    def store_sponsorship(self, job_id, verdict):
+        """Write the tier and its evidence onto the job row so every list can show it."""
+        with self.w.connect() as db:
+            db.execute(
+                "UPDATE jobs SET sponsor_tier=?, sponsor_evidence=?, updated_at=? WHERE id=?",
+                (verdict.tier if verdict.tier != "EXCLUDED" else None, json.dumps(verdict.evidence_json(), ensure_ascii=False), self.now(), job_id),
+            )
+            self.w.record_event(db, "sponsorship_evaluated", job_id, tier=verdict.tier, label=verdict.label())
+        return verdict
+
+    def reevaluate_sponsorship(self, job_id):
+        """Re-run the gate on a saved job. If the posting now refuses, it moves to Excluded."""
+        from backend.services import sponsorship
+        job = self.w.get_job(job_id)
+        verdict = sponsorship.evaluate(job["company"], job.get("description", ""), job.get("url", ""), job.get("location", ""))
+        if sponsorship.overridden(job.get("sponsor_evidence"), verdict):
+            return {"excluded": False, "job": job, "note": "You restored this posting after reviewing that sentence, so it stays."}
+        if verdict.excluded:
+            self.record_excluded(job, verdict, "recheck")
+            self.remove_job(job_id, "Sponsorship gate: " + verdict.screen.reason_label)
+            return {"excluded": True, "sentence": verdict.screen.sentence, "reason_label": verdict.screen.reason_label}
+        self.store_sponsorship(job_id, verdict)
+        return {"excluded": False, "job": self.w.get_job(job_id)}
+
+    def record_excluded(self, values, verdict, source="manual"):
+        clean = canonical_url(values["url"]) if values.get("url") else ""
+        record = {
+            "id": hashlib.sha256((clean or values["company"] + values.get("title", "")).encode()).hexdigest()[:16],
+            "company": str(values["company"]).strip(),
+            "title": str(values.get("title", values.get("role", ""))).strip(),
+            "location": str(values.get("location", "")).strip(),
+            "url": clean,
+            "description": str(values.get("description", "")),
+            "reason": verdict.screen.reason,
+            "reason_label": verdict.screen.reason_label,
+            "sentence": verdict.screen.sentence,
+            "pattern": verdict.screen.pattern,
+            "source": source,
+            "excluded_at": self.now(),
+        }
+        with self.w.connect() as db:
+            db.execute(
+                """INSERT OR REPLACE INTO excluded_postings(id,company,title,location,url,description,reason,reason_label,sentence,pattern,source,excluded_at,restored_at)
+                   VALUES(:id,:company,:title,:location,:url,:description,:reason,:reason_label,:sentence,:pattern,:source,:excluded_at,NULL)""",
+                record,
+            )
+            self.w.record_event(db, "posting_excluded", None, company=record["company"], title=record["title"], url=record["url"], reason=record["reason"], sentence=record["sentence"], source=source)
+        self.w.export_tracking()
+        return {k: v for k, v in record.items() if k != "description"}
+
+    def reapply_memory(self):
+        """Every job ever saved, plus the history a fresh start archived, for the never-re-apply rules."""
+        with self.w.connect() as db:
+            archived = [dict(r) for r in db.execute(
+                "SELECT company, title, status, url, application_date, updated_at FROM reapply_history"
+            )]
+        return self.w.jobs(include_deleted=True) + archived
+
+    def excluded(self, include_restored=False):
+        with self.w.connect() as db:
+            rows = [dict(r) for r in db.execute("SELECT * FROM excluded_postings ORDER BY excluded_at DESC")]
+        return [
+            {k: v for k, v in row.items() if k != "description"}
+            for row in rows
+            if include_restored or not row.get("restored_at")
+        ]
+
+    def restore_excluded(self, excluded_id):
+        """A wrong exclusion is correctable: save the posting as a normal job and keep the audit trail."""
+        from backend.services.sponsorship import Screen, Verdict
+        with self.w.connect() as db:
+            row = db.execute("SELECT * FROM excluded_postings WHERE id=?", (excluded_id,)).fetchone()
+        if not row:
+            raise ValueError("Excluded posting not found")
+        row = dict(row)
+        if row.get("restored_at"):
+            raise ValueError("This posting was already restored")
+        override = Verdict(tier="C", screen=Screen("KEEP", "silent", "Restored by Annie after review; the exclusion was judged wrong", sentence=row["sentence"]), restored=True)
+        # Mark it restored first so the never-re-apply check does not see its own record.
+        with self.w.connect() as db:
+            db.execute("UPDATE excluded_postings SET restored_at=? WHERE id=?", (self.now(), excluded_id))
+        try:
+            result = self.add_posting({"company": row["company"], "title": row["title"], "location": row["location"], "url": row["url"], "description": row["description"]}, source="restored", verdict=override)
+        except Exception:
+            with self.w.connect() as db:
+                db.execute("UPDATE excluded_postings SET restored_at=NULL WHERE id=?", (excluded_id,))
+            raise
+        if result.get("blocked"):
+            with self.w.connect() as db:
+                db.execute("UPDATE excluded_postings SET restored_at=NULL WHERE id=?", (excluded_id,))
+            return result
+        if result.get("duplicate") and (result.get("job") or {}).get("deleted_at"):
+            # The posting sweep removed a saved job when its wording changed; restoring brings that job back.
+            self.w.restore_job(result["job"]["id"])
+            self.store_sponsorship(result["job"]["id"], override)
+            result = {"job": self.w.get_job(result["job"]["id"]), "duplicate": False}
+        with self.w.connect() as db:
+            self.w.record_event(db, "exclusion_restored", (result.get("job") or {}).get("id"), company=row["company"], title=row["title"])
+        self.w.export_tracking()
+        return result
+
+    def age_applications(self):
+        """Applied and silent for 21 days -> ghosted. Runs from the hourly scheduler."""
+        from backend.services import reapply
+        flipped = []
+        for row in reapply.due_for_ghosting(self.w.jobs(), self.w.profile()):
+            self.w.update_job(row["id"], "ghosted", notes=f"No reply {row['quiet_days']} days after applying; marked ghosted automatically. A confirmed email or a status change reopens it.")
+            flipped.append(row["id"])
+        return flipped
+
+    def mail(self):
+        with self.w.connect() as db:
+            rows = [
+                dict(r)
+                for r in db.execute(
+                    "SELECT * FROM mail_evidence ORDER BY received_at DESC"
+                )
+            ]
+        rows.sort(
+            key=lambda m: datetime.fromisoformat(
+                m["received_at"].replace("Z", "+00:00")
+            ),
+            reverse=True,
+        )
+        return {
+            "connection": self.pref("gmail", {"connected": False}),
+            "messages": rows,
+        }
+
+    def ingest_mail(self, batch):
+        # Excerpts only: do not store entire inbox bodies, HTML, attachments or tracking URLs.
+        email = str(batch.get("email", "")).strip()
+        if not email:
+            raise ValueError(
+                "Gmail account verification is required before email evidence can be saved"
+            )
+        count = 0
+        with self.w.connect() as db:
+            for m in batch["messages"]:
+                if not re.fullmatch(r"[a-zA-Z0-9_-]{1,150}", m["id"]):
+                    raise ValueError("Invalid message ID")
+                if m["kind"] not in {
+                    "applied",
+                    "interview",
+                    "offer",
+                    "rejected",
+                    "reminder",
+                    "uncertain",
+                }:
+                    raise ValueError("Invalid email classification")
+                timestamp = datetime.fromisoformat(
+                    m["received_at"].replace("Z", "+00:00")
+                )
+                if timestamp.tzinfo is None or timestamp > datetime.now(timezone.utc):
+                    raise ValueError(
+                        "Email must have a valid timezone and cannot be from the future"
+                    )
+                if (
+                    m.get("submission_date")
+                    and date.fromisoformat(m["submission_date"])
+                    > timestamp.astimezone(ZoneInfo(TIMEZONE)).date()
+                ):
+                    raise ValueError("Submission date cannot be after the message")
+                job_id = m.get("job_id") or None
+                if job_id:
+                    self.w.get_job(job_id)
+                count += db.execute(
+                    "INSERT OR IGNORE INTO mail_evidence VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        m["id"],
+                        job_id,
+                        m.get("company", ""),
+                        m.get("role", ""),
+                        m["kind"],
+                        m["subject"],
+                        m["sender"],
+                        m["received_at"],
+                        m.get("submission_date"),
+                        m["excerpt"][:3000],
+                        m.get("reason", ""),
+                        m.get("confidence", "needs_review"),
+                        "pending",
+                        self.now(),
+                    ),
+                ).rowcount
+            self.set_pref(
+                "gmail",
+                {
+                    "connected": True,
+                    "email": email,
+                    "last_synced_at": self.now(),
+                    "last_attempt_at": self.now(),
+                    "status": "ready",
+                    "last_error": "",
+                    "coverage": batch.get("coverage", "Job-related messages"),
+                    "mode": "Connected Gmail via Codex",
+                },
+                db,
+            )
+            self.w.record_event(db, "email_synced", new_messages=count)
+        # Automatic updates require exact company AND role evidence. When no saved
+        # posting exists, a high-confidence status email creates a minimal application
+        # record; no posting URL, job description or submission date is invented.
+        normalize = lambda text: re.sub(r"[^a-z0-9]+", "", text.casefold())
+        for m in self.mail()["messages"]:
+            if (
+                m["state"] != "pending"
+                or m["confidence"] != "high"
+                or m["kind"] in {"reminder", "uncertain"}
+            ):
+                continue
+            matches = [
+                j
+                for j in self.w.jobs()
+                if normalize(j["company"]) == normalize(m["company"])
+                and normalize(j["title"]) == normalize(m["role"])
+            ]
+            if len(matches) == 1 and m["job_id"] in {None, matches[0]["id"]}:
+                self.resolve_mail(m["id"], matches[0]["id"])
+            elif (
+                not matches
+                and not m["job_id"]
+                and m["company"].strip()
+                and m["role"].strip()
+            ):
+                self.resolve_mail(m["id"], create_application=True)
+        self.w.export_tracking()
+        self.export_state()
+        return {"imported": count}
+
+    def record_mail_sync_failure(self, error):
+        """Preserve verified evidence and the last successful timestamp on access failure."""
+        with self.w.connect() as db:
+            row = db.execute(
+                "SELECT value FROM preferences WHERE key='gmail'"
+            ).fetchone()
+            previous = json.loads(row[0]) if row else {}
+            previous_coverage = str(previous.get("coverage", "")).casefold()
+            if not previous.get("email") or any(
+                phrase in previous_coverage
+                for phrase in ("unable to verify", "inaccessible coverage")
+            ):
+                for saved in db.execute(
+                    "SELECT result,updated_at FROM agent_runs WHERE kind='email' AND state='completed' "
+                    "AND result IS NOT NULL ORDER BY created_at DESC"
+                ):
+                    try:
+                        result = json.loads(saved[0])
+                        verified_email = result.get("email", "").strip()
+                    except (AttributeError, json.JSONDecodeError):
+                        continue
+                    if verified_email:
+                        previous["email"] = verified_email
+                        previous["last_synced_at"] = saved[1]
+                        previous["coverage"] = result.get(
+                            "coverage", previous.get("coverage", "")
+                        )
+                        break
+            self.set_pref(
+                "gmail",
+                {
+                    **previous,
+                    "connected": False,
+                    "status": "needs_attention",
+                    "last_attempt_at": self.now(),
+                    "last_error": str(error)[:500],
+                },
+                db,
+            )
+            self.w.record_event(db, "email_sync_failed", error=str(error)[:500])
+        self.sync_projections()
+
+    def _create_mail_application(self, db, message):
+        company = message["company"].strip()
+        role = message["role"].strip()
+        if not company or not role:
+            raise ValueError("Confirm the exact company and role before tracking it")
+        job_id = hashlib.sha256(("gmail:" + message["id"]).encode()).hexdigest()[:16]
+        url = "https://mail.google.com/mail/u/0/#all/" + message["id"]
+        description = (
+            "Job description not available. This application was tracked from verified Gmail evidence. "
+            "Add the original posting and full description before generating a resume or cover letter."
+        )
+        db.execute(
+            "INSERT INTO jobs(id,company,title,location,url,description,status,created_at,updated_at,application_date,verification,record_source) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                job_id,
+                company,
+                role,
+                "Not recorded",
+                url,
+                description,
+                message["kind"],
+                self.now(),
+                self.now(),
+                message["submission_date"],
+                "email_verified",
+                "gmail",
+            ),
+        )
+        db.execute(
+            "INSERT OR IGNORE INTO posting_identities VALUES(?,?)",
+            (
+                "mail-application:"
+                + re.sub(r"[^a-z0-9]+", "", company.casefold())
+                + ":"
+                + re.sub(r"[^a-z0-9]+", "", role.casefold()),
+                job_id,
+            ),
+        )
+        self.w.record_event(
+            db,
+            "email_application_tracked",
+            job_id,
+            message_id=message["id"],
+            company=company,
+            title=role,
+            submission_date=message["submission_date"],
+        )
+        return job_id
+
+    def resolve_mail(
+        self, id, job_id=None, action="confirm", create_application=False
+    ):
+        with self.w.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            m = db.execute("SELECT * FROM mail_evidence WHERE id=?", (id,)).fetchone()
+            if not m:
+                raise ValueError("Email evidence not found")
+            if m["state"] != "pending":
+                return {"state": m["state"]}
+            if action not in {"confirm", "dismiss"}:
+                raise ValueError("Choose confirm or dismiss")
+            if action == "dismiss":
+                db.execute(
+                    "UPDATE mail_evidence SET state='dismissed' WHERE id=?", (id,)
+                )
+                self.w.record_event(db, "email_dismissed", message_id=id)
+                db.commit()
+                self.w.export_tracking()
+                self.export_state()
+                return {"state": "dismissed"}
+            if m["kind"] in {"reminder", "uncertain"}:
+                raise ValueError("This email does not establish an application status")
+            job_id = job_id or m["job_id"]
+            if not job_id and create_application:
+                job_id = self._create_mail_application(db, m)
+                job = dict(
+                    db.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+                )
+            elif job_id:
+                job = self.w.get_job(job_id)
+            else:
+                raise ValueError(
+                    "Choose a saved role or track this verified application from the email"
+                )
+            if job.get("deleted_at"):
+                raise ValueError("Restore the removed role before linking email evidence")
+            # A late old confirmation must never regress an interview, offer or rejection.
+            status = m["kind"]
+            if status == "applied" and job["status"] in {
+                "interview",
+                "offer",
+                "rejected",
+                "withdrawn",
+            }:
+                status = job["status"]
+            timestamps = db.execute(
+                "SELECT received_at FROM mail_evidence WHERE job_id=? AND state='confirmed'",
+                (job_id,),
+            ).fetchall()
+            newest = max(
+                (
+                    datetime.fromisoformat(r[0].replace("Z", "+00:00"))
+                    for r in timestamps
+                ),
+                default=None,
+            )
+            if newest and newest > datetime.fromisoformat(
+                m["received_at"].replace("Z", "+00:00")
+            ):
+                status = job["status"]
+            received = (
+                datetime.fromisoformat(m["received_at"].replace("Z", "+00:00"))
+                .astimezone(ZoneInfo(TIMEZONE))
+                .isoformat()
+            )
+            # Every confirmed outcome establishes an application record, but only an
+            # explicitly stated date is stored as the submission date.
+            db.execute(
+                "INSERT INTO application_evidence VALUES(?,?,?,?,?) ON CONFLICT(job_id) DO UPDATE SET confirmed_at=MIN(application_evidence.confirmed_at,excluded.confirmed_at),submission_date=COALESCE(application_evidence.submission_date,excluded.submission_date)",
+                (job_id, "gmail", received, m["submission_date"], id),
+            )
+            db.execute(
+                "UPDATE jobs SET status=?,application_date=COALESCE(application_date,?),updated_at=? WHERE id=?",
+                (status, m["submission_date"], self.now(), job_id),
+            )
+            db.execute(
+                "UPDATE mail_evidence SET state='confirmed',job_id=? WHERE id=?",
+                (job_id, id),
+            )
+            self.w.record_event(
+                db,
+                "email_status_confirmed",
+                job_id,
+                message_id=id,
+                status=status,
+                submission_date=m["submission_date"],
+            )
+        self.w.export_tracking()
+        self.export_state()
+        return {"state": "confirmed", "job": self.w.get_job(job_id)}
+
+    def remove_job(self, job_id, reason="Not suitable"):
+        result = self.w.remove_job(job_id, reason)
+        self.export_state()
+        return result
+
+    def restore_job(self, job_id):
+        result = self.w.restore_job(job_id)
+        self.export_state()
+        return result
+
+    def _document_root(self, job):
+        from career import safe_child
+
+        if job.get("folder"):
+            return safe_child(
+                self.w.root / "data/output",
+                str(Path(job["folder"]).relative_to("data/output")),
+            )
+        root = self.w.root / "data/output" / "applications" / (job["id"] + "-documents")
+        root.mkdir(parents=True, exist_ok=True)
+        return root
+
+    def generate_cover_letter(self, job_id):
+        from career import atomic_write
+
+        job = self.w.get_job(job_id)
+        if job.get("deleted_at"):
+            raise ValueError("Restore this removed role before generating documents")
+        if job.get("record_source") == "gmail":
+            raise ValueError(
+                "Add the original posting and full job description before generating a cover letter"
+            )
+        if self.profile_dirty():
+            raise ValueError(
+                "Open Profile and confirm the pending entries before generating a cover letter"
+            )
+        active_projects = {
+            item["id"]
+            for item in self.knowledge()
+            if item["kind"] == "project" and item["review_state"] == "registered"
+        }
+        ranked = [
+            project
+            for project in self.w.rank_projects(
+                job["title"] + " " + job["description"]
+            )
+            if project["id"] in active_projects
+        ]
+        if len(ranked) < 2:
+            raise ValueError("Two registered evidence examples are required")
+        first, second = ranked[:2]
+        focus = list(dict.fromkeys(first["matched_terms"] + second["matched_terms"]))[:4]
+        focus_text = (
+            " The role's focus on " + ", ".join(focus) + " aligns with evidence from my work and projects."
+            if focus
+            else ""
+        )
+        profile = self.w.profile()
+        candidate = profile["candidate"]
+        headline = (profile.get("narrative") or {}).get("headline", "").strip().rstrip(".")
+        # Contact block mirrors the resume header: no city (none of her resumes prints one).
+        contact = [candidate["full_name"], candidate["email"], candidate["phone"]]
+        for key in ("portfolio_url", "github"):
+            if candidate.get(key):
+                contact.append(candidate[key])
+        opening = (
+            f"I am writing to apply for the {job['title']} role at {job['company']}. "
+            f"I am a {headline[0].lower() + headline[1:] if headline else 'Computer Engineering graduate'}, "
+            f"and I completed my MS in Computer Engineering at the University of Arkansas in May 2026.{focus_text}"
+        )
+        letter = "\n".join(
+            [
+                *contact,
+                "",
+                self.today(),
+                "",
+                "Hiring Team",
+                job["company"],
+                "",
+                f"Re: {job['title']}",
+                "",
+                "Dear Hiring Team,",
+                "",
+                opening,
+                "",
+                f"A relevant example is {first['title']}. {first['bullets'][0]} {first['bullets'][1] if len(first['bullets']) > 1 else ''}".strip(),
+                "",
+                f"I can also bring experience from {second['title']}. {second['bullets'][0]}".strip(),
+                "",
+                f"I would welcome the opportunity to discuss how this work could support the {job['title']} team at {job['company']}. Thank you for considering my application.",
+                "",
+                "Sincerely,",
+                candidate["full_name"],
+            ]
+        )
+        with self.w.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            version = (
+                db.execute(
+                    "SELECT COALESCE(MAX(version),0)+1 FROM cover_letters WHERE job_id=?",
+                    (job_id,),
+                ).fetchone()[0]
+            )
+            root = self._document_root(job)
+            path = root / f"cover-letter-v{version}.md"
+            atomic_write(path, letter + "\n")
+            atomic_write(
+                root / f"cover-letter-v{version}.json",
+                json.dumps(
+                    {
+                        "job_id": job_id,
+                        "company": job["company"],
+                        "title": job["title"],
+                        "candidate_revision": self.w.evidence()[
+                            "candidate_revision"
+                        ],
+                        "evidence_ids": [
+                            "IDENTITY-001",
+                            "CONTACT-EMAIL-001",
+                            "CONTACT-PHONE-001",
+                            "CONTACT-PORTFOLIO-001",
+                            "CONTACT-GITHUB-001",
+                            "EDU-MS-001",
+                            first["id"],
+                            second["id"],
+                        ],
+                        "review_required": True,
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+                + "\n",
+            )
+            relative = str(path.relative_to(self.w.root / "data/output"))
+            stamp = self.now()
+            db.execute(
+                "INSERT INTO cover_letters VALUES(?,?,?,?,?,?)",
+                (
+                    job_id,
+                    version,
+                    letter,
+                    relative,
+                    stamp,
+                    self.w.evidence()["candidate_revision"],
+                ),
+            )
+            self.w.record_event(
+                db,
+                "cover_letter_generated",
+                job_id,
+                company=job["company"],
+                title=job["title"],
+                version=version,
+                path=relative,
+                review_required=True,
+            )
+        self.w.export_tracking()
+        self.export_state()
+        return {
+            "job_id": job_id,
+            "company": job["company"],
+            "title": job["title"],
+            "version": version,
+            "content": letter,
+            "path": relative,
+            "created_at": stamp,
+            "review_required": True,
+        }
+
+    def documents(self):
+        documents = []
+        with self.w.connect() as db:
+            has_studio = bool(
+                db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='studio_drafts'"
+                ).fetchone()
+            )
+            latest_letters = {
+                r["job_id"]: dict(r)
+                for r in db.execute(
+                    "SELECT c.* FROM cover_letters c JOIN (SELECT job_id,MAX(version) version FROM cover_letters GROUP BY job_id) latest ON latest.job_id=c.job_id AND latest.version=c.version"
+                )
+            }
+            studio = (
+                {r["job_id"]: dict(r) for r in db.execute("SELECT * FROM studio_drafts")}
+                if has_studio
+                else {}
+            )
+        for job in self.w.jobs():
+            resumes = []
+            if job.get("folder"):
+                root = self.w.root / job["folder"]
+                original = root / "resume.pdf"
+                if original.exists():
+                    resumes.append(
+                        {
+                            "label": "Prepared resume",
+                            "path": str(original.relative_to(self.w.root / "data/output")),
+                        }
+                    )
+            draft = studio.get(job["id"])
+            if draft:
+                preview_file = self.w.root / draft["folder"] / "preview.json"
+                if preview_file.exists():
+                    preview = json.loads(preview_file.read_text())
+                    pdf = self.w.root / "data/output" / preview["path"] / "resume.pdf"
+                    if pdf.exists():
+                        path = str(pdf.relative_to(self.w.root / "data/output"))
+                        if not any(item["path"] == path for item in resumes):
+                            resumes.insert(
+                                0,
+                                {
+                                    "label": f"Resume Studio v{preview['revision']}",
+                                    "path": path,
+                                },
+                            )
+            letter = latest_letters.get(job["id"])
+            fallback_letter = None
+            if not letter and job.get("folder"):
+                root = self.w.root / job["folder"]
+                candidates = sorted(
+                    root.glob("cover-letter*.md"),
+                    key=lambda path: path.stat().st_mtime,
+                    reverse=True,
+                )
+                if candidates:
+                    fallback_letter = {
+                        "version": 1,
+                        "path": str(
+                            candidates[0].relative_to(self.w.root / "data/output")
+                        ),
+                        "created_at": datetime.fromtimestamp(
+                            candidates[0].stat().st_mtime, timezone.utc
+                        ).isoformat(timespec="seconds"),
+                    }
+            if resumes or letter or fallback_letter:
+                documents.append(
+                    {
+                        "job_id": job["id"],
+                        "company": job["company"],
+                        "title": job["title"],
+                        "resumes": resumes,
+                        "cover_letter": (
+                            {
+                                "version": letter["version"],
+                                "path": letter["path"],
+                                "created_at": letter["created_at"],
+                            }
+                            if letter
+                            else fallback_letter
+                        ),
+                    }
+                )
+        return documents
+
+    def runs(self):
+        with self.w.connect() as db:
+            rows = db.execute(
+                "SELECT id,kind,job_id,state,result,error,created_at,updated_at,provider,model,preset FROM agent_runs ORDER BY created_at DESC LIMIT 100"
+            ).fetchall()
+        return [
+            {**dict(r), "result": json.loads(r["result"]) if r["result"] else None}
+            for r in rows
+        ]
+
+    def summary(self):
+        jobs = self.w.jobs()
+        with self.w.connect() as db:
+            confirmed = {
+                r[0]
+                for r in db.execute(
+                    'SELECT job_id FROM application_evidence UNION SELECT job_id FROM mail_evidence WHERE state="confirmed"'
+                )
+            }
+        return {
+            "jobs": jobs,
+            "expired_jobs": [
+                j for j in self.w.jobs(include_deleted=True)
+                if not j.get("deleted_at") and j.get("posting_state") == "expired" and j["status"] in {"saved", "prepared"}
+            ],
+            "removed_jobs": [
+                j for j in self.w.jobs(include_deleted=True) if j.get("deleted_at")
+            ],
+            "excluded_jobs": self.excluded(),
+            "documents": self.documents(),
+            "goals": self.goals(),
+            "mail": self.mail(),
+            "runs": self.runs(),
+            "agents": AGENTS,
+            "profile_dirty": self.profile_dirty(),
+            "counts": {
+                "saved": len(jobs),
+                "applied": sum(
+                    bool(j["application_date"])
+                    or j["id"] in confirmed
+                    or j["status"] in {"applied", "interview", "offer"}
+                    for j in jobs
+                ),
+                "interviews": sum(j["status"] == "interview" for j in jobs),
+                "offers": sum(j["status"] == "offer" for j in jobs),
+                "excluded": len(self.excluded()),
+                "ghosted": sum(j["status"] == "ghosted" for j in jobs),
+            },
+            "activity": self.w.activity(15),
+        }

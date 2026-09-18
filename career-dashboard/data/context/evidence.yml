@@ -1,0 +1,915 @@
+schema_version: 1
+candidate_revision: 2026-09-18.1
+candidate: Annie Prasanna Manoharan
+status_definitions:
+  confirmed: Transcribed from one of Annie's 14 real resumes in data/context/files/ and approved for normal use.
+  user_reported: Supplied or confirmed by Annie in conversation; preserve attribution and wording.
+  conditional: Usable only under the condition stated in approved_external_use.
+  hold: Do not use in candidate-facing material until Annie confirms it.
+  missing: Required detail has not been supplied. Never state it.
+defaults:
+  naming_rule: Client names (Medtronic, Dräger) appear on Annie's own resumes and may be printed.
+  ownership_rule: Preserve her hedges exactly ("Contributed to", "Supported", "Assisted"). Never upgrade a hedge to ownership.
+  years_rule: Never state a total years-of-experience figure. EXP-TOTAL-YEARS is missing by design.
+  publication_rule: No publication may be named, implied or hinted at until PUB-001 leaves hold.
+  research_rule: MiGa and DualFit are AICV Lab research. Present them as research, never as personal side projects.
+  intern_rule: An intern title stays an intern title.
+  concurrency_rule: InsOps, the TA post and the RA post overlap (2024-2026). Never present them as sequential and never sum their durations.
+  source_rule: Each entry points to the context file and section that supports it; evidence.yml is the external-wording authority.
+  selection_metadata_rule: problem_patterns and role_tracks are ranking metadata, not candidate claims; never print them.
+claims:
+- id: IDENTITY-001
+  status: confirmed
+  category: identity
+  approved_external_use: always
+  source_refs:
+  - data/context/01-basics.md > Identity
+  value: Annie Prasanna Manoharan
+- id: CONTACT-EMAIL-001
+  status: confirmed
+  category: contact
+  approved_external_use: always
+  source_refs:
+  - data/context/01-basics.md > Identity
+  value: annieprm0501@gmail.com
+- id: CONTACT-PHONE-001
+  status: confirmed
+  category: contact
+  approved_external_use: always, in US format as printed on every resume
+  source_refs:
+  - data/context/01-basics.md > Identity
+  value: +1 (479) 301-1366
+- id: CONTACT-PORTFOLIO-001
+  status: confirmed
+  category: contact
+  approved_external_use: always, as a full URL
+  source_refs:
+  - data/context/01-basics.md > Identity
+  value: https://annie0159.github.io/Portfolio/
+- id: CONTACT-GITHUB-001
+  status: confirmed
+  category: contact
+  approved_external_use: always, as a full URL
+  source_refs:
+  - data/context/01-basics.md > Identity
+  value: https://github.com/Annie0159
+- id: CONTACT-LINKEDIN-001
+  status: missing
+  category: contact
+  approved_external_use: never; no LinkedIn URL appears on any resume (Q11)
+  source_refs:
+  - data/context/01-basics.md > Identity
+- id: LOCATION-001
+  status: user_reported
+  category: location
+  approved_external_use: Omit the city from resumes (none of the 14 resumes prints one); use only for time zone and search hubs.
+  source_refs:
+  - data/context/01-basics.md > Location
+  value: Fayetteville, AR (inferred from the university; unconfirmed, Q5)
+- id: WORKAUTH-OPT-001
+  status: confirmed
+  category: work_authorization
+  approved_external_use: Omit from resumes by default (Q10). State "Authorized to work in the US (F-1 OPT)" only if a form asks. Never write "no sponsorship required".
+  source_refs:
+  - data/context/01-basics.md > Right to work
+  value: F-1 OPT, active; STEM OPT extension available (Computer Engineering); will need H-1B or cap-exempt sponsorship later
+- id: EDU-MS-001
+  status: confirmed
+  category: education
+  approved_external_use: always
+  source_refs:
+  - data/context/02-education.md > Master of Science in Computer Engineering
+  institution: University of Arkansas
+  location: Fayetteville, AR
+  degree_as_supplied: Master of Science in Computer Engineering
+  dates: Aug 2024 - May 2026
+  status_text: Completed May 2026
+- id: EDU-BE-001
+  status: confirmed
+  category: education
+  approved_external_use: always; appears on _EM, _ES, _H, _T. May be cut for space on software/data resumes.
+  source_refs:
+  - data/context/02-education.md > Bachelor of Engineering in Electronics and Communication
+  institution: Sri Ramakrishna Engineering College
+  location: India
+  degree_as_supplied: Bachelor of Engineering in Electronics and Communication
+  dates: Aug 2019 - May 2023
+  status_text: Completed May 2023
+- id: EDU-GPA-001
+  status: missing
+  category: education
+  approved_external_use: never; no GPA is stated on any resume
+  source_refs:
+  - data/context/02-education.md
+- id: COURSEWORK-MS-001
+  status: confirmed
+  category: academic_coursework
+  approved_external_use: Promote whichever modules the JD names; each appears verbatim on at least one resume. The whole line may be cut for space.
+  source_refs:
+  - data/context/02-education.md > Coursework
+  approved_facts:
+  - Algorithms
+  - Database Management Systems
+  - Advanced DBMS
+  - Data Mining
+  - Artificial Intelligence
+  - Machine Learning
+  - Image Processing
+  - Cryptography
+  - Privacy Enhancing Techniques
+- id: EXP-INSOPS-001
+  status: user_reported
+  category: employment
+  approved_external_use: always; title confirmed by Annie on 2026-09-05. Use the data-engineering framing below on every resume.
+  source_refs:
+  - data/context/03-experience.md > InsOps Inc. > Data-engineering framing (from _DE)
+  - data/context/QUESTIONS-FOR-YOU.md > Q2
+  employer: InsOps Inc.
+  title: Data Engineering Intern
+  dates: Jul 2024 - Present
+  location: Chicago, Illinois
+  approved_facts:
+  - Developed data pipelines in AWS using AWS Glue, Lambda, EMR, SQL, and Apache Airflow for orchestration, with S3 cloud storage, for scalable data ingestion, transformation, validation, and analytics
+  - Built data workflows integrating SQL Server, Azure SQL, AWS S3, and cloud databases, preparing structured datasets for downstream data science and analytics
+  - Implemented metadata-driven data processing for automated schema discovery, transformation, and data validation across heterogeneous sources
+  - Applied data cleaning, transformation, feature preparation, and quality validation to create reliable, analytics-ready datasets
+  - Worked with distributed data processing and lakehouse concepts, including scalable ETL/ELT, cloud data storage, SQL transformations, and pipeline orchestration
+- id: EXP-INSOPS-DS-FRAMING
+  status: hold
+  category: employment
+  approved_external_use: Historical record of what the _DS resume once said. Not for reuse on any resume (Q2 resolved to the data-engineering title).
+  source_refs:
+  - data/context/03-experience.md > InsOps Inc. > Data-science / AI framing (from _DS)
+  employer: InsOps Inc.
+  title: Data Science Intern (superseded)
+  dates: Jul 2024 - Present
+  approved_facts:
+  - Contributed to InsOpsAI, a domain-specific SLM fine-tuned on insurance data, supporting use cases like Litigation Mitigation
+  - Built and validated data pipelines (Python, SQL, Databricks, Apache Airflow) to clean, transform, and prepare large-scale claims data from SQL Server, PostgreSQL, and AWS S3 into model-ready datasets
+- id: EXP-TA-001
+  status: confirmed
+  category: employment
+  approved_external_use: always; university appointment, keep visible for cap-exempt employers
+  source_refs:
+  - data/context/03-experience.md > Teaching Assistant
+  employer: University of Arkansas, Dept. of Computer Science and Engineering
+  title: Teaching Assistant
+  dates: Sep 2024 - May 2026
+  location: Fayetteville, AR
+  approved_facts:
+  - Supported 100+ students in Programming Foundations through laboratory instruction, debugging assistance, and mentorship in C++ programming fundamentals
+  - Assisted students with control flow, functions, arrays, programming logic, debugging, and problem-solving techniques
+  - Supported Database Management Systems instruction for approximately 180 students, assisting with database concepts, assignments, assessments, and technical questions
+- id: EXP-RA-001
+  status: confirmed
+  category: employment
+  approved_external_use: always; present the work as lab research. MiGa and DualFit detail lives in PROJ-P02-MIGA and PROJ-P03-DUALFIT.
+  source_refs:
+  - data/context/03-experience.md > Research Assistant - AICV Lab
+  employer: AICV Lab, University of Arkansas
+  title: Research Assistant
+  dates: Sep 2024 - Jan 2026
+  location: Fayetteville, AR
+  approved_facts:
+  - Developed automated data-processing and annotation pipelines that used previously annotated data to automatically generate bounding boxes, keypoints, and structured datasets from raw image and video frames, reducing repetitive manual processing
+  - Built reusable preprocessing workflows to segment, organize, and transform raw image/video data into structured inputs for downstream processing and evaluation
+  - Automated image-processing workflows for mask generation, image alignment, and inpainting
+  - Evaluated results using mAP, MOTA, IDF1, PSNR, SSIM, and FID
+  - Compared results across processing stages to identify performance trends and support process improvements
+- id: EXP-SOLITON-PE-001
+  status: user_reported
+  category: employment
+  approved_external_use: always with these dates; Annie confirmed the split timeline on 2026-09-18 (Q1).
+  source_refs:
+  - data/context/03-experience.md > Soliton Technologies > Project Engineer bullets
+  - data/context/QUESTIONS-FOR-YOU.md > Q1 (answered 2026-09-18)
+  employer: Soliton Technologies
+  title: Project Engineer
+  dates: Jun 2023 - Jun 2024
+  location: India
+  superseded_dates: Jul 2022 - Jun 2024 appeared on 11 resumes as a single role; corrected to intern + engineer on 2026-09-18
+  approved_facts:
+  - Designed and developed a C# WPF desktop application integrating C#, Python, and LabVIEW-based test workflows to streamline application usage and improve test automation
+  - Implemented reusable software components and automated workflows within an object-oriented application architecture, improving development and testing efficiency
+  - Integrated automated testing and validation workflows to improve test coverage, reduce manual execution, and support repeatable software verification
+  - Collaborated with cross-functional engineering teams to debug system-level issues, troubleshoot application behavior, optimize workflows, and deliver production-ready software
+  - Built the C#/.NET WPF desktop application for Dräger, improving test workflow efficiency, user onboarding, and automated test coverage for medical-device engineering
+  - Developed customized automated testing solutions using MAVIS, an object-oriented test automation framework built on NI LabVIEW and Python, supporting verification and validation (V&V) for medical-device applications
+  - Integrated software components and test automation workflows across C#, Python, LabVIEW, and NI TestStand
+- id: METRIC-DRAEGER-94
+  status: user_reported
+  category: metric
+  approved_external_use: Use only inside the Dräger bullet of EXP-SOLITON-PE-001, worded "approximately 94%". Annie attributed the figure to Dräger on 2026-09-18 (Q4); measured vs estimated is still open, so keep "approximately".
+  source_refs:
+  - data/context/03-experience.md > Soliton Technologies > Project Engineer bullets
+  - data/context/QUESTIONS-FOR-YOU.md > Q4 (answered 2026-09-18)
+  value: approximately 94% of manual test cases automated
+  approved_facts:
+  - Developed customized software solutions for Dräger as the sole developer, automating approximately 94% of manual test cases while meeting medical-device quality and validation requirements
+- id: EXP-SOLITON-INTERN-001
+  status: user_reported
+  category: employment
+  approved_external_use: always with these dates (Q1 answered 2026-09-18). May be cut for space on one-page resumes.
+  source_refs:
+  - data/context/03-experience.md > Soliton Technologies > Engineering Intern bullets
+  - data/context/QUESTIONS-FOR-YOU.md > Q1 (answered 2026-09-18)
+  employer: Soliton Technologies
+  title: Engineering Intern
+  dates: Jul 2022 - May 2023
+  location: India
+  approved_facts:
+  - Received intensive hands-on training in LabVIEW, Object-Oriented Programming, TestStand, and automated testing, developing applications for verification and validation workflows
+  - Contributed to MAVIS, an object-oriented automation framework integrating Python and LabVIEW for scalable testing and data collection
+- id: EXP-CRYSTAL-001
+  status: confirmed
+  category: employment
+  approved_external_use: Embedded/hardware resumes only (appears on _H)
+  source_refs:
+  - data/context/03-experience.md > Embedded Systems Intern - Crystal Clear Technology and Innovation
+  employer: Crystal Clear Technology and Innovation
+  title: Embedded Systems Intern
+  dates: July 2020
+  location: India
+  approved_facts:
+  - Developed embedded applications using the PIC16F887 microcontroller, working with timers, ADC, LCD interfacing, UART, SPI, and I2C
+  - Designed and simulated microcontroller-based circuits using MPLAB IDE and Proteus
+- id: EXP-NIT-001
+  status: confirmed
+  category: employment
+  approved_external_use: RF/telecom resumes only (appears on _T)
+  source_refs:
+  - data/context/03-experience.md > Intern - National Institute of Technology
+  employer: National Institute of Technology
+  title: Intern
+  dates: Sep 2021 - Oct 2021
+  location: India
+  approved_facts:
+  - Conducted research on antenna design incorporating Substrate Integrated Waveguide (SIW) and deep-well cavity structures to enhance antenna performance
+  - Designed and modeled antenna structures using Ansys HFSS for electromagnetic simulation and performance analysis
+  - Performed simulation-based optimization of antenna geometry and structural parameters
+  - Supported antenna fabrication and physical implementation
+- id: EXP-TOTAL-YEARS
+  status: missing
+  category: career_progression
+  approved_external_use: never; no resume states a total and none will
+  source_refs:
+  - data/context/02-education.md > Date consequence
+  - data/context/08-voice.md > Handle carefully
+- id: PUB-001
+  status: hold
+  category: publication
+  approved_external_use: Annie said on 2026-09-18 that she has one or more publications but has not yet supplied title, venue, year, author position or link. Nothing may be printed or implied until she does (Q3).
+  source_refs:
+  - data/context/QUESTIONS-FOR-YOU.md > Q3
+  - data/context/06-achievements.md
+- id: CERT-NONE-001
+  status: missing
+  category: certification
+  approved_external_use: never; no certification appears on any resume. Suggested certifications belong in study plans only.
+  source_refs:
+  - data/context/06-achievements.md
+- id: LANG-001
+  status: confirmed
+  category: languages
+  approved_external_use: Omit; not on any resume
+  source_refs:
+  - data/context/05-skills.md > Languages
+  value: English (professional)
+- id: SKILL-LANGUAGES-001
+  status: confirmed
+  category: skill
+  approved_external_use: Strong tier; may appear in bullets and skills lists.
+  source_refs:
+  - data/context/05-skills.md > Strong
+  approved_facts:
+  - Python
+  - SQL
+  - C#
+  - C++
+- id: SKILL-STREAMING-001
+  status: confirmed
+  category: skill
+  approved_external_use: Strong tier via PROJ-P01-IOT.
+  source_refs:
+  - data/context/05-skills.md > Strong
+  approved_facts:
+  - Apache Kafka
+  - Apache Flink
+  - Flink SQL
+  - ClickHouse
+  - Grafana
+- id: SKILL-ML-001
+  status: confirmed
+  category: skill
+  approved_external_use: Strong tier via PROJ-P02-MIGA, PROJ-P03-DUALFIT, PROJ-P05-RESUME.
+  source_refs:
+  - data/context/05-skills.md > Strong
+  approved_facts:
+  - PyTorch
+  - Scikit-learn
+  - Computer vision
+  - Object detection and tracking
+- id: SKILL-CLOUD-001
+  status: confirmed
+  category: skill
+  approved_external_use: Strong tier via EXP-INSOPS-001.
+  source_refs:
+  - data/context/05-skills.md > Strong
+  approved_facts:
+  - AWS Glue
+  - AWS Lambda
+  - Amazon EMR
+  - Amazon S3
+  - Apache Airflow
+- id: SKILL-TEST-001
+  status: confirmed
+  category: skill
+  approved_external_use: Strong tier via EXP-SOLITON-PE-001.
+  source_refs:
+  - data/context/05-skills.md > Strong
+  approved_facts:
+  - LabVIEW
+  - NI TestStand
+  - MAVIS
+  - Test automation
+  - Verification and validation (V&V)
+- id: SKILL-EMBEDDED-001
+  status: confirmed
+  category: skill
+  approved_external_use: Strong tier via PROJ-P07-FPGA, PROJ-P08-ELEVATOR, PROJ-P09-ANTENNA.
+  source_refs:
+  - data/context/05-skills.md > Strong
+  approved_facts:
+  - Embedded C
+  - PIC16F887
+  - Xilinx Vivado
+  - Vitis
+  - MicroBlaze
+  - AXI
+  - Ansys HFSS
+- id: SKILL-LAKEHOUSE-001
+  status: conditional
+  category: skill
+  approved_external_use: Use only with EXP-INSOPS-001 in a skills list. The only bullet evidence is the superseded _DS framing (EXP-INSOPS-DS-FRAMING, hold), so never write a bullet claiming Spark or Databricks work.
+  source_refs:
+  - data/context/05-skills.md > Used it
+  approved_facts:
+  - Databricks
+  - Apache Spark
+  - PySpark
+  - Delta Lake
+- id: SKILL-GENAI-001
+  status: conditional
+  category: skill
+  approved_external_use: Use only with PROJ-P04-NEWS-RAG.
+  source_refs:
+  - data/context/05-skills.md > Used it
+  approved_facts:
+  - LangChain
+  - FAISS
+  - Ollama
+  - Llama 3.2
+  - nomic-embed-text
+  - RAG
+  - Vector embeddings
+  - Streamlit
+- id: SKILL-DATA-TOOLS-001
+  status: conditional
+  category: skill
+  approved_external_use: Use only with EXP-INSOPS-001 or PROJ-P05-RESUME or PROJ-P06-EXPENSE (Used tier; skills list or the bullet that evidences it).
+  source_refs:
+  - data/context/05-skills.md > Used it
+  approved_facts:
+  - Pandas
+  - NumPy
+  - Flask
+  - PostgreSQL
+  - SQL Server
+  - MySQL
+  - Azure SQL
+  - ETL/ELT
+  - Data validation and quality
+  - Metadata-driven schema discovery
+- id: SKILL-CV-TOOLS-001
+  status: conditional
+  category: skill
+  approved_external_use: Use only with PROJ-P02-MIGA or PROJ-P03-DUALFIT.
+  source_refs:
+  - data/context/05-skills.md > Used it
+  approved_facts:
+  - YOLO11n-Pose
+  - OC-SORT
+  - LSTM
+  - Res-UNet
+  - Image synthesis and inpainting
+- id: SKILL-DESKTOP-001
+  status: conditional
+  category: skill
+  approved_external_use: Use only with EXP-SOLITON-PE-001.
+  source_refs:
+  - data/context/05-skills.md > Used it
+  approved_facts:
+  - WPF
+  - .NET
+  - Git
+  - Bitbucket
+  - Jira
+- id: SKILL-EMBEDDED-TOOLS-001
+  status: conditional
+  category: skill
+  approved_external_use: Use only with PROJ-P07-FPGA or PROJ-P08-ELEVATOR or EXP-CRYSTAL-001.
+  source_refs:
+  - data/context/05-skills.md > Used it
+  approved_facts:
+  - Proteus
+  - MPLAB IDE
+  - Verilog
+- id: SKILL-TOUCHED-001
+  status: conditional
+  category: skill
+  approved_external_use: Skills list only, never in a bullet as if it produced something. Docker, CI/CD and Agile are listed on six resumes but no bullet evidences them.
+  source_refs:
+  - data/context/05-skills.md > Touched it
+  approved_facts:
+  - Java
+  - C
+  - HTML
+  - CSS
+  - MongoDB
+  - Oracle
+  - Amazon EC2
+  - Amazon RDS
+  - Linux
+  - Docker
+  - CI/CD
+  - Agile/Scrum
+  - TDD
+  - Multithreading
+  - Design patterns
+  - Jupyter
+  - MQTT
+  - FreeRTOS
+  - ESP32
+  - Arduino
+  - VHDL
+  - SPI/I2C/UART
+  - PID control
+  - Prompt engineering
+  - Hyperparameter tuning
+  - Cross-validation
+- id: SKILL-NEVER-001
+  status: missing
+  category: skill
+  approved_external_use: never; these are not in the bank. Study-plan or build-now material only.
+  source_refs:
+  - data/context/05-skills.md > Honest gaps
+  approved_facts:
+  - Kubernetes
+  - Terraform
+  - dbt
+  - Snowflake
+  - BigQuery
+  - Redshift
+  - Kinesis
+  - React
+  - Angular
+  - Vue
+  - Node.js
+  - Django
+  - FastAPI
+  - GraphQL
+  - Go
+  - Rust
+  - Scala
+  - Tableau
+  - Power BI
+  - Looker
+  - MLflow
+  - Weights & Biases
+  - Kubeflow
+  - SageMaker
+  - Vertex AI
+  - Spark Streaming
+  - Hadoop
+  - Hive
+  - Elasticsearch
+  - Redis
+  - gRPC
+  - Kafka Connect
+  - Debezium
+  - Great Expectations
+  - Airbyte
+  - Fivetran
+projects:
+- id: PROJ-P01-IOT
+  canonical_name: Real-Time Medical IoT Analytics Platform
+  external_name: Real-Time Medical IoT Analytics Platform
+  date_context: Graduate project, 2024-2026; exact dates not supplied
+  source_refs:
+  - data/context/04-projects.md > P1
+  evidence_type: candidate_project
+  status: confirmed
+  ownership: Individual project
+  approved_external_use: always; strongest general-purpose signature project
+  problem_patterns:
+  - streaming
+  - real-time analytics
+  - event-time processing
+  - anomaly detection
+  - OLAP schema design
+  - medical devices
+  - dashboards
+  role_tracks:
+  - Data Engineer
+  - Analytics Engineer
+  - Data Platform Engineer
+  - Software Engineer
+  - ML Engineer
+  technologies:
+  - Apache Kafka
+  - Apache Flink
+  - Flink SQL
+  - Python
+  - ClickHouse
+  - Grafana
+  approved_facts:
+  - Developed an end-to-end, sub-second latency streaming platform using Apache Flink SQL and Apache Kafka to ingest, process, and score high-frequency medical IoT device data
+  - Implemented temporal Flink OVER windows partitioned by device ID to dynamically compute rolling Z-scores over 5-second sliding intervals, applying custom watermark delay strategies to cleanly handle out-of-order data streams
+  - Designed high-performance ClickHouse schemas using the MergeTree engine sorted by composite keys to physically align disk layouts with clinical querying patterns, isolating ingestion via an optimized Python multi-topic batch consumer
+  - Integrated a Grafana visualization layer on the ClickHouse OLAP tier, delivering real-time clinical dashboards monitoring raw ventilator telemetry and surfacing streaming Z-score anomalies
+  resume_content:
+    title: Real-Time Medical IoT Analytics Platform
+    context: Apache Kafka, Apache Flink, Flink SQL, Python, ClickHouse, Grafana
+    bullets:
+    - Developed an end-to-end, sub-second latency streaming platform using Apache Flink SQL and Apache Kafka to ingest, process, and score high-frequency medical IoT device data
+    - Implemented temporal Flink OVER windows partitioned by device ID to compute rolling Z-scores over 5-second sliding intervals, applying custom watermark delay strategies to handle out-of-order streams
+    - Designed ClickHouse MergeTree schemas sorted by composite keys to align disk layout with clinical query patterns, with an optimized Python multi-topic batch consumer isolating ingestion
+  prohibited:
+  - Production deployment or hospital use
+  - Team size or users
+- id: PROJ-P02-MIGA
+  canonical_name: MiGa - Multi-Chicken Gait Assessment
+  external_name: MiGa - Multi-Chicken Gait Assessment (AICV Lab research)
+  date_context: Research Assistant work, Sep 2024 - Jan 2026
+  source_refs:
+  - data/context/04-projects.md > P2
+  - data/context/03-experience.md > Research Assistant > Project MiGa
+  evidence_type: academic
+  status: confirmed
+  ownership: Research Assistant contribution within the AICV Lab
+  approved_external_use: always, presented as lab research
+  problem_patterns:
+  - computer vision
+  - pose estimation
+  - multi-object tracking
+  - sequence classification
+  - dataset construction
+  - research
+  role_tracks:
+  - ML Engineer
+  - Computer Vision Engineer
+  - Applied Scientist
+  - Research Engineer
+  - Data Engineer
+  technologies:
+  - YOLO11n-Pose
+  - OC-SORT
+  - LSTM
+  - PyTorch
+  approved_facts:
+  - Integrated YOLO11n-Pose for keypoint estimation, applied OC-SORT for multi-object tracking (MOT), and constructed a many-to-one LSTM sequence network for classification
+  - Built a data engineering framework to preprocess and segment raw frames into a Multi-Bird Detection split of 4,569 frames with 11,422 bounding boxes and a Gait-Score Regression split spanning 55 expert-annotated sequences
+  - Implemented spatial normalization to map keypoints into local coordinate spaces to eliminate translational variance, achieving keypoint mAP 91.83% at 1,250 FPS, 0.93 MOTA, 0.91 IDF1
+  resume_content:
+    title: MiGa - Multi-Chicken Gait Assessment (AICV Lab)
+    context: YOLO11n-Pose, OC-SORT, LSTM, PyTorch
+    bullets:
+    - Integrated YOLO11n-Pose for keypoint estimation, applied OC-SORT for multi-object tracking, and constructed a many-to-one LSTM sequence network for classification
+    - Built a data engineering framework to preprocess and segment raw frames into a detection split of 4,569 frames with 11,422 bounding boxes and a regression split of 55 expert-annotated sequences
+    - Implemented spatial normalization into local coordinate spaces to eliminate translational variance, achieving keypoint mAP 91.83% at 1,250 FPS, 0.93 MOTA, and 0.91 IDF1
+  prohibited:
+  - Publication or paper claims (PUB-001 is on hold)
+  - Sole ownership
+- id: PROJ-P03-DUALFIT
+  canonical_name: DualFit - Two-Stage Virtual Try-On via Warping and Synthesis
+  external_name: DualFit - Two-Stage Virtual Try-On (AICV Lab research)
+  date_context: Research Assistant work, Sep 2024 - Jan 2026
+  source_refs:
+  - data/context/04-projects.md > P3
+  - data/context/03-experience.md > Research Assistant > Project DualFit
+  evidence_type: academic
+  status: confirmed
+  ownership: Research Assistant contribution within the AICV Lab
+  approved_external_use: always, presented as lab research; never mention a publication
+  problem_patterns:
+  - generative models
+  - image synthesis
+  - computer vision
+  - research
+  role_tracks:
+  - ML Engineer
+  - Computer Vision Engineer
+  - Applied Scientist
+  - Research Engineer
+  technologies:
+  - PyTorch
+  - Res-UNet
+  - flow-based warping
+  - inpainting
+  approved_facts:
+  - Developed a PyTorch-based two-stage Virtual Try-On (VTON) model combining flow-based garment warping with Res-UNet image synthesis, with preprocessing and inpainting pipelines to improve garment alignment and visual realism
+  - Trained and evaluated on the VITON-HD dataset, reaching 24.9 PSNR, 0.913 SSIM, 5.261 FID
+  resume_content:
+    title: DualFit - Two-Stage Virtual Try-On (AICV Lab)
+    context: PyTorch, Res-UNet, flow-based warping, inpainting
+    bullets:
+    - Developed a PyTorch-based two-stage Virtual Try-On model combining flow-based garment warping with Res-UNet image synthesis, with preprocessing and inpainting pipelines to improve garment alignment and visual realism
+    - Trained and evaluated on the VITON-HD dataset, reaching 24.9 PSNR, 0.913 SSIM, and 5.261 FID
+  prohibited:
+  - Publication, ICCV or paper claims (PUB-001 is on hold)
+  - Sole ownership
+- id: PROJ-P04-NEWS-RAG
+  canonical_name: Local LLM-Powered News Research Platform
+  external_name: Local LLM-Powered News Research Platform
+  date_context: Graduate project, 2024-2026; exact dates not supplied
+  source_refs:
+  - data/context/04-projects.md > P4
+  evidence_type: candidate_project
+  status: confirmed
+  ownership: Individual project
+  approved_external_use: always
+  problem_patterns:
+  - retrieval-augmented generation
+  - LLM applications
+  - vector search
+  - ETL
+  - unstructured data
+  role_tracks:
+  - AI Engineer
+  - ML Engineer
+  - NLP Engineer
+  - Data Engineer
+  - Software Engineer
+  technologies:
+  - Python
+  - LangChain
+  - Streamlit
+  - FAISS
+  - Ollama
+  - nomic-embed-text
+  - Llama 3.2
+  - WebBaseLoader
+  approved_facts:
+  - Built an end-to-end local ETL pipeline using Streamlit and WebBaseLoader to ingest, clean, chunk, and preprocess unstructured web content on demand
+  - Designed a local vector storage architecture using FAISS and nomic-embed-text to serialize high-dimensional embeddings, bypassing redundant ingestion and reducing processing latency
+  - Implemented a RAG pipeline via LangChain orchestrating semantic queries against vectorized data using local Llama 3.2 instances
+  resume_content:
+    title: Local LLM-Powered News Research Platform
+    context: Python, LangChain, Streamlit, FAISS, Ollama, Llama 3.2
+    bullets:
+    - Built an end-to-end local ETL pipeline using Streamlit and WebBaseLoader to ingest, clean, chunk, and preprocess unstructured web content on demand
+    - Designed a local vector store with FAISS and nomic-embed-text to serialize high-dimensional embeddings, bypassing redundant ingestion and reducing processing latency
+    - Implemented a RAG pipeline via LangChain orchestrating semantic queries against vectorized data using local Llama 3.2 instances
+  prohibited:
+  - Users, deployment or evaluation metrics (none recorded)
+- id: PROJ-P05-RESUME
+  canonical_name: Resume Classification Model
+  external_name: Resume Classification Model
+  date_context: Graduate project, 2024-2026; exact dates not supplied
+  source_refs:
+  - data/context/04-projects.md > P5
+  evidence_type: candidate_project
+  status: confirmed
+  ownership: Individual project
+  approved_external_use: always; best-quantified classical ML project
+  problem_patterns:
+  - NLP
+  - text classification
+  - classical machine learning
+  - REST API
+  - model evaluation
+  role_tracks:
+  - ML Engineer
+  - Data Scientist
+  - Applied Scientist
+  - Software Engineer
+  - NLP Engineer
+  technologies:
+  - Python
+  - Scikit-learn
+  - Pandas
+  - TF-IDF
+  - Logistic Regression
+  - Flask
+  approved_facts:
+  - Built an end-to-end NLP classification pipeline using TF-IDF feature extraction and Logistic Regression across 25 job-role categories
+  - Preprocessed 962 unstructured resumes into TF-IDF feature representations
+  - Achieved 89.48% test accuracy and 88% macro F1 across 193 held-out test samples
+  - Deployed the model through a Flask REST API for real-time prediction
+  resume_content:
+    title: Resume Classification Model
+    context: Python, Scikit-learn, Pandas, TF-IDF, Logistic Regression, Flask
+    bullets:
+    - Built an end-to-end NLP classification pipeline using TF-IDF feature extraction and Logistic Regression across 25 job-role categories from 962 unstructured resumes
+    - Achieved 89.48% test accuracy and 88% macro F1 across 193 held-out test samples
+    - Deployed the model through a Flask REST API for real-time prediction
+  prohibited:
+  - Production users or traffic
+- id: PROJ-P06-EXPENSE
+  canonical_name: Expense Tracker with Predictive Analytics
+  external_name: Expense Tracker with Predictive Analytics
+  date_context: Project; exact dates not supplied
+  source_refs:
+  - data/context/04-projects.md > P6
+  evidence_type: candidate_project
+  status: confirmed
+  ownership: Individual project
+  approved_external_use: Prefer as a supporting project; weakest differentiator
+  problem_patterns:
+  - application development
+  - SQL
+  - databases
+  - predictive analytics
+  role_tracks:
+  - Software Engineer
+  - Software Developer
+  - Data Analyst
+  - Analytics Engineer
+  technologies:
+  - C++
+  - MySQL
+  - Python
+  - SQL
+  approved_facts:
+  - Developed a cross-language expense management application integrating C++ business logic with a MySQL database for storing, retrieving, categorizing, and processing historical expense data
+  - Optimized SQL queries generating category-based expense summaries and reports
+  - Implemented Python analytics over historical spending patterns generating next-month expense predictions
+  resume_content:
+    title: Expense Tracker with Predictive Analytics
+    context: C++, MySQL, Python, SQL
+    bullets:
+    - Developed a cross-language expense management application integrating C++ business logic with a MySQL database for storing, retrieving, categorizing, and processing historical expense data
+    - Optimized SQL queries generating category-based expense summaries and reports, and implemented Python analytics over historical spending to generate next-month expense predictions
+  prohibited:
+  - Users or accuracy figures (none recorded)
+- id: PROJ-P07-FPGA
+  canonical_name: FPGA-Based Autonomous Vehicle
+  external_name: FPGA-Based Autonomous Vehicle
+  date_context: Graduate project, 2024-2026; exact dates not supplied
+  source_refs:
+  - data/context/04-projects.md > P7
+  evidence_type: candidate_project
+  status: confirmed
+  ownership: Individual project
+  approved_external_use: Embedded/firmware/hardware resumes
+  problem_patterns:
+  - embedded systems
+  - FPGA
+  - SoC design
+  - firmware
+  - sensors and actuators
+  role_tracks:
+  - Embedded Software Engineer
+  - Firmware Engineer
+  - FPGA Engineer
+  - Hardware Engineer
+  technologies:
+  - Xilinx Arty FPGA
+  - MicroBlaze
+  - Vivado
+  - Vitis
+  - AXI IP cores
+  - Quad-SPI
+  - SREC bootloader
+  - C
+  approved_facts:
+  - Built an autonomous line-following vehicle on a Xilinx Arty FPGA with a custom MicroBlaze-based SoC
+  - Integrated IR line sensors, ultrasonic sensors, and motor drivers through AXI IP cores in Vivado for real-time sensor acquisition and actuator control
+  - Wrote embedded firmware in C using Vitis for line tracking, obstacle detection, sensor processing, and motor control
+  - Implemented Quad-SPI flash boot with an SREC bootloader enabling autonomous startup after power-up
+  - Debugged hardware-software interfaces across FPGA logic, MicroBlaze, sensors, and motor control
+  resume_content:
+    title: FPGA-Based Autonomous Vehicle
+    context: Xilinx Arty FPGA, MicroBlaze, Vivado, Vitis, AXI, C
+    bullets:
+    - Built an autonomous line-following vehicle on a Xilinx Arty FPGA with a custom MicroBlaze-based SoC, integrating IR line sensors, ultrasonic sensors, and motor drivers through AXI IP cores in Vivado
+    - Wrote embedded firmware in C using Vitis for line tracking, obstacle detection, sensor processing, and motor control
+    - Implemented Quad-SPI flash boot with an SREC bootloader enabling autonomous startup after power-up
+  prohibited: []
+- id: PROJ-P08-ELEVATOR
+  canonical_name: Elevator Control System
+  external_name: Elevator Control System
+  date_context: Undergraduate/early project; exact dates not supplied
+  source_refs:
+  - data/context/04-projects.md > P8
+  evidence_type: candidate_project
+  status: confirmed
+  ownership: Individual project
+  approved_external_use: Embedded resumes
+  problem_patterns:
+  - embedded systems
+  - finite state machines
+  - microcontrollers
+  role_tracks:
+  - Embedded Software Engineer
+  - Firmware Engineer
+  technologies:
+  - PIC16F887
+  - Embedded C
+  - Proteus
+  - MPLAB IDE
+  approved_facts:
+  - Developed a multi-floor elevator control system implementing a finite state machine for floor selection, position detection, movement, and real-time control
+  - Implemented bidirectional motor control using relay circuits and digital sensor inputs
+  - Drove LCD and 7-segment displays for real-time floor/status indication; simulated and debugged in Proteus and MPLAB IDE
+  resume_content:
+    title: Elevator Control System
+    context: PIC16F887, Embedded C, Proteus, MPLAB IDE
+    bullets:
+    - Developed a multi-floor elevator control system implementing a finite state machine for floor selection, position detection, movement, and real-time control
+    - Implemented bidirectional motor control using relay circuits and digital sensor inputs, with LCD and 7-segment displays for real-time status; simulated and debugged in Proteus and MPLAB IDE
+  prohibited: []
+- id: PROJ-P09-ANTENNA
+  canonical_name: Antenna Design (Biosensing and SIW/Deep-Well Cavity)
+  external_name: Antenna Design for 5G and Biosensing
+  date_context: Linked to the NIT internship, 2021
+  source_refs:
+  - data/context/04-projects.md > P9
+  - data/context/03-experience.md > Intern - National Institute of Technology
+  evidence_type: academic
+  status: confirmed
+  ownership: Individual research project with fabrication support
+  approved_external_use: RF/telecom resumes only
+  problem_patterns:
+  - RF design
+  - electromagnetic simulation
+  - antenna design
+  role_tracks:
+  - RF Engineer
+  - Hardware Engineer
+  technologies:
+  - Ansys HFSS
+  - SIW
+  approved_facts:
+  - Designed an antenna for 5G and biosensing applications, optimizing unit-cell dimensions and geometry through iterative parametric simulation
+  - Designed a Substrate Integrated Waveguide and deep-well cavity antenna with full-wave EM simulation and parametric optimization, and supported fabrication and physical implementation
+  resume_content:
+    title: Antenna Design for 5G and Biosensing
+    context: Ansys HFSS, SIW, RF simulation
+    bullets:
+    - Designed an antenna for 5G and biosensing applications, optimizing unit-cell dimensions and geometry through iterative parametric simulation in Ansys HFSS
+    - Designed a Substrate Integrated Waveguide and deep-well cavity antenna with full-wave EM simulation and parametric optimization, and supported fabrication
+  prohibited: []
+- id: PROJ-P10-PACMAN
+  canonical_name: Pacman Search Algorithms
+  signature_eligible: false
+  external_name: Pacman Search Algorithms (coursework)
+  date_context: Coursework, University of Arkansas
+  source_refs:
+  - data/context/04-projects.md > P10
+  evidence_type: academic
+  status: conditional
+  ownership: Course assignment
+  approved_external_use: Supporting project only, labeled coursework, and only when the JD emphasizes algorithms/DSA. Never a signature project.
+  problem_patterns:
+  - algorithms
+  - search
+  - heuristics
+  role_tracks:
+  - Software Engineer
+  technologies:
+  - Python
+  - BFS
+  - A*
+  approved_facts:
+  - Implemented custom problem states, successor functions, goal conditions, and state representations for maze-based environments
+  - Implemented BFS and A* with admissible heuristics, and a greedy approximation strategy for large state spaces where optimal search was too expensive
+  resume_content:
+    title: Pacman Search Algorithms (coursework)
+    context: Python, BFS, A*, admissible heuristics
+    bullets:
+    - Implemented custom problem states, successor functions, goal conditions, and state representations for maze-based environments
+    - Implemented BFS and A* with admissible heuristics, and a greedy approximation strategy for large state spaces where optimal search was too expensive
+  prohibited:
+  - Presenting it as original work rather than coursework
+not_resume_ready:
+- id: PROJ-WEB-FULLSTACK
+  reason: No web or full-stack project exists in the bank (no React/Node/Django). Build-now material only.
+- id: PROJ-IAC
+  reason: No Kubernetes, Terraform or CI/CD pipeline she built exists. Build-now material only.
+- id: PROJ-WAREHOUSE
+  reason: No dbt/Snowflake/modern warehouse project exists. Build-now material only.
+immutable_across_resumes:
+  claim_ids:
+  - IDENTITY-001
+  - CONTACT-EMAIL-001
+  - CONTACT-PHONE-001
+  - CONTACT-PORTFOLIO-001
+  - CONTACT-GITHUB-001
+  - EDU-MS-001
+  - EXP-INSOPS-001
+  - EXP-SOLITON-PE-001
+  rule: These facts appear on every resume exactly as registered. Any other employer or degree may
+    be cut for space, but whenever one is printed its registered title and dates are printed with
+    it. Only relevance, ordering, and supported phrasing may vary. No resume states a years total
+    or a publication.

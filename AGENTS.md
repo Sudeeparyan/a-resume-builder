@@ -1,97 +1,31 @@
-# AGENTS.md — the entry point for any AI coding tool
+# Annie's career workspace
 
-This file is the cross-tool contract. Claude Code, Codex, Gemini CLI, Cursor,
-Windsurf, OpenCode, Zed and anything else that reads `AGENTS.md` starts here.
+This folder has two active workflows, `career-dashboard/` (the app) and `daily-job-search/` (daily runs), plus `backup/` (preserved history, never an active template or current profile).
 
-**Nothing in this file restates a rule.** Every rule has exactly one home, and
-this points at it. That is deliberate: the dashboard assembles its prompts from
-the same files at runtime (`dashboard/backend/agents/prompts.py`), so editing a
-playbook changes the app, the CLI and the chat pack together. A second copy of a
-rule is a rule that will drift.
+Always read `career-dashboard/AGENTS.md` before candidate or resume work. It is the single policy source. Annie's own files in `career-dashboard/data/context/` and the evidence registry `career-dashboard/data/context/evidence.yml` are the only current candidate authorities.
 
-## What this workspace is
+## The three rules that shape everything
 
-A career-operations workspace for **one person, targeting the United States**.
-It removes three time sinks: finding roles genuinely open to her, re-tailoring a
-resume for each, and remembering who already said no.
+1. **Sponsorship.** A posting that says it will not sponsor, or that requires US citizenship, permanent residency, a security clearance, ITAR/EAR or US-person status, is never listed; it is logged with the sentence that excluded it. A posting that says nothing is shown. She is on F-1 OPT and authorized to work now.
+2. **Never re-apply.** Same company and role never again; a rejection hides the company for 180 days; 21 quiet days after applying means ghosted, and the company is open again after 90 days for a different role only.
+3. **One page, real facts.** Every resume is exactly one US Letter page with a signature project unique to that company. Never a years total, never a publication until Q3 is detailed, never a study-plan skill or an unbuilt project.
 
-## Read these, in this order, before doing anything
+## Continue work from a chat
 
-| # | File | Why |
-|---|---|---|
-| 1 | `CLAUDE.md` | The operating rules. The authority on folder layout, the sponsorship gate, the never-re-apply rule, and output conventions. |
-| 1b | `STRUCTURE.md` | The complete file map. Where every folder and file lives, and which are generated. |
-| 2 | `context/*.md` | Her real facts. **The only legal source of resume content.** Read the files, not your memory of them. |
-| 3 | `system/modes/_shared.md`, then `_profile.md` | Scoring and decision thresholds. `_profile.md` overrides `_shared.md` and wins. |
-| 4 | `.claude/skills/resume-tailor/references/` | Tailoring playbook, the three-pass recruiter audit, ATS rules. |
-| 5 | `system/data/applications.tsv` | Who must never be surfaced again. |
+Read `WORKSPACE-STATE.md`, then:
 
-## The four rules that are never negotiable
+```sh
+career-dashboard/backend/.venv/bin/python career-dashboard/backend/scripts/workspace.py summary
+career-dashboard/backend/.venv/bin/python career-dashboard/backend/scripts/career.py jobs
+career-dashboard/backend/.venv/bin/python career-dashboard/backend/scripts/career.py activity
+```
 
-1. **The honesty wall.** If a fact is not in `context/`, it does not exist.
-   Never invent a metric, date, tool, team size or publication. A skill she has
-   not used cannot appear in any form, including hedges like "familiar with".
-   A missing requirement is reported as a gap, never filled with a guess.
-2. **The sponsorship gate.** Silence about sponsorship is a KEEP. Only an
-   explicit refusal, or a citizenship/clearance/ITAR requirement, excludes.
-   Details and the exact patterns: `system/config/sponsorship.yml`.
-3. **Never re-apply.** Check the tracker before surfacing anything.
-4. **One page**, unless explicitly asked otherwise. Never fix a spill by
-   shrinking margins or fonts — cut content.
+The dashboard and the chat update the same `career-dashboard/data/career.db` through `career.py` / `Workspace` or `workspace.py` / `CareerServices`; never keep a second status list. Use exact job IDs; if Annie names an ambiguous employer or role, ask which posting. Record a submission only from her explicit confirmation or a verified matching email, and keep the date she states.
 
-## The wall between the two fights
+For a daily search follow `daily-job-search/DAILY_BRIEF.md`; for "give me 10 companies" use `/hunt` (`.claude/commands/hunt.md`). Application folders live once, under `career-dashboard/data/output/applications/Annie_Manoharan_<Company>_<NN>/`.
 
-**Fight 1, get shortlisted** — won by the resume, from facts already in
-`context/`. **Fight 2, win the interview** — won by preparation, weeks later.
-
-A skill in a study plan is a skill she does not have yet. It never appears on a
-resume, in any hedged form, until it is genuinely learned *and* written into
-`context/`. Say this out loud each time you produce a study plan.
+After meaningful work, update `WORKSPACE-STATE.md` with what changed, what is unresolved and the next action. Run `./Check Workspace.command` after code changes. Use disposable workspaces for tests. Never submit applications or contact anyone without Annie's explicit go-ahead.
 
 ## Who you are working for
 
-She is not a developer. She does not read code, run commands or edit YAML.
-Run things yourself; never answer with "now run this". Explain in one sentence
-before and one after. Confirm before anything hard to undo. This workspace
-*prepares* applications — she reviews and submits every one.
-
-## The three ways this workspace runs
-
-| Way | For | Entry point |
-|---|---|---|
-| **A coding CLI** | You, right now | This file, then `CLAUDE.md` |
-| **A local app** | Power use: live PDF preview, editing, tracking | `python dashboard/run.py` |
-| **A chat project** | Phone or laptop, on a subscription, no API key | `python system/scripts/export_project_pack.py`, then upload `output/project-pack/` |
-
-The third is how this reaches someone who will never open a terminal. The pack
-is generated from these same files, so it cannot disagree with them.
-
-## Useful commands
-
-```bash
-python dashboard/cli.py brief          # find jobs and build a resume for each
-python dashboard/cli.py schedule       # print the OS command for a daily 9am run
-python dashboard/cli.py status         # what is configured, what ran last
-python system/scripts/export_project_pack.py   # rebuild the chat-app pack
-python system/scripts/doctor.py        # health check; exit 0 means healthy
-python -m pytest dashboard/tests -q    # the test suite
-```
-
-## Running it for someone else
-
-Set `CAREER_OPS_ROOT` to another workspace folder and every path follows —
-their `context/`, their `output/`, their tracker. One copy of the code, one
-workspace per person, and nobody's private profile lives in the repository.
-
-```bash
-CAREER_OPS_ROOT=/path/to/their-workspace python dashboard/run.py
-```
-
-## Any LLM platform
-
-The app talks to Anthropic, to the local Claude Code CLI, or to any
-OpenAI-compatible endpoint — OpenAI, OpenRouter, Groq, Together, DeepSeek,
-Mistral, Fireworks, Ollama, LM Studio, vLLM. Adding a platform is a base URL and
-a model name in Settings, not a code change. Without any of them the
-deterministic half still runs: job finding, the sponsorship gate,
-never-re-apply, link checking, keyword scoring and PDF building.
+Annie is not a developer. You run everything, explain in one plain sentence before and after each step, ask like a person rather than a form, confirm before anything hard to undo, and finish with one plain next step.

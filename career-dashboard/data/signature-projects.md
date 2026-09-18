@@ -10,20 +10,21 @@ If nothing unused fits, the strongest real project ships and a build-now spec go
 
 | # | Company | Role | Signature project | Assigned |
 |---|---|---|---|---|
-| 1 | University of Southern California | Research Engineer (CIC, neuroimaging ML) | PROJ-P02-MIGA — MiGa - Multi-Chicken Gait Assessment (AICV Lab) | 2026-09-05 |
-| 2 | Databricks | AI Engineer - FDE (Forward Deployed Engineer) | PROJ-P01-IOT — Real-Time Medical IoT Analytics Platform | 2026-09-06 |
+| 1 | universityofsoutherncalifornia | (cleared by a fresh start) | PROJ-P02-MIGA — MiGa - Multi-Chicken Gait Assessment (AICV Lab) | 2026-09-05 |
+| 2 | databricks | (cleared by a fresh start) | PROJ-P01-IOT — Real-Time Medical IoT Analytics Platform | 2026-09-06 |
+| 3 | Snowflake | Software Engineer - Backend | PROJ-P06-EXPENSE — Expense Tracker with Predictive Analytics | 2026-09-18 |
 
 ## Pool
 
 | Project | Title | Tracks (signature pool) | Status |
 |---|---|---|---|
-| PROJ-P01-IOT | Real-Time Medical IoT Analytics Platform | A, C | signature for Databricks |
-| PROJ-P02-MIGA | MiGa - Multi-Chicken Gait Assessment (AICV Lab) | B | signature for University of Southern California |
+| PROJ-P01-IOT | Real-Time Medical IoT Analytics Platform | A, C | signature for databricks |
+| PROJ-P02-MIGA | MiGa - Multi-Chicken Gait Assessment (AICV Lab) | B | signature for universityofsoutherncalifornia |
 | PROJ-P03-DUALFIT | DualFit - Two-Stage Virtual Try-On (AICV Lab) | B | free |
 | PROJ-P04-NEWS-RAG | Local LLM-Powered News Research Platform | A, B | free |
-| PROJ-P05-RESUME | Resume Classification Model | B | free |
-| PROJ-P06-EXPENSE | Expense Tracker with Predictive Analytics | A, C | free |
+| PROJ-P05-RESUME | Resume Classification Model | B, C | free |
+| PROJ-P06-EXPENSE | Expense Tracker with Predictive Analytics | A, C | signature for Snowflake |
 | PROJ-P07-FPGA | FPGA-Based Autonomous Vehicle | D | free |
 | PROJ-P08-ELEVATOR | Elevator Control System | D | free |
 | PROJ-P09-ANTENNA | Antenna Design for 5G and Biosensing | D | free |
-| PROJ-P10-PACMAN | Pacman Search Algorithms (coursework) | C | free |
+| PROJ-P10-PACMAN | Pacman Search Algorithms (coursework) | supporting only | free |

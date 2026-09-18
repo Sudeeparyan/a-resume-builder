@@ -18,7 +18,14 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from backend.paths import CONFIG
+from backend.paths import CONFIG, TIMEZONE
+
+
+def _today() -> str:
+    """The access date in Annie's time zone, for the source records on each posting."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo(TIMEZONE)).date().isoformat()
 
 PORTALS_YML = CONFIG / "portals.yml"
 TIMEOUT = 20
@@ -97,7 +104,7 @@ def _posting(row, source_id, title, url, location, description, employer_type="c
         "url": url or "",
         "requisition_id": str(source_id or ""),
         "description": (description or "").strip(),
-        "company_sources": [{"title": f"{row.get('name')} careers", "url": row.get("careers_url", ""), "accessed_at": ""}],
+        "company_sources": [{"title": f"{row.get('name')} careers", "url": row.get("careers_url", ""), "accessed_at": _today()}],
         "legal_presence": "Posting read from the company's own ATS board (tracked in portals.yml).",
         "verification": "Read directly from the employer's ATS JSON feed.",
         "red_flags": [],

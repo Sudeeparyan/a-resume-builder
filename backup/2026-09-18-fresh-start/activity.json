@@ -1,0 +1,88 @@
+[
+  {
+    "id": 8,
+    "occurred_at": "2026-09-18T14:26:12+00:00",
+    "action": "imported_from_pre_port",
+    "job_id": "28c4ef2caa5b1d4f",
+    "details": {
+      "old_folder": "Annie_Manoharan_Databricks_01",
+      "project_id": "PROJ-P01-IOT"
+    }
+  },
+  {
+    "id": 7,
+    "occurred_at": "2026-09-18T14:26:09+00:00",
+    "action": "draft_prepared",
+    "job_id": "28c4ef2caa5b1d4f",
+    "details": {
+      "folder": "data/output/applications/Annie_Manoharan_Databricks_01",
+      "project_id": "PROJ-P01-IOT",
+      "review_required": true,
+      "warnings": []
+    }
+  },
+  {
+    "id": 6,
+    "occurred_at": "2026-09-18T14:26:09+00:00",
+    "action": "sponsorship_evaluated",
+    "job_id": "28c4ef2caa5b1d4f",
+    "details": {
+      "tier": "B",
+      "label": "H-1B history: 459 approvals (2021, 2022, 2023); posting is silent"
+    }
+  },
+  {
+    "id": 5,
+    "occurred_at": "2026-09-18T14:26:09+00:00",
+    "action": "job_saved",
+    "job_id": "28c4ef2caa5b1d4f",
+    "details": {
+      "company": "Databricks",
+      "title": "AI Engineer - FDE (Forward Deployed Engineer)",
+      "url": "https://databricks.com/company/careers/open-positions/job?gh_jid=8546367002"
+    }
+  },
+  {
+    "id": 4,
+    "occurred_at": "2026-09-18T14:26:09+00:00",
+    "action": "imported_from_pre_port",
+    "job_id": "612dbf74718cb0aa",
+    "details": {
+      "old_folder": "Annie_Manoharan_USC_01",
+      "project_id": "PROJ-P02-MIGA"
+    }
+  },
+  {
+    "id": 3,
+    "occurred_at": "2026-09-18T14:26:06+00:00",
+    "action": "draft_prepared",
+    "job_id": "612dbf74718cb0aa",
+    "details": {
+      "folder": "data/output/applications/Annie_Manoharan_UniversityofSouthernCalifornia_01",
+      "project_id": "PROJ-P02-MIGA",
+      "review_required": true,
+      "warnings": []
+    }
+  },
+  {
+    "id": 2,
+    "occurred_at": "2026-09-18T14:26:06+00:00",
+    "action": "sponsorship_evaluated",
+    "job_id": "612dbf74718cb0aa",
+    "details": {
+      "tier": "S",
+      "label": "Cap-exempt employer: files H-1B year-round, no lottery (domain .edu)"
+    }
+  },
+  {
+    "id": 1,
+    "occurred_at": "2026-09-18T14:26:06+00:00",
+    "action": "job_saved",
+    "job_id": "612dbf74718cb0aa",
+    "details": {
+      "company": "University of Southern California",
+      "title": "Research Engineer (CIC, neuroimaging ML)",
+      "url": "https://usccareers.usc.edu/job/los-angeles/research-engineer/1209/98849730016"
+    }
+  }
+]

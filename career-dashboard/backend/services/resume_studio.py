@@ -473,7 +473,16 @@ class ResumeStudio:
                 atomic_write(target / 'layout-review.json', json.dumps(metadata, indent=2))
                 atomic_write(target / 'resume.tex', candidate)
             self.w.export_tracking()
-            self.score(job_id)
+            try:
+                self.score(job_id)
+            except ValueError as error:
+                # The page is fitted and saved by now; a scoring problem must not read as a failed fit.
+                with self.w.connect() as db:
+                    self.w.record_event(db, 'studio_score_failed', job_id, revision=new_revision, error=str(error))
+                draft = self.get(job_id)
+                draft['warnings'] = [*draft.get('warnings', []),
+                                     'Fitted to one page and saved, but the match score could not be computed: ' + str(error)]
+                return draft
             return self.get(job_id)
 
     # Kept for callers that still say "fill"; the contract decides the page count.

@@ -7,7 +7,7 @@ import json
 import re
 
 
-SCORING_VERSION = "career-assessment-v2"
+SCORING_VERSION = "career-assessment-v3"  # v3: recognizable sections follow the resume contract headings
 ALIASES = {
     "Power BI": ("power bi", "powerbi"),
     "SQL": ("sql", "structured query language"),
@@ -47,8 +47,10 @@ def _contains(text: str, aliases: tuple[str, ...]) -> bool:
 
 
 def _sentences(jd: str) -> list[str]:
-    candidates = re.split(r"(?:\r?\n|(?<=[.!?;])\s+|[•●▪])", jd)
-    return [re.sub(r"\s+", " ", item).strip(" -\t") for item in candidates if len(item.strip()) >= 2]
+    candidates = re.split(r"(?:\r?\n|(?<=[.!?;])[ \t]+|[•●▪])", jd)
+    # Collapse only ordinary spaces and tabs: a non-breaking space (\xa0) inside a sentence
+    # must survive, so every excerpt stays an exact substring of the JD it was quoted from.
+    return [re.sub(r"[ \t]+", " ", item).strip(" -\t") for item in candidates if len(item.strip()) >= 2]
 
 
 def extract_requirements(jd: str) -> list[dict]:
@@ -80,8 +82,14 @@ def ats_readiness(resume_text: str, source: str = "") -> dict:
     words = re.findall(r"\b\w+\b", resume_text)
     printable = sum(ch.isprintable() or ch in "\n\t" for ch in resume_text) / max(1, len(resume_text))
     extraction = 30 if len(words) >= 250 and printable >= 0.98 else 20 if len(words) >= 120 else 8
-    expected = ("summary", "skills", "experience", "projects", "education")
-    recognized = [name for name in expected if re.search(rf"(?im)^\s*(?:professional )?{name}\s*$", resume_text)]
+    # The headings the one-page contract requires (Education, Technical Skills, Professional
+    # Experience, Projects); a plain "Skills" or "Experience" heading also counts.
+    from backend.resume_contract import load_contract
+    expected = tuple(name.casefold() for name in load_contract().required_sections) or ("education", "skills", "experience", "projects")
+    recognized = [
+        name for name in expected
+        if re.search(rf"(?im)^\s*(?:{re.escape(name)}|{re.escape(name.split()[-1])})\s*$", resume_text)
+    ]
     sections = round(25 * len(recognized) / len(expected))
     unsafe_structure = bool(re.search(r"\\begin\{(?:tabular|multicols?|tikzpicture)\}", source))
     structure = 8 if unsafe_structure else 20

@@ -3,6 +3,7 @@
 from __future__ import annotations
 import hashlib, json, os, re, shutil, subprocess, tempfile, threading, time, uuid
 from pathlib import Path
+from urllib.parse import urlsplit
 from concurrent.futures import ThreadPoolExecutor
 
 REPORT_SCHEMA = {
@@ -773,6 +774,14 @@ class AgentRunner:
                     verdicts[job["url"]] = verdict
                     job["sponsor_tier"] = verdict.tier
                     job["sponsor_label"] = verdict.label()
+                    # A tracked employer needs no web legitimacy search: Annie listed it in
+                    # portals.yml herself and the posting was read from that company's own
+                    # careers feed. Anything the AI found still has to prove legal presence.
+                    vouched = (
+                        f"Tracked employer: {job['company']} is listed in data/config/portals.yml and this posting "
+                        f"was read from its own careers feed ({urlsplit(job['url']).hostname or 'ATS'})."
+                        if row.get("preset") == "portals" else ""
+                    )
                     company_check = quality.assess_company(
                         job["company"], job["url"], job.get("company_sources", []) + job.get("sponsorship_evidence", []),
                         [job.get("legal_presence", ""), job.get("verification", ""), "Sponsorship evidence: " + json.dumps(job.get("sponsorship_evidence", []))],
@@ -781,6 +790,7 @@ class AgentRunner:
                         employee_min=job.get("employee_min"),
                         employee_max=job.get("employee_max"),
                         sponsorship_state=("verified" if verdict.tier in {"S", "A", "B"} else "unknown"),
+                        override_reason=vouched,
                     )
                     if company_check["state"] != "verified":
                         output["rejected_leads"].append(job["url"] + ": company legitimacy needs review")
@@ -831,6 +841,10 @@ class AgentRunner:
                         candidates = candidates[:limit]
                     output["balanced_shortages"] = shortages
                 else:
+                    if row.get("preset") == "portals":
+                        # A feed lists hundreds of postings in board order; the AI search already
+                        # ranks its few. Save the best-matching portal leads, not the first ones.
+                        unique.sort(key=lambda job: job["relevance"]["score"], reverse=True)
                     candidates = unique[:limit]
                 for job in candidates:
                     result = self.s.add_posting(job, source="discovery", verdict=verdicts.get(job["url"]))

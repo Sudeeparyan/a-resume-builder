@@ -159,3 +159,18 @@ def test_cuts_follow_the_documented_order():
     assert 'Sri Ramakrishna' not in current
     # The signature project is untouched by every cut.
     assert current.count('\\item \\SelectedProjectBullet') == 3
+
+
+def test_fit_survives_a_scoring_failure_and_says_so(service, monkeypatch):
+    """The fitted page is committed before scoring; a scoring error becomes a warning on the saved draft."""
+    if not shutil.which('tectonic'):
+        pytest.skip('PDF runtime unavailable')
+    j = role(service)
+    studio = ResumeStudio(service)
+    d = studio.open(j['id'])
+    monkeypatch.setattr(ResumeStudio, 'score', lambda self, job_id: (_ for _ in ()).throw(ValueError('Requirement extraction produced an ungrounded excerpt')))
+    fitted = studio.fit(j['id'], d['revision'])
+    assert fitted['revision'] == d['revision'] + 1 and fitted['preview']['page_count'] == 1
+    assert any('Fitted to one page and saved' in w and 'ungrounded excerpt' in w for w in fitted['warnings'])
+    assert studio.get(j['id'])['revision'] == fitted['revision']
+    assert any(e['action'] == 'studio_score_failed' for e in service.w.activity())

@@ -68,6 +68,31 @@ def is_us_location(location: str) -> bool:
         return False
     return not _FOREIGN_TWIN.search(location) or bool(_US_STATE_SUFFIX.search(location))
 SENIORITY_BLOCK = re.compile(r"\b(senior|sr\.?|staff|lead|principal|director|head(?: of)?|manager|architect|distinguished|fellow|vp|vice president)\b", re.I)
+# Annie holds a Master's. A PhD that is merely preferred, or one option among degrees ("MS or PhD"),
+# is fine; a posting that requires one is not hers.
+_PHD = r"ph\.?\s?d\.?"
+_PHD_TITLE = re.compile(r"\b" + _PHD + r"\b", re.I)
+_PHD_REQUIRED = re.compile(
+    r"\b" + _PHD + r"\b[^.\n]{0,30}\b(is\s+)?required\b|\bmust\s+(have|hold)\s+(a\s+)?" + _PHD + r"\b"
+    r"|\b(currently\s+)?(pursuing|enrolled\s+in)\s+(a\s+)?" + _PHD + r"\b|\b" + _PHD + r"\s+(candidates?|students?)\s+only\b",
+    re.I,
+)
+_PHD_ONLY_BULLET = re.compile(r"^\s*(?:[-*•·]\s*)?(?:a\s+|an?\s+)?" + _PHD + r"\b(?:\s+degree)?\s+(?:in|from)\b", re.I | re.M)
+_OTHER_DEGREE = re.compile(r"\b(m\.?s\.?c?|master'?s?|b\.?s\.?c?|bachelor'?s?|b\.?e\.?|m\.?eng|equivalent)\b", re.I)
+
+
+def requires_phd(title: str, description: str) -> bool:
+    """True when the posting is only for PhD holders or PhD students."""
+    if _PHD_TITLE.search(title or ""):
+        return True
+    text = description or ""
+    if _PHD_REQUIRED.search(text):
+        return True
+    for match in _PHD_ONLY_BULLET.finditer(text):
+        line = text[match.start(): text.find("\n", match.start()) if text.find("\n", match.start()) != -1 else len(text)]
+        if not _OTHER_DEGREE.search(line) and not re.search(r"\b(preferred|plus|nice to have|bonus)\b", line, re.I):
+            return True
+    return False
 _YEARS = re.compile(r"(\d{1,2})\s*\+?\s*(?:-|to|–)?\s*(?:\d{1,2})?\s*\+?\s*(?:years?|yrs)\b(?:\s+of)?\s+(?:\w+\s+){0,4}?(?:experience|exp)", re.I)
 
 
@@ -292,6 +317,8 @@ class JobQualityService:
         years = years_required(description)
         if years and years > 4:
             blockers.append(f"The posting asks for {years}+ years of experience; the profile caps at 4.")
+        if requires_phd(title, description):
+            blockers.append("The posting requires a PhD; Annie holds a Master's.")
         if len(description.strip()) < 80 or not str(posting.get("url", "")).startswith(("http://", "https://")):
             blockers.append("A full job description and real application route are required.")
         from backend.services.sponsorship import screen as sponsorship_screen

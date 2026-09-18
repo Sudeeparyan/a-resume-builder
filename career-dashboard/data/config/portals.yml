@@ -105,6 +105,8 @@ tracked_companies:
 
   - name: "Snowflake"
     careers_url: "https://careers.snowflake.com/"
+    ats: "ashby"
+    ats_token: "snowflake"   # public feed confirmed 2026-09-18: 345 postings, Snowflake Inc. (AI Data Cloud)
     cap_exempt: false
     tier: 3
     why: "Large data employer, consistent sponsor. Note: Snowflake itself is a listed gap in her skills."

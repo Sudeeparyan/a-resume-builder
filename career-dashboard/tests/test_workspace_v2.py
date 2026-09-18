@@ -657,3 +657,52 @@ def test_discovery_excludes_unlinked_email_confirmed_roles(service):
     assert service.runs()[0]["result"]["duplicate_job_ids"] == [
         "https://alreadyapplied.example/jobs/9"
     ]
+
+
+def test_portals_preset_gates_ranks_and_saves_tracked_feed_postings(service, monkeypatch):
+    """Tracked career pages: no AI, the same gates, the employer vouched for by portals.yml, best match first."""
+    from backend.services import portals
+
+    board = {"name": "Confluent", "careers_url": "https://jobs.ashbyhq.com/confluent", "ats": "ashby", "ats_token": "confluent"}
+    strong = ("Required Python, SQL, Apache Kafka streaming pipelines, Airflow orchestration on AWS Glue and S3, "
+              "data validation and quality checks. Responsibilities include ETL, lakehouse data modeling and clinical "
+              "device telemetry dashboards. PyTorch a plus.")
+    weak = "Maintain internal web tools for the marketing team. Some SQL reporting. Figma handoffs and CSS polish. " * 2
+    postings = [
+        portals._posting(board, "1", "Senior Data Engineer", "https://jobs.ashbyhq.com/confluent/1", "Austin, TX", strong),
+        # A different title from the eligible lead below: an excluded role blocks the same title at that company.
+        portals._posting(board, "2", "Analytics Engineer", "https://jobs.ashbyhq.com/confluent/2", "Austin, TX",
+                         strong + " Applicants must be authorized to work in the US without sponsorship now or in the future."),
+        portals._posting(board, "3", "Software Engineer", "https://jobs.ashbyhq.com/confluent/3", "Remote, United States", weak),
+        portals._posting(board, "4", "Data Engineer", "https://jobs.ashbyhq.com/confluent/4", "Austin, TX", strong),
+    ]
+    assert len(postings[0]["company_sources"][0]["accessed_at"]) == 10  # the feed stamps the access date
+    monkeypatch.setattr(portals, "fetch_all", lambda *a, **k: (postings, ["Confluent: 4 open postings via ashby"]))
+    # One slot left today, so the ranking decides which lead is saved.
+    service.save_goals({"weekly_target": 6, "workdays": [0, 1, 2, 3, 4, 5], "start_date": service.today()})
+    assert service.goals()["remaining_today"] == 1
+
+    runner = AgentRunner(service, lambda *a, **kw: pytest.fail("the portals preset must never call the AI"))
+    runner.enqueue("discovery", preset="portals")
+    runner.pool.shutdown(wait=True)
+    run = service.runs()[0]
+    assert run["state"] == "completed", run["error"]
+    result = run["result"]
+    assert result["summary"].startswith("Tracked career pages read directly (no AI call).")
+
+    # The refusal is excluded with its sentence and the portals source; the senior title is rejected.
+    assert [item["url"] for item in result["excluded"]] == ["https://jobs.ashbyhq.com/confluent/2"]
+    assert "without sponsorship" in result["excluded"][0]["sentence"]
+    assert service.excluded()[0]["source"] == "portals"
+    assert any("confluent/1: relevance gate Seniority" in lead for lead in result["rejected_leads"])
+    # A tracked employer is never dropped for "legitimacy needs review".
+    assert not any("legitimacy" in lead for lead in result["rejected_leads"])
+
+    # The best-matching eligible lead is saved, not the first one in feed order.
+    jobs = service.w.jobs()
+    assert [job["url"] for job in jobs] == ["https://jobs.ashbyhq.com/confluent/4"]
+    assert jobs[0]["sponsor_tier"] in {"B", "C"} and jobs[0]["status"] == "saved"
+    assert result["added_job_ids"] == [jobs[0]["id"]]
+    with service.w.connect() as db:
+        state, reason = db.execute("SELECT legitimacy_state, manual_override_reason FROM companies WHERE display_name=?", ("Confluent",)).fetchone()
+    assert state == "verified" and "portals.yml" in reason and "jobs.ashbyhq.com" in reason

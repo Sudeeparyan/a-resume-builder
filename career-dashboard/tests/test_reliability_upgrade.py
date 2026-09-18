@@ -86,6 +86,17 @@ def test_relevance_legitimacy_and_balanced_shortfall_are_honest(service):
     assert not dublin["eligible"] and any("United States" in b for b in dublin["blockers"])
     refusing = quality.relevance({**posting, "description": posting["description"] + " We are unable to sponsor work visas."}, profile)
     assert not refusing["eligible"] and any("unable to sponsor" in b for b in refusing["blockers"])
+    # A PhD requirement is a blocker; a PhD that is preferred or one option among degrees is not.
+    for wording in ("Systems PhD - Software Engineer", "PhD Software Engineer"):
+        assert any("PhD" in b for b in quality.relevance({**posting, "title": wording}, profile)["blockers"]), wording
+    for wording in ("\n- PhD in databases or systems\n- Strong C++", "A PhD is required for this role.",
+                    "Must hold a PhD in computer vision.", "You are currently pursuing a PhD in machine learning."):
+        phd = quality.relevance({**posting, "description": posting["description"] + " " + wording}, profile)
+        assert not phd["eligible"] and any("requires a PhD" in b for b in phd["blockers"]), wording
+    for wording in ("\n- MS or PhD in Computer Science\n", "PhD preferred.", "\n- BS/MS/PhD in a related field\n",
+                    "\n- PhD in databases preferred, or equivalent experience\n", "Our founders hold PhDs from MIT."):
+        fine = quality.relevance({**posting, "description": posting["description"] + " " + wording}, profile)
+        assert fine["eligible"], (wording, fine["blockers"])
     blocked = quality.assess_company("Acme", posting["url"], [{"url": "https://acme.example/about", "accessed_at": "2026-09-17"}], ["Registered legal entity"], ["Recruiter requests payment fee"])
     assert blocked["state"] == "blocked"
     result = quality.balanced_five([])
@@ -98,6 +109,12 @@ def test_grounded_assessments_separate_readiness_coverage_and_fit():
     jd = "SQL and Power BI are required. You will build dashboards for stakeholders. Python is preferred."
     requirements = extract_requirements(jd)
     assert requirements and all(item["excerpt"] in jd for item in requirements)
+    # Real postings carry non-breaking spaces and curly quotes; every excerpt must still be an exact quote.
+    pasted = ("Snowflake employees must abide by the company\u2019s data security plan as an\xa0essential part of their duties.\n"
+              "- 2-7 years\u2019 of industry experience designing large-scale systems\r\n\u2022 Proficiency in Python\xa0and SQL required")
+    grounded = extract_requirements(pasted)
+    assert grounded and all(item["excerpt"] in pasted for item in grounded), [item["excerpt"] for item in grounded]
+    assert any("security plan" in item["excerpt"] for item in grounded)
     result = assess(
         "Annie Prasanna Manoharan\nannie@example.com +1 (479) 301-1366\nEducation\nMS Computer Engineering\nTechnical Skills\nSQL and Power BI\nProfessional Experience\nBuilt dashboards\nProjects\nReporting " + "evidence " * 260,
         jd,
@@ -107,6 +124,9 @@ def test_grounded_assessments_separate_readiness_coverage_and_fit():
     python = next(item for item in result["keywords"] if item["requirement"] == "Python")
     assert python["status"] == "supported_missing_from_pdf"
     assert result["resume_coverage"]["score"] != result["ats_readiness"]["score"]
+    # The four contract headings are all recognised; no points are lost for the summary Annie's resume never has.
+    assert result["ats_readiness"]["recognized_sections"] == ["education", "technical skills", "professional experience", "projects"]
+    assert result["ats_readiness"]["components"]["recognizable_sections"] == 25
 
 
 def test_skill_parser_preserves_commas_and_capitalizes_terms():

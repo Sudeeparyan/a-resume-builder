@@ -114,3 +114,32 @@ class MailVerdict(BaseModel):
     states_submission_date: Optional[str] = Field(default=None, description="ISO date only if the message states when the application was submitted")
     confidence: Literal["high", "medium", "low"]
     excerpt: str
+
+
+class PostingFields(BaseModel):
+    """The four facts a pasted posting must yield before it can be saved.
+
+    Every value must appear in the pasted text; the assistant discards anything
+    it cannot find there, so a wrong guess costs nothing but an empty field.
+    """
+    company: str = Field(default="", description="Employer name exactly as the posting writes it; empty if not stated")
+    title: str = Field(default="", description="Job title exactly as the posting writes it; empty if not stated")
+    location: str = Field(default="", description="City and state, 'Remote (US)' or similar, as the posting states it; empty if not stated")
+    url: str = Field(default="", description="The application or posting link if the text contains one; empty otherwise")
+
+
+class AgentTurn(BaseModel):
+    """One decision of the workspace agent: call a tool, ask the person something, or reply.
+
+    The loop in services/assistant.py runs the chosen tool, appends its result
+    to the task transcript and asks for the next turn, until the agent replies.
+    """
+    thought: str = Field(description="One short sentence, written to her as 'you', on what you are doing now and why; she sees it as progress")
+    action: Literal["call", "ask", "reply"] = Field(description="call = run one tool; ask = you need something only she can supply; reply = the task is finished or cannot proceed")
+    tool: str = Field(default="", description="For call: the tool name, exactly as listed in tools")
+    arguments: str = Field(default="{}", description="For call: the tool's arguments as one JSON object, using the parameter names listed")
+    reply: str = Field(default="", description="For ask or reply: what to say to her, in plain sentences; **bold** for a job name is fine")
+    suggestions: list[str] = Field(
+        default_factory=list,
+        description="For reply: up to four short messages she could send next; for ask: the likely answers, e.g. yes / no",
+    )

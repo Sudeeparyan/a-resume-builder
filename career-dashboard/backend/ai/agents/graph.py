@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 from typing import Annotated, Any, TypedDict
 
-from backend.ai import catalog, claude_code, models
+from backend.ai import catalog, claude_code, codex, models
 from backend.ai.agents.specialists import GROUNDING, REGISTRY, Specialist
 
 
@@ -123,7 +123,7 @@ class AgentTeam:
     def _invoke(self, agent: Specialist, payload: Any, max_tokens: int):
         provider, model = self.tiers[agent.tier]
         text = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False, default=str)
-        if provider == claude_code.ID:
+        if provider in (claude_code.ID, codex.ID):
             return self._invoke_local(agent, text, provider, model)
         llm = models.build(self.root, provider, model, max_tokens=max_tokens)
         structured = llm.with_structured_output(agent.schema, include_raw=True)
@@ -140,7 +140,7 @@ class AgentTeam:
         return result["parsed"]
 
     def _invoke_local(self, agent: Specialist, text: str, provider: str, model: str):
-        """The same step through the local Claude Code CLI instead of LangChain.
+        """The same step through a local CLI (Claude Code or Codex) instead of LangChain.
 
         The specialist's system text and schema are passed as they are; the
         isolation rules above apply unchanged because the payload is built
@@ -148,9 +148,10 @@ class AgentTeam:
         """
         from pydantic import ValidationError
 
+        runtime = claude_code if provider == claude_code.ID else codex
         started = time.time()
         try:
-            raw, usage = claude_code.run(
+            raw, usage = runtime.run(
                 text, agent.schema.model_json_schema(), model=model,
                 web=agent.needs_web, system=agent.system + "\n\n" + GROUNDING,
             )

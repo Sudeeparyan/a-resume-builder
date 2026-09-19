@@ -112,12 +112,14 @@ def test_choose_main_refuses_a_provider_that_is_not_ready(service):
         ai_settings.choose_main(service, gateway, "nobody", "x")
 
 
-def test_choosing_codex_keeps_the_chat_tiers_it_cannot_run(service):
+def test_choosing_codex_moves_the_chat_tiers_too(service):
+    """The specialists (and the assistant's agent loop) run on Codex now, so one choice covers everything."""
     gateway = AIGateway(service, lambda *a, **k: {})
     service.set_pref("ai_preferences", {"tiers": {"strong": {"provider": "claude_code", "model": "sonnet"}}})
     ai_settings.choose_main(service, gateway, "codex", "codex-runtime")
     stored = service.pref("ai_preferences")
-    assert stored["default"]["provider"] == "codex" and stored["tiers"]["strong"]["provider"] == "claude_code"
+    assert stored["default"]["provider"] == "codex"
+    assert stored["tiers"] == {"strong": {"provider": "codex", "model": "codex-runtime"}, "cheap": {"provider": "codex", "model": "codex-runtime"}}
 
 
 def test_hosted_provider_returns_the_structured_object(service, monkeypatch):

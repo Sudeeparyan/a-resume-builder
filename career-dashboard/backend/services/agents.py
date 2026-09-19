@@ -44,6 +44,15 @@ def strings(*keys):
     return {k: {"type": "string"} for k in keys}
 
 
+RUN_KINDS = {"research", "resume_advisor", "email", "discovery", "resume_build", "resume_match", "instruction_interpret", "study_plan"}
+# The gateway action each kind of run resolves its provider through (resume_build has no AI call of its own).
+RUN_ACTIONS = {
+    "discovery": "discovery", "research": "role_research",
+    "resume_advisor": "role_research", "resume_match": "document_review",
+    "instruction_interpret": "resume_chat", "email": "email", "study_plan": "role_research",
+}
+
+
 MAIL_SCHEMA = object_schema(
     {
         **strings("email", "coverage"),
@@ -123,7 +132,8 @@ DISCOVERY_SCHEMA = object_schema(
         "excluded": {"type": "array", "items": object_schema(strings("company", "title", "url", "reason", "sentence"))},
     }
 )
-# The gate fills "excluded" itself; the model may leave it out.
+# The gate fills "excluded" itself; the model may leave it out. Codex's strict output
+# gets the closed form of this schema (see invoke), where every property is required.
 DISCOVERY_SCHEMA["required"] = [k for k in DISCOVERY_SCHEMA["required"] if k != "excluded"]
 
 
@@ -266,17 +276,13 @@ class AgentRunner:
             )
 
     def enqueue(self, kind, job_id=None, provider=None, model=None, preset="default"):
-        if kind not in {"research", "resume_advisor", "email", "discovery", "resume_build", "resume_match", "instruction_interpret", "study_plan"}:
+        if kind not in RUN_KINDS:
             raise ValueError("Unknown agent action")
         if kind == "discovery" and self.s.goals()["remaining_today"] == 0:
             raise ValueError(
                 "Your daily application target is complete. You can still save individual postings manually."
             )
-        action = {
-            "discovery": "discovery", "research": "role_research",
-            "resume_advisor": "role_research", "resume_match": "document_review",
-            "instruction_interpret": "resume_chat", "email": "email", "study_plan": "role_research",
-        }.get(kind)
+        action = RUN_ACTIONS.get(kind)
         if action:
             chosen, model = self.gateway.resolve(action, provider, model)
             provider = chosen.id
@@ -367,7 +373,9 @@ class AgentRunner:
             folder = Path(temp)
             schema_file = folder / "schema.json"
             out = folder / "result.json"
-            schema_file.write_text(json.dumps(schema))
+            # Codex's structured output is strict: every object closed, every field required.
+            from backend.ai.codex import failure_reason, strict_schema
+            schema_file.write_text(json.dumps(strict_schema(schema)))
             cmd = [
                 executable,
                 "exec",
@@ -442,8 +450,10 @@ class AgentRunner:
                     "The agent reached its time limit. No unverified jobs or statuses were saved. Retry a smaller search pass."
                 ) from None
             if result.returncode or not out.exists():
+                reason = failure_reason(result.stderr, result.stdout)
                 raise ValueError(
-                    "Agent could not finish. Check Codex sign-in, connected Gmail permissions, or usage and retry. No status was inferred from this failure."
+                    "Agent could not finish" + (f": {reason}" if reason else "")
+                    + ". Check Codex sign-in, connected Gmail permissions, or usage and retry. No status was inferred from this failure."
                 )
             return json.loads(out.read_text())
 

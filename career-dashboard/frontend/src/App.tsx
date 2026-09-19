@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   LayoutDashboard,
+  MessageSquareText,
   Search,
   FileText,
   UserRound,
@@ -19,8 +20,10 @@ import ResumeStudio from "./features/ResumeStudio";
 import Profile from "./features/Profile";
 import Settings from "./features/Settings";
 import Agents, { AGENT_LABEL } from "./features/Agents";
+import Assistant from "./features/Assistant";
 import type { Summary } from "./types";
 const tabs = [
+  ["assistant", "Assistant", MessageSquareText, "Your search"],
   ["dashboard", "Dashboard", LayoutDashboard, "Your search"],
   ["daily", "Daily Search", Search, "Your search"],
   ["resumes", "Resume Studio", FileText, "Your search"],
@@ -30,7 +33,8 @@ const tabs = [
 ] as const;
 function routeFromHash() {
   const r = location.hash.slice(1).split("/")[0];
-  return tabs.some((t) => t[0] === r) ? r : "dashboard";
+  // The chat is the front door: it opens first unless the address names a tab.
+  return tabs.some((t) => t[0] === r) ? r : "assistant";
 }
 export default function App() {
   const [route, setRoute] = useState(routeFromHash);
@@ -186,6 +190,14 @@ export default function App() {
               <p>Loading your workspace…</p>
             ) : (
               <>
+                {route === "assistant" && (
+                  <Assistant
+                    data={data}
+                    refresh={refresh}
+                    notify={notify}
+                    onJob={openStudio}
+                  />
+                )}
                 {route === "dashboard" && (
                   <Dashboard
                     data={data}

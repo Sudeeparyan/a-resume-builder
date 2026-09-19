@@ -191,3 +191,72 @@ export type ProfileData = {
   revision: number;
   skills: { name: string; purpose: string; path: string }[];
 };
+export type AssistantStep = {
+  at: string;
+  label: string;
+  state: "running" | "done" | "failed";
+  detail: string;
+  agent?: string;
+  run_id?: string;
+};
+export type AssistantMessage = {
+  id: string;
+  message: string;
+  response: string;
+  state: "processing" | "done" | "needs_input" | "failed";
+  steps: AssistantStep[];
+  data: {
+    intent?: string;
+    job_id?: string | null;
+    job_ids?: string[];
+    company?: string;
+    title?: string;
+    tier?: string;
+    revision?: number;
+    pdf?: string | null;
+    preview_png?: string | null;
+    posting_url?: string;
+    coverage?: number | null;
+    ats?: number | null;
+    gaps?: string[];
+    warnings?: string[];
+    suggestions?: string[];
+    run_id?: string;
+    [key: string]: unknown;
+  };
+  created_at: string;
+  updated_at: string;
+};
+export type AssistantEngine = {
+  provider: string;
+  model: string;
+  label: string;
+  ready: boolean;
+  moved_from: string | null;
+  /** What the runs the chat starts go through (the Settings main choice). */
+  runs: { provider: string; model: string; label: string; ready: boolean };
+  note: string | null;
+  options: { provider: string; model: string; label: string }[];
+};
+export type AssistantAgent = {
+  id: string;
+  name: string;
+  does: string;
+  implementation: string;
+  linked: boolean;
+  tools: string[];
+};
+export type AssistantOverview = {
+  messages: AssistantMessage[];
+  pending: {
+    kind: string;
+    question?: string;
+    candidates?: { id: string; company: string; title: string }[];
+    [key: string]: unknown;
+  } | null;
+  busy: boolean;
+  ai_configured: boolean;
+  engine: AssistantEngine;
+  agents: AssistantAgent[];
+  capabilities: { group: string; labels: string[] }[];
+};

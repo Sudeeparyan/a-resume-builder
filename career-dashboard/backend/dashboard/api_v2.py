@@ -140,6 +140,11 @@ class ScheduleInput(BaseModel):
     hours: int = Field(ge=1, le=24)
 
 
+class AssistantInput(BaseModel):
+    message: str = Field(min_length=1, max_length=120000)
+    request_id: str = Field(min_length=1, max_length=100)
+
+
 def attach(app, workspace, schedule: bool = False):
     service = CareerServices(workspace)
     runner = AgentRunner(service)
@@ -152,6 +157,10 @@ def attach(app, workspace, schedule: bool = False):
     tracker = InstructionTracker(service, studio)
     quality = JobQualityService(service)
     chats = ChatChangeService(service, studio)
+    from backend.services.assistant import Assistant
+    from backend.services.assistant_tools import Toolbox
+    assistant = Assistant(service, studio, runner, quality, tools=Toolbox(service, studio, runner, quality, chats))
+    app.state.assistant = assistant
     app.state.tracker = tracker
     app.state.studio = studio
     app.state.career = service
@@ -475,6 +484,19 @@ def attach(app, workspace, schedule: bool = False):
     def score_studio(job_id: str):
         return studio.score(job_id)
 
+    @router.get('/assistant')
+    def assistant_overview():
+        return assistant.overview()
+
+    @router.post('/assistant/messages', status_code=202)
+    def assistant_send(data: AssistantInput):
+        # Returns at once; the reply and its steps fill in on the worker thread.
+        return assistant.send(data.message, data.request_id)
+
+    @router.get('/assistant/messages/{message_id}')
+    def assistant_message(message_id: str):
+        return assistant.get(message_id)
+
     app.include_router(router)
 
     @asynccontextmanager
@@ -487,6 +509,8 @@ def attach(app, workspace, schedule: bool = False):
         yield
         runner.stop.set()
         runner.pool.shutdown(wait=False, cancel_futures=True)
+        if assistant.pool:
+            assistant.pool.shutdown(wait=False, cancel_futures=True)
 
     app.router.lifespan_context = lifespan
     return service

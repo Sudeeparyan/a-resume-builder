@@ -145,6 +145,11 @@ def save(services, values: dict) -> dict:
 def test_provider(services, provider_id: str, model: str) -> dict:
     """Make the smallest possible real call, so a bad key fails here not mid-run."""
     if provider_id == "codex":
+        from backend.ai import codex
+
+        if not codex.available():
+            return {"ok": False, "provider": provider_id, "model": model,
+                    "detail": "Codex is not installed on this Mac. Install the ChatGPT app and sign in."}
         return {"ok": True, "provider": provider_id, "model": model,
                 "detail": "The local Codex runtime is used directly and needs no key."}
     if provider_id == claude_code.ID:
@@ -182,7 +187,7 @@ def team(services, on_usage=None) -> AgentTeam:
 
 
 def choose_main(services, gateway, provider_id: str, model: str) -> dict:
-    """One choice for every agent: the gateway default and, where it can, both tiers.
+    """One choice for every agent: the gateway default and both specialist tiers.
 
     Per-action overrides are cleared so nothing silently keeps an older choice.
     Work the chosen provider cannot do (web search, Gmail) is routed by the
@@ -199,12 +204,9 @@ def choose_main(services, gateway, provider_id: str, model: str) -> dict:
     stored["default"] = {"provider": provider_id, "model": model}
     stored["actions"] = {}
     if provider_id in LOCAL_DEFAULTS or provider_id in catalog.PROVIDERS:
-        if provider_id == "codex":
-            pass  # the chat specialists cannot run on Codex; their tiers stay as they were
-        else:
-            cheap = claude_code.DEFAULTS["cheap"] if provider_id == claude_code.ID else catalog.default_model(provider_id, "cheap")
-            stored["tiers"] = {"strong": {"provider": provider_id, "model": model},
-                               "cheap": {"provider": provider_id, "model": cheap}}
+        cheap = LOCAL_DEFAULTS[provider_id]["cheap"] if provider_id in LOCAL_DEFAULTS else catalog.default_model(provider_id, "cheap")
+        stored["tiers"] = {"strong": {"provider": provider_id, "model": model},
+                           "cheap": {"provider": provider_id, "model": cheap}}
     services.set_pref("ai_preferences", stored)
     with services.w.connect() as db:
         services.w.record_event(db, "ai_main_provider_chosen", provider=provider_id, model=model)

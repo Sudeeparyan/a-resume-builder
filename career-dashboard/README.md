@@ -22,8 +22,9 @@ python run.py            # http://127.0.0.1:8010; --port 8011 if taken, --no-bro
 
 Needs Python 3.12, Node.js + npm (for the React client) and Tectonic (PDF builds; the launcher wires the bundle through `../daily-job-search/with_resume_runtime.py`). Research and discovery run on a signed-in Claude Code or Codex runtime, chosen in Settings; API keys for OpenAI, the Claude API, OpenRouter, Gemini or Kimi can be pasted in Settings → API keys instead. Gmail sync is optional and needs Codex signed in. The Agents tab shows every agent step by step.
 
-## Six tabs
+## Seven tabs
 
+- **Assistant**: the front door, and an agent. Paste a job description (with its link) and it runs the sponsorship gate and the never-re-apply check, saves the job, opens the draft, fits it to one US Letter page, scores it and hands back the PDF with an *Open in Resume Studio* button; every step is shown as it happens and needs no AI. Ask for anything else in plain words ("research Snowflake and then write the study plan", "which saved jobs still have no resume? build them", "I finished the AWS course", "set my weekly target to 12") and the agent does it with the same tools the tabs use — jobs, Resume Studio, every agent, your Profile, goals, synced mail, settings — pausing for your *yes* before anything hard to undo (marking applied, changing the profile or goals, removing a job). The rail on the right shows the one runtime everything uses (Claude Code, Codex or a keyed provider, switchable there: the chat and the runs it starts follow it), the live flow of agents behind the current task, what is running, and every agent with whether the chat can reach it; a click pre-fills its request. Yes/no questions get one-tap answers, a failed reply has *Try again*, and on a phone the tabs sit at the bottom of the screen. Whatever the chat does appears on the other tabs, because it writes the same database.
 - **Dashboard**: saved jobs ranked by sponsorship tier (S cap-exempt → A says yes → B proven sponsor → C silent), status/notes/date editing, a tier filter, linked Gmail evidence and activity. **Excluded roles** lists every posting the gate cut, with the exact sentence that triggered it and a Restore button for a wrong call.
 - **Daily Search**: weekly targets over chosen workdays (default 30 a week, Monday–Saturday, US Central time), carryover, and **Find suitable jobs** with three mixes: *Default*, *Balanced five* (2 startup, 1 mid, 2 large; mid/large need tier S/A/B) and *Tracked career pages* (Greenhouse/Lever/Ashby feeds from `data/config/portals.yml`, no AI call). Every lead passes the sponsorship gate and the never-re-apply check before it is saved.
 - **Resume Studio**: the per-job one-page draft. **Fit to one page** ranks content for the role's track, tries 11 → 10.5 → 10pt and then cuts content in the documented order; it never goes below 10pt or touches margins. Signature and supporting project slots, chat edits (`skills:`, `skills data:`, `coursework:`, `font:`), build and score, and **Write study plan**.
@@ -34,6 +35,8 @@ Needs Python 3.12, Node.js + npm (for the React client) and Tectonic (PDF builds
 Open a saved job to see its tier and the reason ("Cap-exempt: .edu domain", "H-1B history: 459 approvals"), re-check sponsorship, run company research, an independent hiring-manager benchmark (it never sees Annie's profile) and a separate profile comparison.
 
 ## Daily workflow
+
+The short version: open **Assistant**, paste the posting, download the PDF, apply, tell it *applied to <company>*. The long version:
 
 1. **Daily Search** → *Find suitable jobs*. Excluded postings go to Excluded roles with their sentence; roles she already saw or that rejected her in the last 180 days are skipped.
 2. Open a posting, read the JD, run *Company & hiring review*.

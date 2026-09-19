@@ -42,6 +42,7 @@ flowchart TD
 | Tracked career pages (`services/portals.py`) | `data/config/portals.yml` | Greenhouse/Lever/Ashby postings through the same gates | None |
 | Posting sweep (`job_quality.verify_due`) | Saved postings | Active/expired/needs review; live wording re-gated | None |
 | Main orchestrator | Job ID, draft revision, worker states | Queued/running/completed/failed runs with progress | None |
+| Assistant agent (`services/assistant.py`, tools in `services/assistant_tools.py`) | One message thread for the whole workspace: the snapshot, the tool catalogue and the task transcript | A pasted posting → gate, save, draft, one-page fit, score, PDF without a model; any other request → an agent loop (one structured decision per turn: call a tool, ask, or reply) over tools that wrap every feature, pausing for her yes before anything hard to undo | None for postings and shortcuts; one cheap call to read an unlabelled posting; one strong call per agent turn (at most 14 per message), on Claude Code, Codex or a keyed provider |
 | Instruction tracker | Chat messages, selected draft | Applied edit, pending profile fact, clarification or error, all retained | None |
 | Project ranker / builder | Saved JD, registry, signature ownership | Signature + supporting project slots, evidence-linked draft | None |
 | Layout fitter | Saved source | Measured one-page PDF and preview; cuts in the documented order | None |
@@ -52,9 +53,11 @@ flowchart TD
 | Email reviewer | Scoped Gmail read tools | Application evidence | Live, budgeted |
 | Release validator | Source, registry, evidence map, PDF, preview | Hard pass/fail gates | None |
 
-AI workers run as fresh Claude Code or Codex processes in temporary directories with shell tools disabled, or through an API provider chosen in Settings. The hiring manager never receives candidate context.
+AI workers run as fresh Claude Code or Codex processes in temporary directories with shell tools disabled, or through an API provider chosen in Settings. Codex's structured output is strict, so every schema reaches it in closed form (`backend/ai/codex.py: strict_schema`: objects closed, every property required); a failed `codex exec` reports its last error line rather than a generic hint. One choice covers everything: the chat's tiers follow the main provider unless Settings set them apart, and a run the chat starts is enqueued on the chat's engine when that runtime can do the work. The hiring manager never receives candidate context.
 
 ## How to use the workflow
+
+The Assistant tab is the front door: paste a posting with its link and the steps below run in order, reporting each stage; the reply carries the PDF, *Open in Resume Studio* and the next commands (study plan, research, applied). Anything else is a task for the agent, which chains the same tools the tabs use and reports each one as a step; the rail beside the thread shows the runtime it runs on, the live flow of agents behind the current task, the runs in progress and every agent with whether the chat reaches it (the Gmail sync stays on the Agents tab). The tabs remain for looking closely at anything the chat did.
 
 1. **Daily Search → Find suitable jobs.** Every lead passes the sponsorship gate and the re-apply check before it is saved; excluded postings appear under Dashboard → Excluded roles with their sentence.
 2. Open a saved job: tier badge and reason, **Re-check sponsorship**, company & hiring review.

@@ -121,7 +121,7 @@ function Inline({ text }: { text: string }) {
   return (
     <>
       {text
-        .split(/(\[[^\]]+\]\(https?:\/\/[^\s)]+\)|\*\*[^*]+\*\*)/g)
+        .split(/(\[[^\]]+\]\(https?:\/\/[^\s)]+\)|\*\*[^*]+\*\*|\*[^*\n]+\*)/g)
         .map((part, n) => {
           const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
           return link ? (
@@ -130,6 +130,8 @@ function Inline({ text }: { text: string }) {
             </a>
           ) : part.startsWith("**") ? (
             <strong key={n}>{part.slice(2, -2)}</strong>
+          ) : part.startsWith("*") && part.length > 2 ? (
+            <em key={n}>{part.slice(1, -1)}</em>
           ) : (
             part
           );
@@ -187,6 +189,24 @@ export function RichText({ text }: { text: string }) {
             </tbody>
           </table>
         </div>,
+      );
+    } else if (/^\s*[-•]\s+/.test(line)) {
+      // Consecutive "- item" lines become one list.
+      const items: string[] = [];
+      const key = i;
+      while (i < lines.length && /^\s*[-•]\s+/.test(lines[i])) {
+        items.push(lines[i].replace(/^\s*[-•]\s+/, ""));
+        i++;
+      }
+      i--;
+      blocks.push(
+        <ul key={key}>
+          {items.map((item, n) => (
+            <li key={n}>
+              <Inline text={item} />
+            </li>
+          ))}
+        </ul>,
       );
     } else if (line.startsWith("### "))
       blocks.push(<h4 key={i}>{line.slice(4)}</h4>);

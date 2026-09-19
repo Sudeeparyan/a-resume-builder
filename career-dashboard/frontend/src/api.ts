@@ -2,12 +2,25 @@ export async function api<T = any>(
   path: string,
   method = "GET",
   body?: unknown,
+  options: { timeout?: number } = {},
 ): Promise<T> {
-  const r = await fetch("/api" + path, {
-    method,
-    headers: body === undefined ? {} : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  // A poll that never answers (a dropped connection, a sleeping laptop) must fail,
+  // not hang the loop that would retry it.
+  const control = options.timeout ? new AbortController() : undefined;
+  const timer = control ? window.setTimeout(() => control.abort(), options.timeout) : 0;
+  let r: Response;
+  try {
+    r = await fetch("/api" + path, {
+      method,
+      headers: body === undefined ? {} : { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: control?.signal,
+    });
+  } catch (e) {
+    throw new Error(control?.signal.aborted ? "The app did not answer in time. Retrying…" : "Cannot reach the app: " + (e as Error).message);
+  } finally {
+    window.clearTimeout(timer);
+  }
   const data = await r.json();
   if (!r.ok)
     throw new Error(

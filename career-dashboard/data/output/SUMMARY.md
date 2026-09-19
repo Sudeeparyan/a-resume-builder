@@ -1,6 +1,6 @@
 # Annie's job search — front page
 
-Last run: ai_policy_updated at 2026-09-18T23:32:52+00:00. Generated from data/career.db; open the dashboard to act on anything here.
+Last run: posting_verified at 2026-09-19T20:00:12+00:00. Generated from data/career.db; open the dashboard to act on anything here.
 
 ## Your resumes
 

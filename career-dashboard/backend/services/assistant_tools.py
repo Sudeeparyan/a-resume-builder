@@ -693,7 +693,7 @@ class Toolbox:
         personal = {i["id"]: i["summary"] for i in items if i["kind"] == "personal"}
         pending = self.s.pending_knowledge()
         questions = self.w.root / QUESTIONS_FILE
-        open_questions = len(re.findall(r"^- \[ \]", questions.read_text(), re.M)) if questions.exists() else 0
+        open_questions = len(re.findall(r"^- \[ \]", questions.read_text(encoding="utf-8"), re.M)) if questions.exists() else 0
         return {"summary": f"{len(items)} entries · {len(pending)} pending review", "entries_by_kind": by_kind,
                 "registered": sum(i["review_state"] == "registered" for i in items),
                 "pending_review": pending, "profile_has_unreviewed_edits": self.s.profile_dirty(),
@@ -739,14 +739,14 @@ class Toolbox:
 
     def open_questions(self) -> dict:
         path = self.w.root / QUESTIONS_FILE
-        text = path.read_text() if path.exists() else ""
+        text = path.read_text(encoding="utf-8") if path.exists() else ""
         return {"summary": f"{len(re.findall(r'^- \\[ \\]', text, re.M))} open", "text": text[:8000]}
 
     def add_question(self, question) -> dict:
         from career import atomic_write
 
         path = self.w.root / QUESTIONS_FILE
-        text = path.read_text() if path.exists() else "# Questions for you\n"
+        text = path.read_text(encoding="utf-8") if path.exists() else "# Questions for you\n"
         heading = "## Asked from the chat"
         entry = f"- [ ] **{self.s.today()}** — {question.strip()}\n"
         if heading not in text:
@@ -805,7 +805,7 @@ class Toolbox:
 
     def read_policy(self, topic=None) -> dict:
         path = self.w.root / POLICY_FILE
-        text = path.read_text() if path.exists() else ""
+        text = path.read_text(encoding="utf-8") if path.exists() else ""
         sections, current, title = {}, [], "Overview"
         for line in text.splitlines():
             if line.startswith("## "):

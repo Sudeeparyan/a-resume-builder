@@ -374,10 +374,10 @@ class AgentRunner:
             schema_file = folder / "schema.json"
             out = folder / "result.json"
             # Codex's structured output is strict: every object closed, every field required.
-            from backend.ai.codex import failure_reason, strict_schema
+            from backend.ai.codex import failure_reason, launcher, strict_schema
             schema_file.write_text(json.dumps(strict_schema(schema)))
-            cmd = [
-                executable,
+            prefix = launcher(Path(executable))
+            cmd = prefix + [
                 "exec",
                 "--ignore-user-config",
                 "--ephemeral",
@@ -412,7 +412,7 @@ class AgentRunner:
                         "Gmail is not connected. Sign in to Codex, then save the Gmail connector id "
                         "in Settings before syncing mail."
                     )
-                cmd[1:1] = [
+                cmd[len(prefix):len(prefix)] = [
                     "-c",
                     "apps._default.enabled=false",
                     "-c",
@@ -430,7 +430,7 @@ class AgentRunner:
                     "read_email_thread",
                 ):
                     for tool_name in (name, "gmail_" + name):
-                        cmd[1:1] = [
+                        cmd[len(prefix):len(prefix)] = [
                             "-c",
                             f"apps.{connector}.tools.{tool_name}.enabled=true",
                         ]

@@ -72,6 +72,13 @@ def available() -> bool:
     return find_cli() is not None
 
 
+def launcher(cli: Path) -> list[str]:
+    """Return a shell-free launcher for a native binary or Windows command shim."""
+    if os.name == "nt" and cli.suffix.casefold() in {".cmd", ".bat"}:
+        return [os.environ.get("ComSpec", "cmd.exe"), "/d", "/s", "/c", str(cli)]
+    return [str(cli)]
+
+
 def strict_schema(schema: dict) -> dict:
     """A copy of a pydantic JSON schema in the shape strict structured-output APIs accept.
 
@@ -95,8 +102,8 @@ def strict_schema(schema: dict) -> dict:
 
 def command(cli: Path, folder: Path, schema_file: Path, out: Path, *, web: bool) -> list:
     """The exact argument list, kept separate so tests can check it."""
-    return [
-        str(cli), "exec",
+    return launcher(cli) + [
+        "exec",
         "--ignore-user-config", "--ephemeral", "--skip-git-repo-check",
         "-C", str(folder),
         "-s", "read-only",

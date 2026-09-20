@@ -31,3 +31,10 @@ Restart the dashboard so it picks up the rebuilt chat (Ctrl+C in its Terminal wi
 ## Checks
 
 `./Check Workspace.command` runs the backend tests, the workspace and layout validators, the React build and the component tests.
+
+## Windows setup (20 Sep 2026)
+
+- Installed Python 3.12, all backend and frontend dependencies, Tectonic and Poppler; added `Start Dashboard.cmd` for Windows.
+- Added Windows support for timezone data, UTF-8 profile files, atomic batch writes, newline-stable artifact hashes, Codex `.cmd` launchers and portable tests.
+- Verification passes: 318 backend tests, 16 frontend tests, Python dependency checks, frontend production build, zero npm audit findings, workspace/layout validation and the visually reviewed one-page base resume.
+- The current database in this clone reports 0 jobs and 0 excluded roles; no application history was restored or changed during setup.

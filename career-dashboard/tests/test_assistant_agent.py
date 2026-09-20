@@ -1,6 +1,7 @@
 """The assistant's agent loop and its toolbox: the model decides, the tools do, the gates hold."""
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -259,10 +260,10 @@ def test_profile_tools_propose_apply_and_reconcile(tools, assistant, monkeypatch
 def test_questions_and_policy_tools_touch_only_what_they_may(tools, assistant):
     shutil.copy(ROOT / "AGENTS.md", assistant.w.root / "AGENTS.md")
     context = assistant.w.root / "data/context"
-    before = {p.name: p.read_text() for p in context.glob("*.md")}
+    before = {p.name: p.read_text(encoding="utf-8") for p in context.glob("*.md")}
     noted = tools.call("add_question", {"question": "Which client was the 94% figure for?"})
     assert noted["file"] == "data/context/QUESTIONS-FOR-YOU.md"
-    after = {p.name: p.read_text() for p in context.glob("*.md")}
+    after = {p.name: p.read_text(encoding="utf-8") for p in context.glob("*.md")}
     assert {n for n in after if after[n] != before.get(n)} == {"QUESTIONS-FOR-YOU.md"}
     assert "## Asked from the chat" in after["QUESTIONS-FOR-YOU.md"] and "Which client was the 94% figure for?" in after["QUESTIONS-FOR-YOU.md"]
     assert tools.call("open_questions", {})["text"].startswith("# Questions for you")
@@ -335,10 +336,25 @@ def test_strict_schema_closes_every_object_and_requires_every_field():
 
 def fake_codex(tmp_path, result='{"ok": true}', fail=False, stderr=""):
     """A stand-in for ``codex exec``: keeps the schema it was given, writes the result or fails like Codex does."""
+    if os.name == "nt":
+        script = tmp_path / "fake_codex.py"
+        script.write_text(
+            "import shutil, sys\n"
+            "args = sys.argv[1:]\n"
+            "out = args[args.index('-o') + 1]\n"
+            "schema = args[args.index('--output-schema') + 1]\n"
+            "shutil.copyfile(schema, __import__('pathlib').Path(__file__).with_name('schema-seen.json'))\n"
+            "sys.stdin.read()\n"
+            + (f"sys.stderr.write({stderr!r})\nraise SystemExit(3)\n" if fail else f"open(out, 'w', encoding='utf-8').write({result!r})\n"),
+            encoding="utf-8",
+        )
+        path = tmp_path / "codex.cmd"
+        path.write_text(f'@echo off\n"{sys.executable}" "{script}" %*\n', encoding="utf-8")
+        return path
     path = tmp_path / "codex"
     path.write_text("#!/bin/sh\nwhile [ $# -gt 0 ]; do if [ \"$1\" = \"-o\" ]; then out=\"$2\"; fi; "
                     "if [ \"$1\" = \"--output-schema\" ]; then cp \"$2\" \"$(dirname \"$0\")/schema-seen.json\"; fi; shift; done\n"
-                    "cat > /dev/null\n" + (f"printf '%s' '{stderr}' >&2\nexit 3\n" if fail else f"printf '%s' '{result}' > \"$out\"\n"))
+                    "cat > /dev/null\n" + (f"printf '%s' '{stderr}' >&2\nexit 3\n" if fail else f"printf '%s' '{result}' > \"$out\"\n"), encoding="utf-8")
     path.chmod(0o755)
     return path
 
@@ -421,7 +437,7 @@ def test_codex_runs_sealed_and_returns_the_object(tmp_path, monkeypatch):
     result, usage = codex.run("Reply ok", {"type": "object", "properties": {"ok": {"type": "boolean"}}}, system="Be brief", web=False)
     assert result == {"ok": True}
     cmd = seen["cmd"]
-    assert cmd[:2] == [str(cli), "exec"] and "--ephemeral" in cmd and cmd[cmd.index("-s") + 1] == "read-only"
+    assert str(cli) in cmd and "exec" in cmd and "--ephemeral" in cmd and cmd[cmd.index("-s") + 1] == "read-only"
     assert 'web_search="disabled"' in cmd and "features.apps=false" in cmd and cmd[-1] == "-"
     assert seen["input"].startswith("Be brief\n\n---\n\nReply ok")
     (tmp_path / "broken").mkdir()

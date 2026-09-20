@@ -675,8 +675,9 @@ class Workspace(Tracking):
             raise ValueError('Two distinct resume-ready projects are required')
         source = install_project(source, second, second=True)
         snapshot = f"# {job['company']} — {job['title']}\n\nLocation: {job['location']}\nSource: {job['url']}\nSaved: {now()}\nVerification: not verified; user-supplied snapshot.\n\n{job['description']}\n"
-        (folder / "job-description.md").write_text(snapshot)
-        (folder / "resume.tex").write_text(source)
+        snapshot_path = folder / "job-description.md"
+        snapshot_path.write_text(snapshot, encoding="utf-8")
+        (folder / "resume.tex").write_text(source, encoding="utf-8")
         ids = sorted(
             {
                 i
@@ -688,7 +689,7 @@ class Workspace(Tracking):
             "candidate_revision": self.evidence()["candidate_revision"],
             "job_id": job_id,
             "role_eligible": False,
-            "job_snapshot_sha256": hashlib.sha256(snapshot.encode()).hexdigest(),
+            "job_snapshot_sha256": hashlib.sha256(snapshot_path.read_bytes()).hexdigest(),
             "supported_requirement_coverage": 0,
             "requirements": [],
             "company_problem": {

@@ -71,10 +71,10 @@ class VerifyJobUrlTests(unittest.TestCase):
             "# Pipeline\n\n"
             "- [ ] https://example.test/jobs/123 | Example Co | Data Analyst | Analytics | Dublin\n"
         )
-        with tempfile.NamedTemporaryFile("w", suffix=".md", encoding="utf-8") as fixture:
-            fixture.write(source)
-            fixture.flush()
-            entries = MODULE.extract_urls_from_markdown(fixture.name)
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Path(temporary) / "pipeline.md"
+            fixture.write_text(source, encoding="utf-8")
+            entries = MODULE.extract_urls_from_markdown(str(fixture))
 
         self.assertEqual(len(entries), 1)
         self.assertEqual(entries[0]["company"], "Example Co")

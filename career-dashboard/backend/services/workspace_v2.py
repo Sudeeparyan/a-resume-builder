@@ -1,7 +1,7 @@
 """Application services. SQLite owns mutable state; original evidence is preserved."""
 
 from __future__ import annotations
-import hashlib, json, re, uuid
+import hashlib, json, re, threading, uuid
 from datetime import datetime, timezone, date
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -135,6 +135,7 @@ AGENTS = [
 class CareerServices:
     def __init__(self, workspace):
         self.w = workspace
+        self._posting_lock = threading.RLock()
         projections_changed = False
         with self.w.connect() as db:
             db.executescript(
@@ -559,6 +560,11 @@ class CareerServices:
         return self.goals()
 
     def add_posting(self, values, source="manual", verdict=None):
+        """Serialize posting saves so every caller gets the correct duplicate status."""
+        with self._posting_lock:
+            return self._add_posting(values, source, verdict)
+
+    def _add_posting(self, values, source="manual", verdict=None):
         """Save a posting unless the sponsorship gate or the never-re-apply rules say no.
 
         Returns {"job", "duplicate"} on success, {"excluded": True, ...} when the posting's

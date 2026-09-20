@@ -4,6 +4,7 @@ uvicorn==0.39.0
 PyYAML==6.0.3
 pypdf==6.18.0
 Pillow==11.3.0
+tzdata==2026.4; sys_platform == "win32"
 
 # LangChain agent layer
 langchain==1.4.1

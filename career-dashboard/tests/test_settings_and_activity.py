@@ -43,7 +43,8 @@ def test_saved_key_is_private_replaceable_and_wins_over_keys_txt(tmp_path):
     keys.save(root, "OPENROUTER_API_KEY", FAKE.replace("0", "1"))  # replaces, never duplicates
     text = (root / ".env").read_text()
     assert text.count("OPENROUTER_API_KEY=") == 1 and "GEMINI_API_KEY=" in text
-    assert stat.S_IMODE(os.stat(root / ".env").st_mode) == 0o600
+    if os.name != "nt":
+        assert stat.S_IMODE(os.stat(root / ".env").st_mode) == 0o600
     assert keys.secret(root, "OPENROUTER_API_KEY") == FAKE.replace("0", "1")
     assert keys.source(root, "OPENROUTER_API_KEY") == "saved in the app"
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 import hashlib
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -96,7 +97,12 @@ def test_disallowed_project_and_scope_screen(workspace):
 def test_path_escape_and_symlink(workspace,tmp_path):
     output=workspace.root/'data/output';output.mkdir(exist_ok=True)
     with pytest.raises(ValueError): safe_child(output,'../context/evidence.yml')
-    (output/'outside').symlink_to(workspace.root/'data/context')
+    try:
+        (output/'outside').symlink_to(workspace.root/'data/context', target_is_directory=True)
+    except OSError as exc:
+        if os.name == 'nt' and getattr(exc, 'winerror', None) == 1314:
+            pytest.skip('Windows symlink creation requires Developer Mode or elevated privileges')
+        raise
     with pytest.raises(ValueError): safe_child(output,'outside/evidence.yml')
 
 def test_latex_escaping():

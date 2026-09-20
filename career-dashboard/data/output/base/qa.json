@@ -1,8 +1,8 @@
 {
   "candidate_revision": "2026-09-18.1",
-  "checked_at": "2026-09-18T12:58:21.857148+00:00",
+  "checked_at": "2026-09-19T23:29:11.692084+00:00",
   "compile_ok": true,
-  "compiled_pdf_sha256": "c1e382523fd20261321fa1a5339b53369ed7a14397f640885d558b5e1409bac1",
+  "compiled_pdf_sha256": "39a05e897822b937be11c4495602f803899c193cd4d4d6935e38f42cd144daf8",
   "evidence_map": {
     "all_candidate_claims_grounded": true,
     "candidate_revision": null,
@@ -50,23 +50,23 @@
   "overflow_count": 0,
   "page2_text_characters": null,
   "page_count": 1,
-  "pdf": "/Users/chetan/Desktop/sudeepprojects/a-resume-builder/career-dashboard/data/output/base/Annie_Manoharan_Resume.pdf",
+  "pdf": "C:\\Users\\sudee\\Desktop\\annie-resume\\a-resume-builder\\a-resume-builder\\career-dashboard\\data\\output\\base\\Annie_Manoharan_Resume.pdf",
   "pdf_metadata": {
     "author": "Annie Prasanna Manoharan",
     "subject": "Evidence-grounded resume",
     "title": "Annie Prasanna Manoharan - Resume"
   },
-  "pdf_sha256": "c1e382523fd20261321fa1a5339b53369ed7a14397f640885d558b5e1409bac1",
+  "pdf_sha256": "39a05e897822b937be11c4495602f803899c193cd4d4d6935e38f42cd144daf8",
   "pdf_text_extractable": true,
   "preview_sha256": {
-    "page-01.png": "6034ed614ce3dd3f2e20fa6078ccfda2cd69630c88bd12515d19825ef9e2a233"
+    "page-01.png": "8e80f96d82d31e2c6abb82999266f99528ce1e353fe8a2d96af618e16315b071"
   },
-  "profile_sha256": "13291fd2855b8722603ddcd3be9bb7d9b0ba4ecb95f9dd711bde73f6546fbd23",
+  "profile_sha256": "f5868cb8fa99421a302e22556314b900e955722600dc709f05500fcd023e2188",
   "project_count": 2,
   "published_pdf": true,
-  "registry_sha256": "b8a763bb5b4835cb2828ec141d6b9bbe3cea08ac31bfa7dee53a362eb4db956d",
-  "release_ready": false,
-  "render_dir": "/Users/chetan/Desktop/sudeepprojects/a-resume-builder/career-dashboard/data/output/base/resume-preview",
+  "registry_sha256": "9c59b040ebf486052580f248e600cb54c20a428f2acaaacb1ef43b3e4ff03089",
+  "release_ready": true,
+  "render_dir": "C:\\Users\\sudee\\Desktop\\annie-resume\\a-resume-builder\\a-resume-builder\\career-dashboard\\data\\output\\base\\resume-preview",
   "required_headings_present": true,
   "schema_version": 2,
   "second_project": {
@@ -86,7 +86,7 @@
     "PROJ-P01-IOT",
     "PROJ-P04-NEWS-RAG"
   ],
-  "source": "/Users/chetan/Desktop/sudeepprojects/a-resume-builder/career-dashboard/data/templates/resume-base.tex",
+  "source": "C:\\Users\\sudee\\Desktop\\annie-resume\\a-resume-builder\\a-resume-builder\\career-dashboard\\data\\templates\\resume-base.tex",
   "source_evidence_ids": [
     "CONTACT-EMAIL-001",
     "CONTACT-GITHUB-001",
@@ -118,8 +118,8 @@
   "source_page_word_counts": [
     503
   ],
-  "source_sha256": "412d4eff95065a01f12194637a3742078ee4f73a3f0a34b11a3d94d26c3c903f",
-  "status": "AUTOMATED_PASS_MANUAL_PENDING",
+  "source_sha256": "d588a09bde6fbf3f9a276a9864e8fa1280013552a27fa1fb38ceceaadf86b45a",
+  "status": "PASS",
   "text_order_ok": true,
   "unresolved_placeholders": [],
   "unsafe_claims": [],
@@ -133,10 +133,8 @@
     "5",
     "94"
   ],
-  "visual_review": "pending",
-  "visual_reviewed_at": null,
-  "visual_reviewer": null,
-  "warnings": [
-    "Manual visual review is pending; artifact is not release-ready"
-  ]
+  "visual_review": "pass",
+  "visual_reviewed_at": "2026-09-19T23:29:11.789323+00:00",
+  "visual_reviewer": "Codex",
+  "warnings": []
 }

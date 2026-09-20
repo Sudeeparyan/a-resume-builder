@@ -186,7 +186,7 @@ def attach(app, workspace, schedule: bool = False):
         # readable profile, the questions ledger, pending updates and sources/*.md.
         context = workspace.root / "data/context"
         for path in sorted(list(context.glob("*.md")) + list((context / "sources").glob("*.md"))):
-            sources[str(path.relative_to(workspace.root))] = path.read_text()
+            sources[str(path.relative_to(workspace.root))] = path.read_text(encoding="utf-8")
         return {
             "items": service.knowledge(),
             "removed": sum(i["deleted"] for i in service.knowledge(True)),

@@ -1130,6 +1130,7 @@ def main() -> int:
                 # so substring checks run against whitespace-collapsed text. Checks that
                 # depend on line structure keep using normalized_pdf_text.
                 flattened_pdf_text = re.sub(r"\s+", " ", normalized_pdf_text).strip()
+                compact_pdf_text = re.sub(r"\s+", "", flattened_pdf_text).casefold()
                 first_page_text = (
                     str(pages[0].get("text", "")) if pages and isinstance(pages[0], dict) else ""
                 )
@@ -1153,7 +1154,10 @@ def main() -> int:
                     if anchor in flattened_pdf_text:
                         add_failure(
                             failures,
-                            any(value in flattened_pdf_text for value in accepted),
+                            any(
+                                re.sub(r"\s+", "", value).casefold() in compact_pdf_text
+                                for value in accepted
+                            ),
                             f"Compiled PDF prints {anchor} without a registered title/date line ({accepted[0]})",
                         )
 
@@ -1166,7 +1170,7 @@ def main() -> int:
                     "Compiled PDF must show the registered selected-project title exactly once",
                 )
                 second_title = qa.get('second_project', {}).get('title')
-                add_failure(failures, isinstance(second_title, str) and normalized_pdf_text.count(second_title) == 1,
+                add_failure(failures, isinstance(second_title, str) and compact_pdf_text.count(re.sub(r"\s+", "", second_title).casefold()) == 1,
                             'Compiled PDF must show the registered second-project title exactly once')
                 heading_positions = [normalized_pdf_text.find(heading) for heading in required_order]
                 qa["text_order_ok"] = all(

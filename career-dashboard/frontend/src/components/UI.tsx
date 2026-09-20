@@ -121,13 +121,15 @@ function Inline({ text }: { text: string }) {
   return (
     <>
       {text
-        .split(/(\[[^\]]+\]\(https?:\/\/[^\s)]+\)|\*\*[^*]+\*\*|\*[^*\n]+\*)/g)
+        .split(/(`[^`\n]+`|\[[^\]]+\]\(https?:\/\/[^\s)]+\)|\*\*[^*]+\*\*|\*[^*\n]+\*)/g)
         .map((part, n) => {
           const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
           return link ? (
             <a key={n} href={safeUrl(link[2])} target="_blank" rel="noreferrer">
               {link[1]}
             </a>
+          ) : part.startsWith("`") && part.length > 2 ? (
+            <code key={n}>{part.slice(1, -1)}</code>
           ) : part.startsWith("**") ? (
             <strong key={n}>{part.slice(2, -2)}</strong>
           ) : part.startsWith("*") && part.length > 2 ? (
@@ -150,7 +152,21 @@ export function RichText({ text }: { text: string }) {
       .map((c) => c.trim());
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (
+    if (/^\s*```/.test(line)) {
+      // A fenced block is shown exactly as written, up to the closing fence.
+      const code: string[] = [];
+      const key = i;
+      i++;
+      while (i < lines.length && !/^\s*```/.test(lines[i])) {
+        code.push(lines[i]);
+        i++;
+      }
+      blocks.push(
+        <pre key={key}>
+          <code>{code.join("\n")}</code>
+        </pre>,
+      );
+    } else if (
       line.trim().startsWith("|") &&
       /^\s*\|?[\s:|\-]+\|?\s*$/.test(lines[i + 1] || "") &&
       (lines[i + 1] || "").includes("---")

@@ -497,6 +497,35 @@ def attach(app, workspace, schedule: bool = False):
     def assistant_message(message_id: str):
         return assistant.get(message_id)
 
+    @router.post('/assistant/messages/{message_id}/stop')
+    def assistant_stop(message_id: str):
+        # The worker ends the reply at its next step; the row reads "Stopping…" until then.
+        return assistant.stop(message_id)
+
+    @router.get('/assistant/conversations')
+    def assistant_conversations():
+        return assistant.conversations()
+
+    @router.post('/assistant/conversations', status_code=201)
+    def assistant_new_conversation():
+        assistant.new_conversation()
+        return assistant.overview()
+
+    @router.delete('/assistant/conversations')
+    def assistant_clear_history():
+        assistant.clear_history()
+        return assistant.overview()
+
+    @router.put('/assistant/conversations/{conversation_id}')
+    def assistant_open_conversation(conversation_id: str):
+        assistant.open_conversation(conversation_id)
+        return assistant.overview()
+
+    @router.delete('/assistant/conversations/{conversation_id}')
+    def assistant_delete_conversation(conversation_id: str):
+        assistant.delete_conversation(conversation_id)
+        return assistant.overview()
+
     app.include_router(router)
 
     @asynccontextmanager

@@ -246,7 +246,20 @@ export type AssistantAgent = {
   linked: boolean;
   tools: string[];
 };
+export type AssistantConversation = {
+  id: string;
+  /** The first line of the first message, cut short. */
+  title: string;
+  count: number;
+  started_at: string;
+  updated_at: string;
+  busy: boolean;
+  current: boolean;
+};
 export type AssistantOverview = {
+  /** The open conversation; `messages` are its messages, `conversations` lists every thread. */
+  conversation_id: string;
+  conversations: AssistantConversation[];
   messages: AssistantMessage[];
   pending: {
     kind: string;

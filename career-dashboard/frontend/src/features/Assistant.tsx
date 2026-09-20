@@ -1,27 +1,38 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ArrowDown,
   BookOpen,
   Bot,
+  CalendarCheck,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  CircleHelp,
   ClipboardList,
+  ClipboardPaste,
+  Copy,
   Cpu,
   Download,
   ExternalLink,
   FileText,
+  History,
   LoaderCircle,
   Mail,
   MessageSquare,
   Network,
+  Pencil,
+  RefreshCw,
   RotateCcw,
   ScanSearch,
   Search,
   Send,
   ShieldCheck,
   Sparkles,
+  Square,
+  SquarePen,
+  Trash2,
   UserRound,
   Workflow,
   X,
@@ -29,9 +40,10 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { api, fileUrl, safeUrl } from "../api";
-import { Badge, RichText } from "../components/UI";
+import { Badge, Modal, RichText } from "../components/UI";
 import type {
   AssistantAgent,
+  AssistantConversation,
   AssistantMessage,
   AssistantOverview,
   AssistantStep,
@@ -48,13 +60,13 @@ type Props = {
 };
 
 /** What the front page offers: each is a real message the agent understands. */
-const STARTERS: { label: string; hint: string; send?: string }[] = [
-  { label: "Paste a posting", hint: "The whole job description plus its link; the one-page PDF comes back." },
-  { label: "Search jobs for my profile", hint: "Today's search through the tracked career pages and portals.", send: "find jobs" },
-  { label: "Which saved jobs still have no resume? Build them", hint: "Every draft goes through the one-page fit and the scorer." },
-  { label: "What did I apply to this week, and what's still waiting?", hint: "Read from the tracker; nothing changes." },
-  { label: "Research the newest saved job and write its study plan", hint: "Company research, the independent hiring review, then the plan." },
-  { label: "Show my open profile questions", hint: "The answers that sharpen every future resume." },
+const STARTERS: { label: string; hint: string; send?: string; icon: ComponentType<{ size?: number }> }[] = [
+  { label: "Paste a posting", hint: "The whole job description plus its link; the one-page PDF comes back.", icon: ClipboardPaste },
+  { label: "Search jobs for my profile", hint: "Today's search through the tracked career pages and portals.", send: "find jobs", icon: Search },
+  { label: "Which saved jobs still have no resume? Build them", hint: "Every draft goes through the one-page fit and the scorer.", icon: FileText },
+  { label: "What did I apply to this week, and what's still waiting?", hint: "Read from the tracker; nothing changes.", icon: CalendarCheck },
+  { label: "Research the newest saved job and write its study plan", hint: "Company research, the independent hiring review, then the plan.", icon: BookOpen },
+  { label: "Show my open profile questions", hint: "The answers that sharpen every future resume.", icon: CircleHelp },
 ];
 const ALSO = ["status", "set my weekly target to 12", "how does the sponsorship rule work?", "excluded"];
 
@@ -120,6 +132,8 @@ const RAIL_ORDER = [
 const POLL_BUSY = 1200;
 const POLL_IDLE = 8000;
 const POLL_HIDDEN = 30000;
+/** A message longer than this folds until "Show all" is pressed. */
+const FOLD_AT = 700;
 
 const active = (state: string) => state === "queued" || state === "running";
 
@@ -140,6 +154,40 @@ export function elapsed(seconds: number): string {
   const s = Math.max(0, Math.round(seconds));
   if (s < 60) return s + " s";
   return Math.floor(s / 60) + " m " + String(s % 60).padStart(2, "0") + " s";
+}
+
+/** "Today", "Yesterday", then "Mon, Sep 15" (with the year once it differs). */
+export function dayLabel(iso: string, now: Date = new Date()): string {
+  const at = new Date(iso);
+  if (isNaN(at.getTime())) return "";
+  const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((midnight(now) - midnight(at)) / 86_400_000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  return at.toLocaleDateString([], {
+    weekday: "short", month: "short", day: "numeric",
+    ...(at.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+  });
+}
+
+/** Whether an exchange mentions the search words (all of them, in either side). */
+export function matches(m: Pick<AssistantMessage, "message" | "response">, query: string): boolean {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const text = (m.message + "\n" + m.response).toLowerCase();
+  return words.every((w) => text.includes(w));
+}
+
+/** The conversation as a Markdown file she can keep or send. */
+export function exportMarkdown(title: string, messages: AssistantMessage[], now: Date = new Date()): string {
+  const lines = [`# ${title}`, "", `Assistant chat exported ${now.toLocaleString()} · ${messages.length} ${messages.length === 1 ? "exchange" : "exchanges"}`, ""];
+  for (const m of messages) {
+    lines.push("---", "", `**You** · ${new Date(m.created_at).toLocaleString()}`, "", m.message, "");
+    const state = m.state === "failed" ? " (failed)" : m.state === "processing" ? " (still working)" : "";
+    lines.push(`**Assistant**${state} · ${new Date(m.updated_at).toLocaleString()}`, "", m.response, "");
+    if (m.data.pdf) lines.push(`Resume PDF: ${m.data.pdf}`, "");
+  }
+  return lines.join("\n");
 }
 
 /** The one-tap answers a pending question accepts, so a yes never needs typing. */
@@ -171,6 +219,35 @@ function scrollToEnd(behavior: ScrollBehavior) {
   window.scrollTo({ top: document.documentElement.scrollHeight, behavior });
 }
 
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // An older browser or a page without clipboard permission: the selection route still works.
+    const box = document.createElement("textarea");
+    box.value = text;
+    box.setAttribute("readonly", "");
+    box.style.position = "fixed";
+    box.style.opacity = "0";
+    document.body.appendChild(box);
+    box.select();
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch {
+      ok = false;
+    }
+    box.remove();
+    return ok;
+  }
+}
+
+function greeting(now: Date = new Date()) {
+  const h = now.getHours();
+  return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+}
+
 export default function Assistant({ data, refresh, notify, onJob }: Props) {
   const [overview, setOverview] = useState<AssistantOverview>();
   const [draft, setDraft] = useState("");
@@ -181,9 +258,17 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [stepsOpen, setStepsOpen] = useState<Record<string, boolean>>({});
   const [railOpen, setRailOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<AssistantConversation | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [unseen, setUnseen] = useState(false);
+  const [away, setAway] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const boxRef = useRef<HTMLTextAreaElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   // Which messages were still processing at the last poll: when one settles,
   // the rest of the app is refreshed so every tab shows what the chat changed.
   const processing = useRef<Set<string>>(new Set());
@@ -201,6 +286,15 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
   const autoUntil = useRef(0);
   // On a phone the keyboard's Enter is a new line; the Send button sends.
   const touch = useMemo(() => typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches, []);
+  const mac = useMemo(() => /Mac|iPhone|iPad/.test(navigator.platform || ""), []);
+  const mod = mac ? "⌘" : "Ctrl+";
+
+  /** A fresh overview from an action (new chat, open, delete) replaces whatever a slower poll would bring. */
+  const adopt = useCallback((next: AssistantOverview) => {
+    seq.current++;
+    processing.current = new Set(next.messages.filter((m) => m.state === "processing").map((m) => m.id));
+    setOverview(next);
+  }, []);
 
   const load = useCallback(async () => {
     const n = ++seq.current;
@@ -217,7 +311,7 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
     if (settled.length) {
       await refresh().catch(() => {});
       for (const m of settled)
-        if (m.state === "failed") notify(m.response, true);
+        if (m.state === "failed" && m.data.intent !== "stopped") notify(m.response, true);
     }
     return next;
   }, [refresh, notify]);
@@ -251,12 +345,14 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
     document.addEventListener("visibilitychange", wake);
     window.addEventListener("focus", wake);
     const onScroll = () => {
+      const bottom = nearBottom();
+      setAway(!bottom);
       if (autoUntil.current > Date.now()) {
-        if (nearBottom()) autoUntil.current = 0;
+        if (bottom) autoUntil.current = 0;
         return;
       }
-      stick.current = nearBottom();
-      if (stick.current) setUnseen(false);
+      stick.current = bottom;
+      if (bottom) setUnseen(false);
     };
     // A wheel or a finger is the reader: it ends any scroll the page started.
     const onGesture = () => {
@@ -286,6 +382,10 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
     const clockTimer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(clockTimer);
   }, [working]);
+  // "Stopping…" ends when the reply does.
+  useEffect(() => {
+    if (!working) setStopping(false);
+  }, [working]);
 
   // Only real changes to the thread move the page: a new exchange, a step, a settled
   // reply. A reader who scrolled up keeps their place and gets a "new activity" nudge.
@@ -294,8 +394,10 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
   const lastState = latest?.state;
   const lastSteps = latest?.steps.length;
   const echoId = echo?.id;
+  const conversationId = overview?.conversation_id;
   useEffect(() => {
     if (!loaded || (count === 0 && !echoId)) return; // the welcome card reads from the top
+    if (query) return; // a filtered thread is read where the reader is
     if (stick.current) {
       autoUntil.current = Date.now() + 1500;
       scrollToEnd(firstScroll.current ? "auto" : "smooth");
@@ -307,13 +409,24 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
     } else if (count || echoId) {
       setUnseen(true);
     }
-  }, [loaded, count, lastState, lastSteps, echoId]);
+  }, [loaded, count, lastState, lastSteps, echoId, conversationId, query]);
 
   function jumpToLatest() {
     stick.current = true;
     setUnseen(false);
     autoUntil.current = Date.now() + 1500;
     scrollToEnd("smooth");
+  }
+
+  /** A different thread reads from its own end, with nothing folded open. */
+  function resetThread() {
+    setExpanded({});
+    setStepsOpen({});
+    setUnseen(false);
+    setQuery("");
+    setSearchOpen(false);
+    stick.current = true;
+    firstScroll.current = true;
   }
 
   async function send(text: string) {
@@ -325,6 +438,10 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
     setEcho({ id, text: message, at: new Date().toISOString() });
     setDraft("");
     if (boxRef.current) boxRef.current.style.height = "";
+    if (query) {
+      setQuery("");
+      setSearchOpen(false);
+    }
     stick.current = true;
     setUnseen(false);
     try {
@@ -340,6 +457,97 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
     }
   }
 
+  /** Stop the reply being worked on; the worker ends it at its next step. */
+  async function stop() {
+    const id = latest?.state === "processing" ? latest.id : echo?.id;
+    if (!id || stopping) return;
+    setStopping(true);
+    try {
+      await api(`/v2/assistant/messages/${encodeURIComponent(id)}/stop`, "POST");
+      await load();
+      schedule(POLL_BUSY);
+    } catch (e) {
+      setStopping(false);
+      notify((e as Error).message, true);
+    }
+  }
+
+  async function newChat() {
+    if (working) {
+      notify("Wait for this reply, or stop it, before starting a new chat.", true);
+      return;
+    }
+    try {
+      adopt(await api<AssistantOverview>("/v2/assistant/conversations", "POST"));
+      resetThread();
+      setHistoryOpen(false);
+      boxRef.current?.focus();
+    } catch (e) {
+      notify((e as Error).message, true);
+    }
+  }
+
+  async function openChat(id: string) {
+    if (id === overview?.conversation_id) {
+      setHistoryOpen(false);
+      return;
+    }
+    try {
+      adopt(await api<AssistantOverview>(`/v2/assistant/conversations/${encodeURIComponent(id)}`, "PUT"));
+      resetThread();
+      setHistoryOpen(false);
+    } catch (e) {
+      notify((e as Error).message, true);
+    }
+  }
+
+  async function deleteChat(c: AssistantConversation) {
+    try {
+      adopt(await api<AssistantOverview>(`/v2/assistant/conversations/${encodeURIComponent(c.id)}`, "DELETE"));
+      setConfirmDelete(null);
+      if (c.current) resetThread();
+      notify("Chat deleted. The jobs, resumes and profile changes it made are still in the workspace.");
+    } catch (e) {
+      notify((e as Error).message, true);
+    }
+  }
+
+  async function clearHistory() {
+    try {
+      adopt(await api<AssistantOverview>("/v2/assistant/conversations", "DELETE"));
+      setConfirmClear(false);
+      setHistoryOpen(false);
+      resetThread();
+      notify("Chat history cleared. The jobs, resumes and profile changes those chats made are still in the workspace.");
+      boxRef.current?.focus();
+    } catch (e) {
+      notify((e as Error).message, true);
+    }
+  }
+
+  function exportChat() {
+    if (!messages.length) return;
+    const title = currentConversation?.title || "Assistant chat";
+    const stamp = new Date().toISOString().slice(0, 10);
+    const name = "assistant-" + (title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "chat") + "-" + stamp + ".md";
+    const blob = new Blob([exportMarkdown(title, messages)], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    notify("Saved " + name + " to your downloads.");
+  }
+
+  function toggleSearch(open = !searchOpen) {
+    setSearchOpen(open);
+    if (!open) setQuery("");
+    else window.setTimeout(() => searchRef.current?.focus(), 0);
+  }
+
   /** A rail click pre-fills the composer and never sends: a tap on a list is not a request.
    *  A complete message is one Enter away; one that needs a job name waits for it. */
   function prompt(text: string) {
@@ -352,6 +560,7 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
       window.setTimeout(() => {
         box.setSelectionRange(text.length, text.length);
         grow(box);
+        box.scrollIntoView({ block: "nearest" });
       }, 0);
     }
   }
@@ -372,42 +581,136 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
     el.style.height = Math.min(el.scrollHeight, 260) + "px";
   }
 
+  // Keyboard: Esc closes what is open, ⌘⇧O starts a chat, ⌘K searches, "/" jumps to the box.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const cmd = e.metaKey || e.ctrlKey;
+      const key = e.key.toLowerCase();
+      if (cmd && e.shiftKey && key === "o") {
+        e.preventDefault();
+        void newChat();
+      } else if (cmd && !e.shiftKey && key === "k") {
+        e.preventDefault();
+        toggleSearch();
+      } else if (e.key === "Escape") {
+        if (confirmDelete || confirmClear) return; // the dialog closes itself
+        if (historyOpen) setHistoryOpen(false);
+        else if (railOpen) setRailOpen(false);
+        else if (searchOpen) toggleSearch(false);
+      } else if (e.key === "/" && !cmd && !e.altKey) {
+        const t = e.target as HTMLElement | null;
+        if (t && !/^(input|textarea|select)$/i.test(t.tagName) && !t.isContentEditable) {
+          e.preventDefault();
+          boxRef.current?.focus();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   const jobs = new Map(data.jobs.map((j) => [j.id, j]));
   const runningNow = data.runs.filter((r) => active(r.state)).length;
   const current = latest?.state === "processing" ? latest.steps[latest.steps.length - 1] : undefined;
   const startedAt = echo ? new Date(echo.at).getTime() : latest?.state === "processing" ? new Date(latest.created_at).getTime() : 0;
   const quick = quickReplies(overview?.pending ?? null);
   const names = new Map(overview?.agents.map((a) => [a.id, AGENT_UI[a.id]?.short || a.name]));
+  const conversations = overview?.conversations || [];
+  const currentConversation = conversations.find((c) => c.current);
+  const q = query.trim();
+  const shown = q ? messages.filter((m) => matches(m, q)) : messages;
+  const empty = messages.length === 0 && !echo;
+  const heading = currentConversation?.title || (empty ? "New chat" : "Assistant");
   return (
     <div className="chat chat-with-rail">
       <div className="chat-main">
-        <div className="page-title chat-title">
-          <div>
-            <div className="eyebrow">ONE PLACE TO TALK TO YOUR WORKSPACE</div>
-            <h1>Assistant</h1>
-            <p>
-              Paste a posting and get the one-page PDF back, or ask for anything in plain words:
-              the agent does it with the same tools the tabs use, asks before anything hard to undo,
-              and never submits for you.
-            </p>
+        <div className="chat-bar">
+          <div className="chat-bar-title">
+            <span className="chat-bar-icon" aria-hidden="true">
+              <Sparkles size={17} />
+            </span>
+            <div className="chat-bar-text">
+              <h1>Assistant</h1>
+              <small title={heading}>
+                {heading}
+                {messages.length > 0 && <span className="chat-bar-count"> · {messages.length} {messages.length === 1 ? "exchange" : "exchanges"}</span>}
+              </small>
+            </div>
           </div>
-          <div className="chat-title-side">
-            {overview && !overview.ai_configured && (
-              <Badge tone="amber" title="Install Claude Code or the ChatGPT app, or add a provider key in Settings">
-                No AI runtime · shortcuts only
-              </Badge>
-            )}
+          <div className="chat-bar-actions" role="toolbar" aria-label="Chat actions">
+            <button type="button" className="bar-button" onClick={() => void newChat()} title={`New chat (${mod}⇧O)`}>
+              <SquarePen size={15} />
+              <span>New chat</span>
+            </button>
             <button
               type="button"
-              className="secondary chat-rail-toggle"
+              className={"bar-button" + (historyOpen ? " on" : "")}
+              onClick={() => setHistoryOpen(true)}
+              title="Earlier chats"
+              aria-haspopup="dialog"
+              aria-expanded={historyOpen}
+            >
+              <History size={15} />
+              <span>History</span>
+              {conversations.length > 1 && <em className="bar-count">{conversations.length}</em>}
+            </button>
+            <button
+              type="button"
+              className={"bar-button" + (searchOpen ? " on" : "")}
+              onClick={() => toggleSearch()}
+              title={`Search this chat (${mod}K)`}
+              aria-pressed={searchOpen}
+              disabled={empty}
+            >
+              <Search size={15} />
+              <span>Search</span>
+            </button>
+            <button type="button" className="bar-button" onClick={exportChat} title="Download this chat as a Markdown file" disabled={empty}>
+              <Download size={15} />
+              <span>Export</span>
+            </button>
+            <button
+              type="button"
+              className="bar-button chat-rail-toggle"
               onClick={() => setRailOpen(true)}
               aria-label="Show the agents"
+              title="The agents linked to this chat"
             >
-              <Workflow size={15} /> Agents
+              <Workflow size={15} />
+              <span>Agents</span>
               {(working || runningNow > 0) && <span className="rail-live" aria-label="working" />}
             </button>
           </div>
         </div>
+        {overview && !overview.ai_configured && (
+          <div className="chat-notice" role="status">
+            <Badge tone="amber">No AI runtime</Badge>
+            <span>Shortcuts only. Install Claude Code or the ChatGPT app, or add a provider key in Settings, and the chat can do the rest.</span>
+          </div>
+        )}
+        {searchOpen && (
+          <div className="chat-search" role="search">
+            <Search size={15} aria-hidden="true" />
+            <input
+              ref={searchRef}
+              type="search"
+              value={query}
+              placeholder="Search this chat…"
+              aria-label="Search this chat"
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  toggleSearch(false);
+                }
+              }}
+            />
+            <small>{q ? `${shown.length} of ${messages.length}` : `${messages.length} ${messages.length === 1 ? "exchange" : "exchanges"}`}</small>
+            <button type="button" className="icon-button" aria-label="Close search" onClick={() => toggleSearch(false)}>
+              <X size={16} />
+            </button>
+          </div>
+        )}
         {error && (
           <div className="callout warning" role="alert">
             {error}
@@ -418,25 +721,36 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
             <p className="muted chat-loading">
               <LoaderCircle className="spin" size={15} /> Loading the conversation…
             </p>
-          ) : messages.length === 0 && !echo ? (
-            <section className="card chat-welcome">
-              <span className="metric-icon">
-                <Sparkles size={20} />
+          ) : empty ? (
+            <section className="chat-welcome">
+              <span className="chat-welcome-icon" aria-hidden="true">
+                <Sparkles size={22} />
               </span>
-              <h2>What would you like done?</h2>
+              <h2>{greeting()}. What would you like done?</h2>
+              <p>
+                Paste a posting and get the one-page PDF back, or ask for anything in plain words. The agent uses the same
+                tools the tabs use, asks before anything hard to undo, and never submits for you.
+              </p>
               <div className="chat-starters">
-                {STARTERS.map((s) => (
-                  <button
-                    key={s.label}
-                    className="chat-starter"
-                    onClick={() =>
-                      s.label === "Paste a posting" ? boxRef.current?.focus() : send(s.send || s.label)
-                    }
-                  >
-                    <b>{s.label}</b>
-                    <span>{s.hint}</span>
-                  </button>
-                ))}
+                {STARTERS.map((s) => {
+                  const Icon = s.icon;
+                  return (
+                    <button
+                      key={s.label}
+                      type="button"
+                      className="chat-starter"
+                      onClick={() =>
+                        s.label === "Paste a posting" ? boxRef.current?.focus() : send(s.send || s.label)
+                      }
+                    >
+                      <span className="chat-starter-icon" aria-hidden="true">
+                        <Icon size={16} />
+                      </span>
+                      <b>{s.label}</b>
+                      <span>{s.hint}</span>
+                    </button>
+                  );
+                })}
               </div>
               <div className="chat-also">
                 <span className="muted">Also try</span>
@@ -447,37 +761,66 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
                 ))}
               </div>
             </section>
+          ) : q && shown.length === 0 ? (
+            <p className="muted chat-empty-search">Nothing in this chat mentions “{q}”.</p>
           ) : (
-            messages.map((m) => (
-              <Exchange
-                key={m.id}
-                message={m}
-                names={names}
-                expanded={!!expanded[m.id]}
-                onExpand={() => setExpanded({ ...expanded, [m.id]: !expanded[m.id] })}
-                stepsOpen={stepsOpen[m.id]}
-                onSteps={(open) => setStepsOpen({ ...stepsOpen, [m.id]: open })}
-                onJob={onJob}
-                onSend={send}
-                now={now}
-                jobTier={m.data.job_id ? jobs.get(m.data.job_id)?.sponsor_tier : undefined}
-              />
-            ))
+            shown.map((m, i) => {
+              const day = dayLabel(m.created_at);
+              const before = i > 0 ? dayLabel(shown[i - 1].created_at) : "";
+              return (
+                <Fragment key={m.id}>
+                  {day && day !== before && (
+                    <div className="chat-day" role="separator">
+                      <span>{day}</span>
+                    </div>
+                  )}
+                  <Exchange
+                    message={m}
+                    names={names}
+                    expanded={!!expanded[m.id]}
+                    onExpand={() => setExpanded({ ...expanded, [m.id]: !expanded[m.id] })}
+                    stepsOpen={stepsOpen[m.id]}
+                    onSteps={(open) => setStepsOpen({ ...stepsOpen, [m.id]: open })}
+                    onJob={onJob}
+                    onSend={send}
+                    onEdit={prompt}
+                    now={now}
+                    jobTier={m.data.job_id ? jobs.get(m.data.job_id)?.sponsor_tier : undefined}
+                    stopping={stopping && m.state === "processing"}
+                  />
+                </Fragment>
+              );
+            })
           )}
-          {echo && (
+          {echo && !q && (
             <>
-              <article className="chat-bubble you echo">
-                <div className="chat-text">{echo.text.length > 700 ? echo.text.slice(0, 700) + "…" : echo.text}</div>
-                <div className="chat-when">Sending…</div>
-              </article>
-              <article className="chat-bubble assistant processing" aria-busy="true">
-                <p className="muted chat-wait">
-                  <LoaderCircle className="spin" size={15} /> Working on it…
-                </p>
-              </article>
+              {(!latest || dayLabel(latest.created_at) !== "Today") && (
+                <div className="chat-day" role="separator">
+                  <span>Today</span>
+                </div>
+              )}
+              <div className="chat-turn you echo">
+                <div className="chat-turn-body">
+                  <div className="chat-msg you">
+                    <div className="chat-text">{echo.text.length > FOLD_AT ? echo.text.slice(0, FOLD_AT) + "…" : echo.text}</div>
+                  </div>
+                  <div className="chat-meta">
+                    <span>Sending…</span>
+                  </div>
+                </div>
+              </div>
+              <div className="chat-turn assistant">
+                <span className="chat-avatar" aria-hidden="true">
+                  <Sparkles size={14} />
+                </span>
+                <div className="chat-turn-body">
+                  <div className="chat-msg assistant processing" aria-busy="true">
+                    <Typing label={stopping ? "Stopping…" : "Working on it"} />
+                  </div>
+                </div>
+              </div>
             </>
           )}
-
         </div>
         <form
           className="chat-composer"
@@ -486,17 +829,18 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
             void send(draft);
           }}
         >
-          {unseen && (
-            <button type="button" className="chat-jump" onClick={jumpToLatest}>
-              <ArrowDown size={14} /> New activity
+          {(unseen || away) && !empty && (
+            <button type="button" className={"chat-jump" + (unseen ? " new" : "")} onClick={jumpToLatest} aria-label="Jump to the latest message">
+              <ArrowDown size={15} />
+              {unseen && <span>New activity</span>}
             </button>
           )}
           {working ? (
             <div className="chat-working" role="status">
               <span className="rail-live" aria-hidden="true" />
               <span className="chat-working-label">
-                {current ? current.label : "Working on it"}
-                {current?.agent && current.agent !== "assistant" && (
+                {stopping ? "Stopping after the current step" : current ? current.label : "Working on it"}
+                {!stopping && current?.agent && current.agent !== "assistant" && (
                   <em className="chat-step-agent">{names.get(current.agent) || current.agent}</em>
                 )}
               </span>
@@ -514,10 +858,10 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
                 </div>
                 {quick.length > 0 && (
                   <div className="chat-quick" aria-label="Quick answers">
-                    {quick.map((q) => (
-                      <button key={q.send} type="button" className={"chip" + (q.send === "yes" ? " yes" : "")} onClick={() => send(q.send)}>
-                        {q.send === "yes" && <CheckCircle2 size={13} />}
-                        {q.label}
+                    {quick.map((qr) => (
+                      <button key={qr.send} type="button" className={"chip" + (qr.send === "yes" ? " yes" : "")} onClick={() => send(qr.send)}>
+                        {qr.send === "yes" && <CheckCircle2 size={13} />}
+                        {qr.label}
                       </button>
                     ))}
                   </div>
@@ -525,7 +869,7 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
               </div>
             )
           )}
-          <div className="chat-input">
+          <div className={"chat-input" + (working ? " working" : "")}>
             <textarea
               ref={boxRef}
               rows={1}
@@ -542,16 +886,42 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
                 if (e.key === "Enter" && !e.shiftKey && !touch && !e.nativeEvent.isComposing) {
                   e.preventDefault();
                   void send(draft);
+                } else if (e.key === "Escape" && draft && !e.nativeEvent.isComposing) {
+                  e.stopPropagation();
+                  setDraft("");
+                  grow(e.currentTarget);
                 }
               }}
             />
-            <button className="primary" disabled={sending || !draft.trim()} aria-label="Send">
-              {sending ? <LoaderCircle className="spin" size={18} /> : <Send size={18} />}
-            </button>
+            <div className="chat-input-buttons">
+              {working && (
+                <button
+                  type="button"
+                  className="chat-stop"
+                  onClick={() => void stop()}
+                  disabled={stopping}
+                  aria-label={stopping ? "Stopping" : "Stop the reply"}
+                  title={stopping ? "Stopping after the current step" : "Stop the reply"}
+                >
+                  {stopping ? <LoaderCircle className="spin" size={16} /> : <Square size={14} fill="currentColor" />}
+                </button>
+              )}
+              <button className="chat-send" disabled={sending || !draft.trim()} aria-label="Send" title={touch ? "Send" : "Send (Enter)"}>
+                {sending ? <LoaderCircle className="spin" size={18} /> : <Send size={17} />}
+              </button>
+            </div>
           </div>
-          <small className="muted chat-hint">
-            {touch ? "Long pastes are fine" : "Enter sends · Shift+Enter for a new line · long pastes are fine"}
-          </small>
+          <div className="chat-hint">
+            {draft.length > 1000 ? (
+              <small className="muted">{draft.length.toLocaleString()} characters · a whole posting is fine</small>
+            ) : touch ? (
+              <small className="muted">Long pastes are fine</small>
+            ) : (
+              <small className="muted">
+                <kbd>Enter</kbd> sends · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line · <kbd>{mod}⇧O</kbd> new chat · <kbd>{mod}K</kbd> search
+              </small>
+            )}
+          </div>
         </form>
       </div>
       {overview && (
@@ -565,7 +935,194 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
           onEngine={chooseEngine}
         />
       )}
+      <HistoryDrawer
+        conversations={conversations}
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        onOpen={(id) => void openChat(id)}
+        onNew={() => void newChat()}
+        onDelete={(c) => setConfirmDelete(c)}
+        onClear={() => setConfirmClear(true)}
+        working={working}
+      />
+      {confirmDelete && (
+        <Modal title="Delete this chat?" onClose={() => setConfirmDelete(null)}>
+          <p>
+            <b>{confirmDelete.title}</b> — {confirmDelete.count} {confirmDelete.count === 1 ? "exchange" : "exchanges"}, last active{" "}
+            {dayLabel(confirmDelete.updated_at).toLowerCase()} at {clock(confirmDelete.updated_at)}.
+          </p>
+          <p>
+            Only the messages go. The jobs, resumes and profile changes this chat made stay in the workspace. This cannot be undone.
+          </p>
+          <div className="actions">
+            <button type="button" className="danger" onClick={() => void deleteChat(confirmDelete)}>
+              <Trash2 size={15} /> Delete chat
+            </button>
+            <button type="button" className="secondary" onClick={() => setConfirmDelete(null)}>
+              Keep it
+            </button>
+          </div>
+        </Modal>
+      )}
+      {confirmClear && (
+        <Modal title="Clear all chat history?" onClose={() => setConfirmClear(false)}>
+          <p>
+            This deletes {conversations.length === 1 ? "the one chat" : `all ${conversations.length} chats`} —{" "}
+            {conversations.reduce((n, c) => n + c.count, 0).toLocaleString()} exchanges in total — and opens a fresh one.
+          </p>
+          <p>
+            Only the messages go. The jobs, resumes and profile changes those chats made stay in the workspace. This cannot be undone.
+          </p>
+          <div className="actions">
+            <button type="button" className="danger" onClick={() => void clearHistory()}>
+              <Trash2 size={15} /> Clear chat history
+            </button>
+            <button type="button" className="secondary" onClick={() => setConfirmClear(false)}>
+              Keep everything
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
+  );
+}
+
+/** Three dots while a reply is being worked on, with what is happening right now. */
+function Typing({ label }: { label?: string }) {
+  return (
+    <p className="chat-typing" role="status">
+      <span className="chat-dots" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </span>
+      {label && <span>{label}</span>}
+    </p>
+  );
+}
+
+/** Copies to the clipboard and says so for a moment. */
+function CopyButton({ text, label }: { text: string; label: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      className={"chat-tool" + (done ? " done" : "")}
+      title={done ? "Copied" : label}
+      aria-label={done ? "Copied" : label}
+      onClick={async () => {
+        if (await copyText(text)) {
+          setDone(true);
+          window.setTimeout(() => setDone(false), 1600);
+        }
+      }}
+    >
+      {done ? <Check size={14} /> : <Copy size={14} />}
+      {done && <span>Copied</span>}
+    </button>
+  );
+}
+
+export function HistoryDrawer({
+  conversations,
+  open,
+  onClose,
+  onOpen,
+  onNew,
+  onDelete,
+  onClear,
+  working = false,
+}: {
+  conversations: AssistantConversation[];
+  open: boolean;
+  onClose: () => void;
+  onOpen: (id: string) => void;
+  onNew: () => void;
+  onDelete: (c: AssistantConversation) => void;
+  /** Clear every chat at once; asks first. */
+  onClear?: () => void;
+  /** A reply in progress: nothing can be cleared until it ends. */
+  working?: boolean;
+}) {
+  const groups = useMemo(() => {
+    const out: { day: string; items: AssistantConversation[] }[] = [];
+    for (const c of conversations) {
+      const day = dayLabel(c.updated_at) || "Earlier";
+      const last = out[out.length - 1];
+      if (last && last.day === day) last.items.push(c);
+      else out.push({ day, items: [c] });
+    }
+    return out;
+  }, [conversations]);
+  return (
+    <>
+      {open && <div className="rail-backdrop history-backdrop" onClick={onClose} aria-hidden="true" />}
+      <div className={"chat-history" + (open ? " open" : "")} role="dialog" aria-label="Earlier chats" aria-hidden={!open}>
+        <div className="rail-head">
+          <div>
+            <div className="eyebrow">HISTORY</div>
+            <h2>Your chats</h2>
+          </div>
+          <button type="button" className="icon-button" aria-label="Close" onClick={onClose} tabIndex={open ? 0 : -1}>
+            <X size={20} />
+          </button>
+        </div>
+        <button type="button" className="secondary history-new" onClick={onNew} tabIndex={open ? 0 : -1}>
+          <SquarePen size={15} /> New chat
+        </button>
+        {conversations.length === 0 ? (
+          <p className="muted rail-empty">Nothing yet. The first message starts a chat; every chat stays here until you delete it.</p>
+        ) : (
+          <div className="history-list">
+            {groups.map((g) => (
+              <section key={g.day}>
+                <div className="rail-label">{g.day}</div>
+                <ul>
+                  {g.items.map((c) => (
+                    <li key={c.id} className={"history-item" + (c.current ? " current" : "")}>
+                      <button type="button" className="history-open" onClick={() => onOpen(c.id)} aria-current={c.current ? "true" : undefined} tabIndex={open ? 0 : -1}>
+                        <b>{c.title}</b>
+                        <small>
+                          {c.busy ? "Working… · " : ""}
+                          {c.count} {c.count === 1 ? "exchange" : "exchanges"} · {clock(c.updated_at)}
+                          {c.current ? " · open now" : ""}
+                        </small>
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-tool history-delete"
+                        aria-label={"Delete " + c.title}
+                        title="Delete this chat"
+                        onClick={() => onDelete(c)}
+                        disabled={c.busy}
+                        tabIndex={open ? 0 : -1}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+        )}
+        <div className="history-foot">
+          {onClear && conversations.length > 0 && (
+            <button
+              type="button"
+              className="history-clear"
+              onClick={onClear}
+              disabled={working}
+              title={working ? "Wait for the reply, or stop it, before clearing" : "Delete every chat"}
+              tabIndex={open ? 0 : -1}
+            >
+              <Trash2 size={15} /> Clear chat history
+            </button>
+          )}
+          <p className="muted history-note">Deleting a chat removes only its messages. Jobs, resumes and profile changes stay where they are.</p>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -639,15 +1196,6 @@ export function AgentRail({
   const current = engine.provider + "::" + engine.model;
   const listed = engine.options.some((o) => o.provider + "::" + o.model === current);
   const runsElsewhere = engine.runs && (engine.runs.provider !== engine.provider || engine.runs.model !== engine.model);
-  // Escape closes the drawer on narrow screens.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
   return (
     <>
       {open && <div className="rail-backdrop" onClick={onClose} aria-hidden="true" />}
@@ -791,8 +1339,10 @@ export function Exchange({
   onSteps,
   onJob,
   onSend,
+  onEdit,
   now,
   jobTier,
+  stopping = false,
 }: {
   message: AssistantMessage;
   names: Map<string, string>;
@@ -802,13 +1352,17 @@ export function Exchange({
   onSteps: (open: boolean) => void;
   onJob: (id: string) => void;
   onSend: (text: string) => void;
+  /** Puts the text back in the composer to change and send again. */
+  onEdit?: (text: string) => void;
   now: number;
   jobTier?: string | null;
+  stopping?: boolean;
 }) {
-  const long = m.message.length > 700;
-  const shown = long && !expanded ? m.message.slice(0, 700) + "…" : m.message;
+  const long = m.message.length > FOLD_AT;
+  const shown = long && !expanded ? m.message.slice(0, FOLD_AT) + "…" : m.message;
   const working = m.state === "processing";
   const failed = m.state === "failed";
+  const stopped = failed && m.data.intent === "stopped";
   // A result card only where there is a document to act on; a question or a
   // queued run just names the job in its text.
   const hasResult = !!m.data.pdf || m.data.intent === "open" || m.data.intent === "resume_ready";
@@ -820,172 +1374,197 @@ export function Exchange({
   // Steps stay open while they happen and after a failure; a finished answer folds them away.
   const showSteps = stepsOpen ?? (working || failed);
   const stepSummary = m.steps.map((s) => s.label).filter((label, i, all) => all.indexOf(label) === i).slice(0, 3).join(" · ");
+  const currentStep = working ? m.steps[m.steps.length - 1] : undefined;
   return (
     <>
-      <article className="chat-bubble you">
-        <div className="chat-text">{shown}</div>
-        {long && (
-          <button type="button" className="text-button" onClick={onExpand}>
-            {expanded ? "Show less" : `Show all ${m.message.length.toLocaleString()} characters`}
-          </button>
-        )}
-        <div className="chat-when">{clock(m.created_at)}</div>
-      </article>
-      <article
-        className={"chat-bubble assistant " + m.state}
-        aria-busy={working}
-      >
-        {m.steps.length > 0 && (
-          <>
-            <button
-              type="button"
-              className="chat-steps-toggle"
-              aria-expanded={showSteps}
-              onClick={() => onSteps(!showSteps)}
-            >
-              {showSteps ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              {working ? (
-                <span>
-                  {m.steps.length} {m.steps.length === 1 ? "step" : "steps"} so far · {elapsed(took)}
-                </span>
-              ) : (
-                <span>
-                  {m.steps.length} {m.steps.length === 1 ? "step" : "steps"} in {elapsed(took)}
-                  {!showSteps && stepSummary && <em> — {stepSummary}{m.steps.length > 3 ? "…" : ""}</em>}
-                </span>
-              )}
-            </button>
-            {showSteps && (
-              <ol className="chat-steps">
-                {m.steps.map((step, n) => (
-                  <li key={n} className={step.state}>
-                    <span aria-hidden="true">
-                      {step.state === "running" ? (
-                        <LoaderCircle className="spin" size={15} />
-                      ) : step.state === "failed" ? (
-                        <XCircle size={15} />
-                      ) : (
-                        <CheckCircle2 size={15} />
-                      )}
-                    </span>
-                    <div>
-                      <b>
-                        {step.label}
-                        {stepName(step) && <em className="chat-step-agent">{stepName(step)}</em>}
-                      </b>
-                      {step.detail && <small>{step.detail}</small>}
-                    </div>
-                  </li>
-                ))}
-              </ol>
+      <div className="chat-turn you">
+        <div className="chat-turn-body">
+          <div className="chat-msg you">
+            <div className="chat-text">{shown}</div>
+            {long && (
+              <button type="button" className="text-button" onClick={onExpand}>
+                {expanded ? "Show less" : `Show all ${m.message.length.toLocaleString()} characters`}
+              </button>
             )}
-          </>
-        )}
-        {working && m.steps.length === 0 ? (
-          <p className="muted chat-wait">
-            <LoaderCircle className="spin" size={15} /> Working on it…
-          </p>
-        ) : (
-          !working && <RichText text={m.response} />
-        )}
-        {failed && (
-          <div className="chat-retry">
-            <button type="button" className="secondary" onClick={() => onSend(m.message)}>
-              <RotateCcw size={14} /> Try again
-            </button>
           </div>
-        )}
-        {hasResult && !working && (
-          <div className="chat-result">
-            {m.data.preview_png && (
-              <a
-                className="chat-page"
-                href={fileUrl(m.data.preview_png)}
-                target="_blank"
-                rel="noreferrer"
-                title="Open the rendered page"
-              >
-                <img src={fileUrl(m.data.preview_png)} alt="Rendered resume page" />
-              </a>
-            )}
-            <div className="chat-result-body">
-              {m.data.company && (
-                <div className="chat-result-title">
-                  <FileText size={16} />
-                  <b>
-                    {m.data.company} — {m.data.title}
-                  </b>
-                  {(m.data.tier || jobTier) && (
-                    <Badge
-                      tone={tier === "S" ? "green" : tier === "A" ? "lime" : "neutral"}
-                      title={tierTitle[tier as keyof typeof tierTitle]}
-                    >
-                      Tier {tier}
-                    </Badge>
-                  )}
-                  {m.data.revision != null && <small>v{m.data.revision}</small>}
-                </div>
+          <div className="chat-meta">
+            <span className="chat-tools">
+              <CopyButton text={m.message} label="Copy your message" />
+              {onEdit && (
+                <button type="button" className="chat-tool" title="Edit and send again" aria-label="Edit and send again" onClick={() => onEdit(m.message)}>
+                  <Pencil size={14} />
+                </button>
               )}
-              {(m.data.coverage != null || m.data.ats != null) && (
-                <div className="chat-scores">
-                  {m.data.coverage != null && (
+            </span>
+            <span className="chat-when">{clock(m.created_at)}</span>
+          </div>
+        </div>
+      </div>
+      <div className={"chat-turn assistant " + m.state}>
+        <span className="chat-avatar" aria-hidden="true">
+          <Sparkles size={14} />
+        </span>
+        <div className="chat-turn-body">
+          <div className={"chat-msg assistant " + m.state + (stopped ? " stopped" : "")} aria-busy={working}>
+            {m.steps.length > 0 && (
+              <div className="chat-steps-wrap">
+                <button
+                  type="button"
+                  className="chat-steps-toggle"
+                  aria-expanded={showSteps}
+                  onClick={() => onSteps(!showSteps)}
+                >
+                  {showSteps ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  {working ? (
                     <span>
-                      <b>{m.data.coverage}</b> JD coverage
+                      {m.steps.length} {m.steps.length === 1 ? "step" : "steps"} so far · {elapsed(took)}
+                    </span>
+                  ) : (
+                    <span>
+                      {m.steps.length} {m.steps.length === 1 ? "step" : "steps"} in {elapsed(took)}
+                      {!showSteps && stepSummary && <em> — {stepSummary}{m.steps.length > 3 ? "…" : ""}</em>}
                     </span>
                   )}
-                  {m.data.ats != null && (
-                    <span>
-                      <b>{m.data.ats}</b> ATS readiness
-                    </span>
-                  )}
-                </div>
-              )}
-              <div className="chat-actions">
-                {m.data.pdf && (
-                  <a
-                    className="primary"
-                    href={fileUrl(m.data.pdf)}
-                    download={
-                      (m.data.company || "resume").replace(/\W+/g, "-") + "-resume.pdf"
-                    }
-                  >
-                    <Download size={15} /> Download PDF
-                  </a>
-                )}
-                {m.data.job_id && (
-                  <button type="button" className="secondary" onClick={() => onJob(m.data.job_id!)}>
-                    <FileText size={15} /> Open in Resume Studio
-                  </button>
-                )}
-                {m.data.posting_url && (
-                  <a
-                    className="secondary"
-                    href={safeUrl(m.data.posting_url)}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <ExternalLink size={15} /> Open the posting
-                  </a>
+                </button>
+                {showSteps && (
+                  <ol className="chat-steps">
+                    {m.steps.map((step, n) => (
+                      <li key={n} className={step.state}>
+                        <span aria-hidden="true">
+                          {step.state === "running" ? (
+                            <LoaderCircle className="spin" size={15} />
+                          ) : step.state === "failed" ? (
+                            <XCircle size={15} />
+                          ) : (
+                            <CheckCircle2 size={15} />
+                          )}
+                        </span>
+                        <div>
+                          <b>
+                            {step.label}
+                            {stepName(step) && <em className="chat-step-agent">{stepName(step)}</em>}
+                          </b>
+                          {step.detail && <small>{step.detail}</small>}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
                 )}
               </div>
+            )}
+            {working ? (
+              <Typing label={stopping ? "Stopping after the current step…" : currentStep ? currentStep.label : "Working on it"} />
+            ) : (
+              <RichText text={m.response} />
+            )}
+            {failed && !working && (
+              <div className="chat-retry">
+                <button type="button" className="secondary" onClick={() => onSend(m.message)}>
+                  <RotateCcw size={14} /> {stopped ? "Send it again" : "Try again"}
+                </button>
+              </div>
+            )}
+            {hasResult && !working && (
+              <div className="chat-result">
+                {m.data.preview_png && (
+                  <a
+                    className="chat-page"
+                    href={fileUrl(m.data.preview_png)}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Open the rendered page"
+                  >
+                    <img src={fileUrl(m.data.preview_png)} alt="Rendered resume page" />
+                  </a>
+                )}
+                <div className="chat-result-body">
+                  {m.data.company && (
+                    <div className="chat-result-title">
+                      <FileText size={16} />
+                      <b>
+                        {m.data.company} — {m.data.title}
+                      </b>
+                      {(m.data.tier || jobTier) && (
+                        <Badge
+                          tone={tier === "S" ? "green" : tier === "A" ? "lime" : "neutral"}
+                          title={tierTitle[tier as keyof typeof tierTitle]}
+                        >
+                          Tier {tier}
+                        </Badge>
+                      )}
+                      {m.data.revision != null && <small>v{m.data.revision}</small>}
+                    </div>
+                  )}
+                  {(m.data.coverage != null || m.data.ats != null) && (
+                    <div className="chat-scores">
+                      {m.data.coverage != null && (
+                        <span>
+                          <b>{m.data.coverage}</b> JD coverage
+                        </span>
+                      )}
+                      {m.data.ats != null && (
+                        <span>
+                          <b>{m.data.ats}</b> ATS readiness
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <div className="chat-actions">
+                    {m.data.pdf && (
+                      <a
+                        className="primary"
+                        href={fileUrl(m.data.pdf)}
+                        download={
+                          (m.data.company || "resume").replace(/\W+/g, "-") + "-resume.pdf"
+                        }
+                      >
+                        <Download size={15} /> Download PDF
+                      </a>
+                    )}
+                    {m.data.job_id && (
+                      <button type="button" className="secondary" onClick={() => onJob(m.data.job_id!)}>
+                        <FileText size={15} /> Open in Resume Studio
+                      </button>
+                    )}
+                    {m.data.posting_url && (
+                      <a
+                        className="secondary"
+                        href={safeUrl(m.data.posting_url)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <ExternalLink size={15} /> Open the posting
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            {!working && !!m.data.suggestions?.length && (
+              <div className="chat-suggestions">
+                {m.data.suggestions.map((s) => (
+                  <button key={s} type="button" className="chip" onClick={() => onSend(s)}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {!working && (
+            <div className="chat-meta">
+              <span className="chat-when">
+                {stopped ? "Stopped" : failed ? "Failed" : "Answered"} at {clock(m.updated_at)}
+              </span>
+              <span className="chat-tools">
+                <CopyButton text={m.response} label="Copy the reply" />
+                <button type="button" className="chat-tool" title="Ask again" aria-label="Ask again" onClick={() => onSend(m.message)}>
+                  <RefreshCw size={14} />
+                </button>
+              </span>
             </div>
-          </div>
-        )}
-        {!working && !!m.data.suggestions?.length && (
-          <div className="chat-suggestions">
-            {m.data.suggestions.map((s) => (
-              <button key={s} type="button" className="chip" onClick={() => onSend(s)}>
-                {s}
-              </button>
-            ))}
-          </div>
-        )}
-        {!working && (
-          <div className="chat-when">
-            {failed ? "Failed" : "Answered"} at {clock(m.updated_at)}
-          </div>
-        )}
-      </article>
+          )}
+        </div>
+      </div>
     </>
   );
 }

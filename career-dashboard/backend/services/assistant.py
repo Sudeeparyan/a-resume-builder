@@ -21,6 +21,12 @@ Two kinds of message, in this order:
 The model runs on whatever is ready on this Mac — Claude Code, Codex or a
 keyed provider — through the same tier preferences as the other specialists.
 Work happens on one worker thread; the page polls the message row.
+
+Messages belong to conversations. "New chat" starts a fresh one (the old
+thread stays in the history and can be reopened or deleted); the agent's
+memory of recent exchanges is scoped to the open conversation. A reply in
+progress can be stopped: the worker ends it at the next step boundary and
+says what it had already changed.
 """
 
 from __future__ import annotations
@@ -81,6 +87,15 @@ STEP_ORDER = ("Reading the posting", "Sponsorship gate and never-re-apply", "Ope
               "Fitting one US Letter page", "Scoring against the posting")
 STEP_AGENTS = ("assistant", "sponsorship", "resume", "resume", "resume_match")
 
+# A conversation is named after its first message, cut to this many characters.
+TITLE_CHARS = 60
+STOPPED_REPLY = "Stopped. Anything a finished step already saved stays; nothing after it was changed."
+
+
+class Stopped(Exception):
+    """She pressed Stop: the worker ends the reply at the next step boundary."""
+
+
 # The agent loop: how many model decisions one message may take, how much of a
 # tool result the model sees, and how many results stay whole in the transcript.
 MAX_TURNS = 14
@@ -134,6 +149,15 @@ def parse_posting_fields(text: str, labelled_only: bool = False) -> dict:
     return found
 
 
+def conversation_title(first_message: str | None) -> str:
+    """The first line of the first message, cut short; a pasted posting reads as its heading."""
+    text = " ".join((first_message or "").strip().split("\n")[0].split())
+    text = re.sub(r"^\s*(?:jd|job|posting|job description)\s*:\s*", "", text, flags=re.I)
+    if not text:
+        return "New chat"
+    return text if len(text) <= TITLE_CHARS else text[:TITLE_CHARS - 1].rstrip() + "…"
+
+
 def _strip_link(text: str) -> str:
     return URL.sub("", text).strip()
 
@@ -151,12 +175,18 @@ class Assistant:
         self.quality = quality or JobQualityService(service)
         self.tools = tools or Toolbox(service, studio, runner, self.quality)
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="career-assistant") if background else None
+        # Message IDs whose reply she asked to stop; the worker checks at each step.
+        self.stopping: set[str] = set()
         with self.w.connect() as db:
             db.executescript('''
             CREATE TABLE IF NOT EXISTS assistant_messages(id TEXT PRIMARY KEY, message TEXT NOT NULL, response TEXT NOT NULL, state TEXT NOT NULL, steps TEXT NOT NULL DEFAULT '[]', data TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
             ''')
+            if "conversation_id" not in {r[1] for r in db.execute("PRAGMA table_info(assistant_messages)")}:
+                db.execute("ALTER TABLE assistant_messages ADD COLUMN conversation_id TEXT")
             db.execute("UPDATE assistant_messages SET state='failed',response=?,updated_at=? WHERE state='processing'",
                        ("The app stopped before this finished. Send it again.", self.s.now()))
+            # Messages from before conversations existed join the open one.
+            db.execute("UPDATE assistant_messages SET conversation_id=? WHERE conversation_id IS NULL", (self.conversation_id(db),))
 
     # ---- Storage -------------------------------------------------------------
     @staticmethod
@@ -170,10 +200,110 @@ class Assistant:
             raise ValueError("Message not found")
         return self._decode(row)
 
-    def history(self, limit: int = 60) -> list:
+    def history(self, limit: int = 60, conversation_id: str | None = None) -> list:
+        """The open conversation (or the named one), oldest first."""
         with self.w.connect() as db:
-            rows = db.execute("SELECT * FROM assistant_messages ORDER BY created_at DESC, rowid DESC LIMIT ?", (limit,)).fetchall()
+            cid = conversation_id or self.conversation_id(db)
+            rows = db.execute("SELECT * FROM assistant_messages WHERE conversation_id=? ORDER BY created_at DESC, rowid DESC LIMIT ?",
+                              (cid, limit)).fetchall()
         return [self._decode(r) for r in reversed(rows)]
+
+    # ---- Conversations -------------------------------------------------------
+    def conversation_id(self, db=None) -> str:
+        """The open conversation; the first call on a workspace creates it."""
+        if db is None:
+            with self.w.connect() as db:
+                return self.conversation_id(db)
+        row = db.execute("SELECT value FROM preferences WHERE key='assistant_conversation'").fetchone()
+        current = json.loads(row[0]) if row else None
+        if not current:
+            current = uuid.uuid4().hex
+            self.s.set_pref("assistant_conversation", current, db)
+        return current
+
+    def conversations(self) -> list:
+        """Every conversation with messages, newest activity first; the open one is flagged."""
+        with self.w.connect() as db:
+            current = self.conversation_id(db)
+            rows = db.execute(
+                "SELECT conversation_id AS id, COUNT(*) AS count, MIN(created_at) AS started_at, MAX(updated_at) AS updated_at, "
+                "(SELECT message FROM assistant_messages m2 WHERE m2.conversation_id=m.conversation_id ORDER BY created_at, rowid LIMIT 1) AS first, "
+                "SUM(state='processing') AS busy FROM assistant_messages m GROUP BY conversation_id ORDER BY updated_at DESC, MAX(rowid) DESC").fetchall()
+        return [{"id": r["id"], "title": conversation_title(r["first"]), "count": r["count"], "started_at": r["started_at"],
+                 "updated_at": r["updated_at"], "busy": bool(r["busy"]), "current": r["id"] == current} for r in rows]
+
+    def new_conversation(self) -> str:
+        """Start a fresh thread. An open conversation with nothing in it is reused, so
+        pressing New chat twice never leaves empty threads behind; the question the
+        old thread was waiting on is dropped with it."""
+        with self.w.connect() as db:
+            current = self.conversation_id(db)
+            if db.execute("SELECT 1 FROM assistant_messages WHERE conversation_id=? AND state='processing'", (current,)).fetchone():
+                raise ValueError("A reply is still being worked on. Stop it or wait for it before starting a new chat.")
+            if not db.execute("SELECT 1 FROM assistant_messages WHERE conversation_id=?", (current,)).fetchone():
+                self.s.set_pref("assistant_pending", None, db)
+                return current
+            fresh = uuid.uuid4().hex
+            self.s.set_pref("assistant_conversation", fresh, db)
+            self.s.set_pref("assistant_pending", None, db)
+            self.w.record_event(db, "assistant_conversation_started", None, conversation_id=fresh)
+        return fresh
+
+    def open_conversation(self, conversation_id: str) -> str:
+        """Make an earlier thread the open one; the question the current thread was waiting on is dropped."""
+        with self.w.connect() as db:
+            if conversation_id == self.conversation_id(db):
+                return conversation_id
+            if not db.execute("SELECT 1 FROM assistant_messages WHERE conversation_id=?", (conversation_id,)).fetchone():
+                raise ValueError("Conversation not found")
+            if db.execute("SELECT 1 FROM assistant_messages WHERE state='processing'").fetchone():
+                raise ValueError("A reply is still being worked on. Stop it or wait for it before switching chats.")
+            self.s.set_pref("assistant_conversation", conversation_id, db)
+            self.s.set_pref("assistant_pending", None, db)
+        return conversation_id
+
+    def delete_conversation(self, conversation_id: str) -> dict:
+        """Delete a thread and its messages for good. The jobs, resumes and profile changes
+        it produced are not touched: they live in the workspace, not in the chat."""
+        with self.w.connect() as db:
+            if db.execute("SELECT 1 FROM assistant_messages WHERE conversation_id=? AND state='processing'", (conversation_id,)).fetchone():
+                raise ValueError("A reply in this chat is still being worked on. Stop it first.")
+            deleted = db.execute("DELETE FROM assistant_messages WHERE conversation_id=?", (conversation_id,)).rowcount
+            if conversation_id == self.conversation_id(db):
+                self.s.set_pref("assistant_pending", None, db)
+                latest = db.execute("SELECT conversation_id FROM assistant_messages ORDER BY updated_at DESC, rowid DESC LIMIT 1").fetchone()
+                self.s.set_pref("assistant_conversation", latest[0] if latest else uuid.uuid4().hex, db)
+            self.w.record_event(db, "assistant_conversation_deleted", None, conversation_id=conversation_id, messages=deleted)
+        return {"deleted": deleted, "conversation_id": self.conversation_id()}
+
+    def clear_history(self) -> dict:
+        """Delete every conversation and its messages for good, and open a fresh one. As with a
+        single delete, the jobs, resumes and profile changes the chats produced are not touched."""
+        with self.w.connect() as db:
+            if db.execute("SELECT 1 FROM assistant_messages WHERE state='processing'").fetchone():
+                raise ValueError("A reply is still being worked on. Stop it or wait for it before clearing the history.")
+            chats = db.execute("SELECT COUNT(DISTINCT conversation_id) FROM assistant_messages").fetchone()[0]
+            deleted = db.execute("DELETE FROM assistant_messages").rowcount
+            self.s.set_pref("assistant_pending", None, db)
+            self.s.set_pref("assistant_conversation", uuid.uuid4().hex, db)
+            self.w.record_event(db, "assistant_history_cleared", None, conversations=chats, messages=deleted)
+        return {"deleted": deleted, "conversations": chats, "conversation_id": self.conversation_id()}
+
+    def stop(self, id: str) -> dict:
+        """End a reply in progress. The worker notices at its next step and leaves the message
+        failed with what it had already done; a step that is mid-flight (a compile, one model
+        call) finishes first, so the page may show "Stopping…" for a few seconds."""
+        row = self.get(id)
+        if row["state"] != "processing":
+            return row
+        self.stopping.add(id)
+        steps = row["steps"]
+        for step in steps:
+            if step["state"] == "running":
+                step["detail"] = "Stopping…"
+        self._write(id, steps=steps)
+        self.s.set_pref("assistant_pending", None)
+        return self.get(id)
 
     def agents(self) -> list:
         """The agent registry with what the chat can reach: every tool names the agent it runs on."""
@@ -196,6 +326,8 @@ class Assistant:
 
         messages = self.history()
         return {
+            "conversation_id": self.conversation_id(),
+            "conversations": self.conversations(),
             "messages": messages,
             "pending": self.s.pref("assistant_pending"),
             "busy": any(m["state"] == "processing" for m in messages),
@@ -234,8 +366,8 @@ class Assistant:
                 if old["message"] != message:
                     raise ValueError("Message ID already belongs to another request")
                 return self._decode(old)
-            db.execute("INSERT INTO assistant_messages VALUES(?,?,?,?,?,?,?,?)",
-                       (key, message, "Working on it.", "processing", "[]", "{}", stamp, stamp))
+            db.execute("INSERT INTO assistant_messages(id,message,response,state,steps,data,created_at,updated_at,conversation_id) VALUES(?,?,?,?,?,?,?,?,?)",
+                       (key, message, "Working on it.", "processing", "[]", "{}", stamp, stamp, self.conversation_id(db)))
         if self.pool:
             self.pool.submit(self._process, key)
         else:
@@ -246,14 +378,21 @@ class Assistant:
         row = self.get(id)
         try:
             state, response, data = self._handle(id, row["message"])
+        except Stopped:
+            state, response, data = "failed", STOPPED_REPLY, {"intent": "stopped"}
         except ValueError as error:
             state, response, data = "failed", str(error), {}
         except Exception as error:  # noqa: BLE001 - the row must never stay "processing"
             state, response, data = "failed", "Something went wrong: " + type(error).__name__ + ": " + str(error)[:500], {}
+        self.stopping.discard(id)
         steps = self.get(id)["steps"]
         for step in steps:
             if step["state"] == "running":
                 step["state"] = "failed" if state == "failed" else "done"
+                if data.get("intent") == "stopped":
+                    step["detail"] = "Stopped before it finished"
+        if data.get("intent") == "stopped":
+            steps.append({"at": self.s.now(), "label": "Stopped", "state": "failed", "detail": "Nothing after this was changed", "agent": "assistant"})
         self._write(id, state=state, response=response, steps=steps, data=data)
         with self.w.connect() as db:
             self.w.record_event(db, "assistant_replied", data.get("job_id") if isinstance(data, dict) else None,
@@ -264,7 +403,12 @@ class Assistant:
             pass
 
     # ---- Steps ---------------------------------------------------------------
+    def _check_stop(self, id: str) -> None:
+        if id in self.stopping:
+            raise Stopped()
+
     def _step(self, id: str, label: str, state: str = "running", detail: str = "", agent: str = "assistant", **extra) -> None:
+        self._check_stop(id)
         steps = self.get(id)["steps"]
         for step in steps:
             if step["state"] == "running":
@@ -744,6 +888,8 @@ class Assistant:
                 self._finish_step(id, "failed", str(error)[:300])
                 return "failed", ("I could not reach the AI runtime, so nothing more was changed. " + str(error).rstrip(".")
                                   + ". The exact commands (say *help*) still work without it."), {**data, "intent": "agent_failed"}
+            # A decision that arrives after she pressed Stop is dropped: no tool runs, no reply shows.
+            self._check_stop(id)
             thought = " ".join(turn.thought.split())[:200]
             suggestions = [s.strip() for s in turn.suggestions if isinstance(s, str) and 0 < len(s.strip()) <= 80][:4]
             if turn.action == "reply":

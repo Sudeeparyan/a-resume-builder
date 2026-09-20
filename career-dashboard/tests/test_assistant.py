@@ -2,6 +2,7 @@
 
 import shutil
 import sys
+import time
 import uuid
 from pathlib import Path
 
@@ -245,3 +246,150 @@ def test_real_compile_end_to_end(assistant, monkeypatch):
     assert pdf.exists() and (assistant.w.root / "data/output" / data["preview_png"]).exists()
     draft = assistant.studio.get(data["job_id"])
     assert draft["preview"]["page_count"] == 1 and draft["preview"]["current"]
+
+
+# ---- Conversations and Stop --------------------------------------------------------
+
+def test_new_chat_keeps_the_old_thread_in_history_and_scopes_the_agents_memory(assistant, monkeypatch):
+    use_team(monkeypatch, StubTeam(error="not needed"), configured=False)
+    first = assistant.conversation_id()
+    assistant.send("status", "c1")
+    assistant.send("excluded", "c2")
+    assert [m["id"] for m in assistant.history()] == ["c1", "c2"]
+    # The old thread stays; the new one starts empty; the agent's recent memory is scoped.
+    fresh = assistant.new_conversation()
+    assert fresh != first and assistant.conversation_id() == fresh
+    assert assistant.history() == [] and assistant.history(conversation_id=first)[-1]["id"] == "c2"
+    assert assistant._payload("x", [], 0)["recent_conversation"] == []
+    # New chat on an empty thread reuses it instead of leaving empty threads behind.
+    assert assistant.new_conversation() == fresh
+    assistant.send("status", "c3")
+    listed = assistant.overview()["conversations"]
+    assert [(c["count"], c["current"]) for c in listed] == [(1, True), (2, False)]
+    assert listed[1]["title"] == "status" and listed[0]["id"] == fresh
+    # Reopening the old thread shows its messages again; the pending question is dropped.
+    assistant.s.set_pref("assistant_pending", {"kind": "agent", "transcript": []})
+    assert assistant.open_conversation(first) == first
+    assert [m["id"] for m in assistant.history()] == ["c1", "c2"] and assistant.s.pref("assistant_pending") is None
+    with pytest.raises(ValueError):
+        assistant.open_conversation("nope")
+
+
+def test_deleting_a_conversation_removes_only_its_messages(assistant, monkeypatch):
+    use_team(monkeypatch, StubTeam(error="not needed"), configured=False)
+    first = assistant.conversation_id()
+    assistant.send("status", "d1")
+    second = assistant.new_conversation()
+    assistant.send("excluded", "d2")
+    # Deleting the open thread lands on the most recent other one.
+    result = assistant.delete_conversation(second)
+    assert result["deleted"] == 1 and result["conversation_id"] == first
+    assert [m["id"] for m in assistant.history()] == ["d1"]
+    with pytest.raises(ValueError):
+        assistant.get("d2")
+    # Deleting the last thread leaves a fresh, empty one open.
+    assistant.delete_conversation(first)
+    assert assistant.history() == [] and assistant.conversations() == []
+    assert assistant.conversation_id() not in {first, second}
+
+
+def test_clear_history_removes_every_chat_and_opens_a_fresh_one(assistant, monkeypatch):
+    use_team(monkeypatch, StubTeam(error="not needed"), configured=False)
+    assistant.send("status", "h1")
+    first = assistant.conversation_id()
+    assistant.new_conversation()
+    assistant.send("excluded", "h2")
+    assistant.s.set_pref("assistant_pending", {"kind": "agent", "transcript": []})
+    before = assistant.s.summary()["counts"]
+    result = assistant.clear_history()
+    assert result["deleted"] == 2 and result["conversations"] == 2
+    assert assistant.conversations() == [] and assistant.history() == []
+    assert assistant.conversation_id() == result["conversation_id"] and assistant.conversation_id() != first
+    assert assistant.s.pref("assistant_pending") is None
+    for id in ("h1", "h2"):
+        with pytest.raises(ValueError):
+            assistant.get(id)
+    # Nothing outside the chat is touched.
+    assert assistant.s.summary()["counts"] == before
+    assert [e["action"] for e in assistant.w.activity(1)] == ["assistant_history_cleared"]
+
+
+def test_a_conversation_title_is_the_first_line_cut_short():
+    from backend.services.assistant import conversation_title
+
+    assert conversation_title("status") == "status"
+    assert conversation_title("JD: Software Engineer, Data Platform\nAcme Analytics") == "Software Engineer, Data Platform"
+    assert conversation_title("  \n  ") == "New chat"
+    assert conversation_title(None) == "New chat"
+    long = conversation_title("x" * 200)
+    assert len(long) == 60 and long.endswith("…")
+
+
+def test_older_messages_join_the_open_conversation_on_upgrade(service, monkeypatch):
+    use_team(monkeypatch, StubTeam(error="not needed"), configured=False)
+    studio = ResumeStudio(service)
+    runner = AgentRunner(service, execute=lambda *a, **k: None)
+    runner.studio = studio
+    with service.w.connect() as db:
+        db.execute("CREATE TABLE IF NOT EXISTS assistant_messages(id TEXT PRIMARY KEY, message TEXT NOT NULL, response TEXT NOT NULL, state TEXT NOT NULL, steps TEXT NOT NULL DEFAULT '[]', data TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL, updated_at TEXT NOT NULL)")
+        db.execute("INSERT INTO assistant_messages VALUES('old','status','This week','done','[]','{}','2026-09-01T10:00:00','2026-09-01T10:00:05')")
+    assistant = Assistant(service, studio, runner, background=False)
+    assert [m["id"] for m in assistant.history()] == ["old"]
+    assert assistant.conversations()[0] == {**assistant.conversations()[0], "count": 1, "current": True, "title": "status", "busy": False}
+
+
+def test_stop_ends_the_reply_at_the_next_step_and_says_what_stayed(assistant, monkeypatch):
+    from backend.services.assistant import STOPPED_REPLY
+
+    seen = []
+
+    class StopsItself(StubTeam):
+        def run(self, name, payload, **_):
+            # The first turn asks for a tool; she presses Stop while it runs.
+            seen.append(name)
+            assistant.stop("s1")
+            return schemas.AgentTurn(thought="Looking.", action="call", tool="status", arguments="{}")
+
+    use_team(monkeypatch, StopsItself())
+    row = assistant.send("how is my week going?", "s1")
+    assert row["state"] == "failed" and row["response"] == STOPPED_REPLY and row["data"]["intent"] == "stopped"
+    assert len(seen) == 1, "no second model call after Stop"
+    assert row["steps"][-1] == {**row["steps"][-1], "label": "Stopped", "state": "failed", "agent": "assistant"}
+    # The decision that came back after Stop was dropped: the tool never ran, the Thinking step did not finish.
+    assert [(s["label"], s["state"], s["detail"]) for s in row["steps"][:-1]] == [("Thinking", "failed", "Stopped before it finished")]
+    assert "s1" not in assistant.stopping
+    # Stopping a finished message changes nothing.
+    assert assistant.stop("s1")["response"] == STOPPED_REPLY
+
+
+def test_conversation_and_stop_routes(service, monkeypatch):
+    from backend.dashboard.app import create_app
+
+    use_team(monkeypatch, StubTeam(error="not needed"), configured=False)
+    app = create_app(service.w.root)
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        client.post("/api/v2/assistant/messages", json={"message": "status", "request_id": "r1"})
+        for _ in range(200):
+            if client.get("/api/v2/assistant/messages/r1").json()["state"] != "processing":
+                break
+            import time
+            time.sleep(0.05)
+        first = client.get("/api/v2/assistant").json()["conversation_id"]
+        made = client.post("/api/v2/assistant/conversations")
+        assert made.status_code == 201 and made.json()["messages"] == [] and made.json()["conversation_id"] != first
+        assert [c["id"] for c in client.get("/api/v2/assistant/conversations").json()] == [first]
+        opened = client.put(f"/api/v2/assistant/conversations/{first}").json()
+        assert [m["id"] for m in opened["messages"]] == ["r1"] and opened["conversations"][0]["current"] is True
+        assert client.put("/api/v2/assistant/conversations/missing").status_code == 400
+        assert client.post("/api/v2/assistant/messages/r1/stop").json()["state"] == "done"
+        gone = client.delete(f"/api/v2/assistant/conversations/{first}").json()
+        assert gone["messages"] == [] and gone["conversations"] == []
+        assert client.get("/api/v2/assistant/messages/r1").status_code == 400
+        client.post("/api/v2/assistant/messages", json={"message": "status", "request_id": "r2"})
+        for _ in range(200):
+            if client.get("/api/v2/assistant/messages/r2").json()["state"] != "processing":
+                break
+            time.sleep(0.05)
+        cleared = client.delete("/api/v2/assistant/conversations").json()
+        assert cleared["messages"] == [] and cleared["conversations"] == [] and cleared["conversation_id"]
+        assert client.get("/api/v2/assistant/messages/r2").status_code == 400

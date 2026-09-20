@@ -1,6 +1,6 @@
 # Annie's job search — front page
 
-Last run: posting_verified at 2026-09-19T20:00:12+00:00. Generated from data/career.db; open the dashboard to act on anything here.
+Last run: ai_main_provider_chosen at 2026-09-19T22:38:02+00:00. Generated from data/career.db; open the dashboard to act on anything here.
 
 ## Your resumes
 

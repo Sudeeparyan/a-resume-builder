@@ -1,0 +1,190 @@
+% Evidence-grounded one-page US Letter base resume for Annie Prasanna Manoharan.
+% Candidate claims are governed by data/context/evidence.yml. Every content line is
+% preceded by a "% EVIDENCE:" tag naming the registry entries that support it.
+% Track A layout (Data / Analytics Engineering): Education, Skills, Experience, Projects.
+
+\documentclass[letterpaper,10pt]{article}
+
+\usepackage[top=0.5in,bottom=0.5in,left=0.6in,right=0.6in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{titlesec}
+\usepackage{lmodern}
+
+\hypersetup{
+  pdfauthor={Annie Prasanna Manoharan},
+  pdftitle={Annie Prasanna Manoharan - Resume},
+  pdfsubject={Evidence-grounded resume},
+  pdfkeywords={Data Engineer, Machine Learning, Python, SQL, Kafka, Flink, AWS, PyTorch}
+}
+
+\renewcommand{\baselinestretch}{1.0}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+\setlist[itemize]{leftmargin=1.15em,itemsep=2.0pt,topsep=2pt,parsep=0pt,partopsep=0pt}
+\pagestyle{empty}
+\raggedright
+\urlstyle{same}
+
+\titleformat{\section}{\large\scshape}{}{0pt}{}[\vspace{-2pt}\titlerule]
+\titlespacing*{\section}{0pt}{7pt}{4pt}
+
+\newlength{\roleheadingright}
+\newcommand{\roleheading}[4]{%
+  \textbf{#1} \hfill #2\\
+  \settowidth{\roleheadingright}{\textit{#4}}%
+  \parbox[t]{\dimexpr\linewidth-\roleheadingright-1em\relax}{\raggedright\textit{#3}}%
+  \hfill\parbox[t]{\roleheadingright}{\raggedleft\textit{#4}}\vspace{1pt}
+}
+\newcommand{\clientheading}[1]{\textbf{#1}\vspace{1pt}}
+\newenvironment{resumeitems}{\begin{itemize}}{\end{itemize}}
+
+% ---- Header -------------------------------------------------------------
+% EVIDENCE: IDENTITY-001
+\newcommand{\ResumeName}{Annie Prasanna Manoharan}
+% EVIDENCE: CONTACT-PHONE-001 CONTACT-EMAIL-001 CONTACT-PORTFOLIO-001 CONTACT-GITHUB-001
+\newcommand{\ResumeContact}{+1 (479) 301-1366 \textbar{} \href{mailto:annieprm0501@gmail.com}{annieprm0501@gmail.com} \textbar{} \href{https://annie0159.github.io/Portfolio/}{https://annie0159.github.io/Portfolio/} \textbar{} \href{https://github.com/Annie0159}{https://github.com/Annie0159}}
+
+% ---- Skills (one macro per bold category; items ranked per JD by Resume Studio) --
+% EVIDENCE: SKILL-LANGUAGES-001 SKILL-TOUCHED-001
+\newcommand{\SkillsLanguages}{Python, SQL}
+% EVIDENCE: SKILL-STREAMING-001 SKILL-CLOUD-001 SKILL-DATA-TOOLS-001 SKILL-LAKEHOUSE-001
+\newcommand{\SkillsData}{ETL/ELT}
+% EVIDENCE: SKILL-ML-001 SKILL-CV-TOOLS-001 SKILL-GENAI-001 SKILL-DATA-TOOLS-001
+\newcommand{\SkillsML}{PyTorch, Computer vision, Scikit-learn, Flask, Pandas, NumPy}
+% EVIDENCE: SKILL-CLOUD-001 SKILL-TOUCHED-001 SKILL-DESKTOP-001 SKILL-TEST-001 SKILL-TOUCHED-001 SKILL-TOUCHED-001 SKILL-DATA-TOOLS-001 resume_items:49856d24249f48048a58a5f5db338fe8 resume_items:926e1a2b716a427c8d4f7eb3c074212d resume_items:72e5e5ae5cf649f8b5faeb6e1d59aeed resume_items:396a422bd64b47358a598f42544ece2a resume_items:0ea9586184544e989a4d034e3cd6fc8b resume_items:35757075b9f14fa0aaa17c00694b9b81
+\newcommand{\SkillsCloud}{Model monitoring and drift detection, Model deployment and serving, Experiment tracking and versioning, Git, ML pipeline automation, Data curation and annotation workflows, Docker, Linux, Grafana, CI/CD, Jupyter, Data validation and quality, GitHub Actions}
+
+% ---- Coursework -----------------------------------------------------------
+% EVIDENCE: COURSEWORK-MS-001
+\newcommand{\Coursework}{Algorithms, Database Management Systems, Advanced DBMS, Data Mining, Artificial Intelligence, Machine Learning, Image Processing, Privacy Enhancing Techniques}
+
+% ---- Signature project (first in Projects; unique per company) ------------
+% EVIDENCE: PROJ-P02-MIGA
+\newcommand{\SelectedProjectID}{PROJ-P02-MIGA}
+% EVIDENCE: PROJ-P02-MIGA
+\newcommand{\SelectedProjectTitle}{MiGa - Multi-Chicken Gait Assessment (AICV Lab)}
+% EVIDENCE: PROJ-P02-MIGA
+\newcommand{\SelectedProjectContext}{YOLO11n-Pose, OC-SORT, LSTM, PyTorch}
+% EVIDENCE: PROJ-P02-MIGA
+\newcommand{\SelectedProjectBulletOne}{Integrated YOLO11n-Pose for keypoint estimation, applied OC-SORT for multi-object tracking, and constructed a many-to-one LSTM sequence network for classification}
+% EVIDENCE: PROJ-P02-MIGA
+\newcommand{\SelectedProjectBulletTwo}{Built a data engineering framework to preprocess and segment raw frames into a detection split of 4,569 frames with 11,422 bounding boxes and a regression split of 55 expert-annotated sequences}
+% EVIDENCE: PROJ-P02-MIGA
+\newcommand{\SelectedProjectBulletThree}{Implemented spatial normalization into local coordinate spaces to eliminate translational variance, achieving keypoint mAP 91.83\% at 1,250 FPS, 0.93 MOTA, and 0.91 IDF1}
+
+% ---- Supporting project (may repeat across companies) ----------------------
+% EVIDENCE: PROJ-P01-IOT
+\newcommand{\SecondProjectID}{PROJ-P01-IOT}
+% EVIDENCE: PROJ-P01-IOT
+\newcommand{\SecondProjectTitle}{Real-Time Medical IoT Analytics Platform}
+% EVIDENCE: PROJ-P01-IOT
+\newcommand{\SecondProjectContext}{Apache Kafka, Apache Flink, Flink SQL, Python, ClickHouse, Grafana}
+% EVIDENCE: PROJ-P01-IOT
+\newcommand{\SecondProjectBulletOne}{Developed an end-to-end, sub-second latency streaming platform using Apache Flink SQL and Apache Kafka to ingest, process, and score high-frequency medical IoT device data}
+% EVIDENCE: PROJ-P01-IOT
+\newcommand{\SecondProjectBulletTwo}{Implemented temporal Flink OVER windows partitioned by device ID to compute rolling Z-scores over 5-second sliding intervals, applying custom watermark delay strategies to handle out-of-order streams}
+
+% EVIDENCE: PROJ-P01-IOT
+\newcommand{\SecondProjectBulletThree}{Designed ClickHouse MergeTree schemas sorted by composite keys to align disk layout with clinical query patterns, with an optimized Python multi-topic batch consumer isolating ingestion}
+% STUDIO_DENSITY_START
+\clubpenalty=10000
+\widowpenalty=10000
+\renewcommand{\normalsize}{\fontsize{10.0pt}{11.8pt}\selectfont}
+% STUDIO_DENSITY_END
+\begin{document}
+\normalsize
+
+\begin{center}
+  % EVIDENCE: IDENTITY-001
+  {\LARGE\bfseries \ResumeName}\\[3pt]
+  % EVIDENCE: CONTACT-PHONE-001 CONTACT-EMAIL-001 CONTACT-PORTFOLIO-001 CONTACT-GITHUB-001
+  \ResumeContact
+\end{center}
+
+\section{Education}
+
+% EVIDENCE: EDU-MS-001
+\roleheading{University of Arkansas}{Aug 2024 -- May 2026}{Master of Science in Computer Engineering}{Fayetteville, AR}
+% EVIDENCE: COURSEWORK-MS-001
+\textbf{Coursework:} \Coursework
+
+% EVIDENCE: EDU-BE-001
+\roleheading{Sri Ramakrishna Engineering College}{Aug 2019 -- May 2023}{Bachelor of Engineering in Electronics and Communication}{India}
+
+\section{Technical Skills}
+% EVIDENCE: SKILL-CLOUD-001 SKILL-TOUCHED-001 SKILL-DESKTOP-001 SKILL-TEST-001
+\textbf{Cloud and Tools:} \SkillsCloud\\[1pt]
+% EVIDENCE: SKILL-ML-001 SKILL-CV-TOOLS-001 SKILL-GENAI-001 SKILL-DATA-TOOLS-001
+\textbf{Machine Learning and AI:} \SkillsML\\[1pt]
+% EVIDENCE: SKILL-LANGUAGES-001 SKILL-TOUCHED-001
+\textbf{Languages:} \SkillsLanguages\\[1pt]
+% EVIDENCE: SKILL-STREAMING-001 SKILL-CLOUD-001 SKILL-DATA-TOOLS-001 SKILL-LAKEHOUSE-001
+\textbf{Data Engineering:} \SkillsData
+
+\section{Projects}
+% SELECTED_PROJECT_BLOCK_START
+\textbf{\SelectedProjectTitle} \hfill \textit{\SelectedProjectContext}
+\begin{resumeitems}
+% EVIDENCE: PROJ-P02-MIGA
+\item \SelectedProjectBulletOne
+% EVIDENCE: PROJ-P02-MIGA
+\item \SelectedProjectBulletTwo
+% EVIDENCE: PROJ-P02-MIGA
+\item \SelectedProjectBulletThree
+\end{resumeitems}
+% SELECTED_PROJECT_BLOCK_END
+
+% SECOND_PROJECT_BLOCK_START
+\textbf{\SecondProjectTitle} \hfill \textit{\SecondProjectContext}
+\begin{resumeitems}
+% EVIDENCE: PROJ-P01-IOT
+\item \SecondProjectBulletOne
+% EVIDENCE: PROJ-P01-IOT
+\item \SecondProjectBulletTwo
+% EVIDENCE: PROJ-P01-IOT
+\item \SecondProjectBulletThree
+\end{resumeitems}
+% SECOND_PROJECT_BLOCK_END
+
+\section{Professional Experience}
+
+% EVIDENCE: EXP-INSOPS-001
+\roleheading{Data Engineering Intern}{Jul 2024 -- Present}{InsOps Inc.}{Chicago, Illinois}
+\begin{resumeitems}
+  % EVIDENCE: EXP-INSOPS-001
+  \item Built data workflows integrating SQL Server, Azure SQL, AWS S3, and cloud databases, preparing structured datasets for downstream data science and analytics
+  % EVIDENCE: EXP-INSOPS-001
+  \item Developed data pipelines in AWS using AWS Glue, Lambda, EMR, SQL, and Apache Airflow for orchestration, with S3 cloud storage, for scalable data ingestion, transformation, validation, and analytics
+\end{resumeitems}
+
+% EVIDENCE: EXP-TA-001
+\roleheading{Teaching Assistant}{Sep 2024 -- May 2026}{University of Arkansas, Dept. of Computer Science and Engineering}{Fayetteville, AR}
+\begin{resumeitems}
+  % EVIDENCE: EXP-TA-001
+  \item Supported 100+ students in Programming Foundations through laboratory instruction, debugging assistance, and mentorship in C++ programming fundamentals
+\end{resumeitems}
+
+% EVIDENCE: EXP-RA-001
+\roleheading{Research Assistant}{Sep 2024 -- Jan 2026}{AICV Lab, University of Arkansas}{Fayetteville, AR}
+\begin{resumeitems}
+  % EVIDENCE: EXP-RA-001
+  \item Built reusable preprocessing workflows to segment, organize, and transform raw image/video data into structured inputs for downstream processing and evaluation
+  % EVIDENCE: EXP-RA-001
+  \item Evaluated results using mAP, MOTA, IDF1, PSNR, SSIM, and FID
+\end{resumeitems}
+
+% EVIDENCE: EXP-SOLITON-PE-001
+\roleheading{Project Engineer}{Jun 2023 -- Jun 2024}{Soliton Technologies}{India}
+\begin{resumeitems}
+  % EVIDENCE: EXP-SOLITON-PE-001
+  \item Designed and developed a C\# WPF desktop application integrating C\#, Python, and LabVIEW-based test workflows to streamline application usage and improve test automation
+  % EVIDENCE: EXP-SOLITON-PE-001 METRIC-DRAEGER-94
+  \item Developed customized software solutions for Dr\"ager as the sole developer, automating approximately 94\% of manual test cases while meeting medical-device quality and validation requirements
+\end{resumeitems}
+
+\end{document}

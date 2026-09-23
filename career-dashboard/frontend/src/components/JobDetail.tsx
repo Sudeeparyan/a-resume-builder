@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ExternalLink, Search, FileText } from "lucide-react";
 import { api, fileUrl, safeUrl } from "../api";
 import { Badge, Field, Modal, ReportView, Running } from "./UI";
-import { statuses, TierBadge } from "./JobList";
+import { statuses, statusLabel, TierBadge, FitBadge } from "./JobList";
 import type { Summary, Job } from "../types";
 export default function JobDetail({
   job,
@@ -66,8 +66,9 @@ export default function JobDetail({
     <Modal title={job.company + " · " + job.title} onClose={onClose} wide>
       <div className="job-meta">
         <Badge tone={job.status === "applied" ? "green" : "neutral"}>
-          {job.status}
+          {statusLabel[job.status] || job.status}
         </Badge>
+        <FitBadge job={job} />
         <span>{job.location}</span>
         <a href={safeUrl(job.url)} target="_blank" rel="noreferrer">
           Open posting <ExternalLink size={14} />
@@ -224,7 +225,9 @@ export default function JobDetail({
                 onChange={(e) => setStatus(e.target.value)}
               >
                 {statuses.map((s) => (
-                  <option key={s}>{s}</option>
+                  <option key={s} value={s}>
+                    {statusLabel[s] || s}
+                  </option>
                 ))}
               </select>
             </Field>

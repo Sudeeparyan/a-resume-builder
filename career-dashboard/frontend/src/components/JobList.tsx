@@ -12,6 +12,28 @@ export const statuses = [
   "withdrawn",
   "ghosted",
 ];
+// The pipeline reads as stages; the stored status codes never change.
+export const statusLabel: Record<string, string> = {
+  saved: "Discovered",
+  prepared: "Tailored",
+  applied: "Applied",
+  interview: "Interview",
+  offer: "Offer",
+  rejected: "Rejected",
+  withdrawn: "Withdrawn",
+  ghosted: "Ghosted",
+};
+export function FitBadge({ job }: { job: Job }) {
+  if (typeof job.fit_score !== "number") return null;
+  return (
+    <Badge
+      tone={job.fit_score >= 70 ? "green" : job.fit_score >= 50 ? "amber" : "neutral"}
+      title={job.fit_rationale || "Fit score against your profile"}
+    >
+      Fit {job.fit_score}
+    </Badge>
+  );
+}
 export const tierRank: Record<string, number> = { S: 1, A: 2, B: 3, C: 4 };
 export const tierTitle: Record<string, string> = {
   S: "Cap-exempt employer: files H-1B year-round, no lottery",
@@ -78,7 +100,9 @@ export function JobList({
         >
           <option value="all">All statuses</option>
           {statuses.map((s) => (
-            <option key={s}>{s}</option>
+            <option key={s} value={s}>
+              {statusLabel[s] || s}
+            </option>
           ))}
         </select>
         <select
@@ -127,9 +151,10 @@ export function JobList({
                           : "neutral"
                     }
                   >
-                    {j.status}
+                    {statusLabel[j.status] || j.status}
                   </Badge>
                   <TierBadge job={j} />
+                  <FitBadge job={j} />
                   {j.posting_state === "expired" && (
                     <Badge tone="red">posting closed</Badge>
                   )}

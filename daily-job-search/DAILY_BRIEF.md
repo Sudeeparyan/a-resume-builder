@@ -1,6 +1,6 @@
 # Annie's daily job search
 
-Times are US Central (America/Chicago), the app's single timezone. There is no scheduled external task yet; a daily run is started by Annie, from the dashboard (Daily Search → Find suitable jobs) or from this brief.
+Times are US Central (America/Chicago), the app's single timezone. **A scheduled task runs the daily flow automatically**: "Annie Daily Job Search" (Windows Task Scheduler, installed by `Install-MorningTask.ps1`) starts `morning-run.cmd` every day at 07:00 (catching up at the next logon/wake if 07:00 was missed). `morning_run.py` starts the dashboard on 127.0.0.1:8010 if needed, runs discovery (portals + one AI pass, capped at 5 jobs), tailors a Resume Studio resume per new job, writes each study plan, compiles the one-page PDFs, regenerates the projections and writes `<date>/MORNING-REPORT.md`. Logs: `logs/YYYY-MM-DD.log`. Pause with `Disable-ScheduledTask -TaskName "Annie Daily Job Search"`. A manual run is unchanged: from the dashboard (Daily Search → Find suitable jobs) or `career-dashboard/backend/.venv/Scripts/python.exe daily-job-search/morning_run.py`.
 
 ## Outcome
 

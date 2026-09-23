@@ -239,6 +239,67 @@ class Toolbox:
         tool = self.get(name)
         return tool.label + " — " + (", ".join(f"{k}: {str(v)[:80]}" for k, v in arguments.items()) or "no arguments")
 
+    def diff(self, name: str, arguments: dict) -> list:
+        """Field-level before/after for a confirmation card: what changes if she says yes.
+
+        Every row is {"field", "before", "after"}; empty list means nothing
+        describable (the plain-language question still stands on its own).
+        """
+        try:
+            if name == "update_job":
+                j = self._job(arguments["job_id"])
+                rows = []
+                if arguments.get("status"):
+                    rows.append({"field": "Status", "before": j["status"], "after": arguments["status"]})
+                if arguments.get("application_date"):
+                    rows.append({"field": "Application date", "before": j.get("application_date") or "—", "after": arguments["application_date"]})
+                if arguments.get("notes"):
+                    rows.append({"field": "Notes", "before": (j.get("notes") or "—")[:200], "after": arguments["notes"][:200]})
+                return rows
+            if name == "remove_job":
+                j = self._job(arguments["job_id"])
+                return [{"field": f"{j['company']} — {j['title']}", "before": j["status"], "after": "removed (restorable)"}]
+            if name == "restore_excluded":
+                row = next((r for r in self.s.excluded(True) if r["id"] == arguments.get("excluded_id")), None)
+                return [{"field": f"{row['company']} — {row['title']}", "before": "excluded: “" + row["sentence"] + "”", "after": "restored"}] if row else []
+            if name == "apply_profile_change":
+                with self.w.connect() as db:
+                    row = db.execute("SELECT proposed_changes FROM chat_change_sets WHERE id=? AND scope='profile'", (arguments.get("change_set_id"),)).fetchone()
+                changes = (json.loads(row["proposed_changes"]) if row else {}).get("changes") or []
+                rows = []
+                for change in changes:
+                    op = change.get("operation", "update")
+                    label = change.get("title") or change.get("id") or change.get("kind", "entry")
+                    rows.append({"field": label,
+                                 "before": "not in your Profile" if op in {"add", "proposal"} else "current wording",
+                                 "after": (change.get("summary") or op)[:200] if op != "remove" else "removed"})
+                return rows
+            if name == "reconcile_profile":
+                pending = self.s.pending_knowledge()
+                chosen = [p for p in pending if not arguments.get("ids") or p["id"] in set(arguments["ids"])]
+                return [{"field": p["title"], "before": "pending review", "after": "reviewed"} for p in chosen[:12]]
+            if name == "set_goals":
+                current = self.s.pref("goals") or {}
+                names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+                days = arguments.get("workdays") or current.get("workdays") or [0, 1, 2, 3, 4]
+                rows = []
+                if arguments.get("weekly_target") is not None:
+                    rows.append({"field": "Weekly target", "before": str(current.get("weekly_target", "—")), "after": str(arguments["weekly_target"])})
+                rows.append({"field": "Workdays",
+                             "before": ", ".join(names[int(d)] for d in current.get("workdays", [0, 1, 2, 3, 4]) if 0 <= int(d) <= 6),
+                             "after": ", ".join(names[int(d)] for d in days if 0 <= int(d) <= 6)})
+                return rows
+            if name == "resolve_mail":
+                mail = next((m for m in self.s.mail()["messages"] if m["id"] == arguments.get("id")), None)
+                if not mail:
+                    return []
+                return [{"field": f"Email “{mail['subject']}” from {mail['sender']}",
+                         "before": "pending review",
+                         "after": "confirmed as evidence" + (" — records the application" if arguments.get("create_application") else "") if arguments.get("action") == "confirm" else "dismissed"}]
+        except (ValueError, KeyError, TypeError):
+            pass
+        return []
+
     # ---- Helpers ---------------------------------------------------------------
     def _job(self, job_id: str) -> dict:
         try:

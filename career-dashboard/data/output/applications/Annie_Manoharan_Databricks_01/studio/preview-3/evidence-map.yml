@@ -1,0 +1,53 @@
+candidate_revision: 2026-09-18.1
+job_id: 13dd3968e5ae327f
+role_eligible: false
+job_snapshot_sha256: 403cabeb9c4d89f8358d1ab022202549a84534378d31ac458f08745b1613e689
+supported_requirement_coverage: 0
+requirements: []
+company_problem:
+  statement: Pending review of the saved job description.
+  source_url: https://databricks.com/company/careers/open-positions/job?gh_jid=8560779002
+  published_or_accessed: '2026-09-22'
+  evidence_class: explicit
+  confidence: low
+selected_project_id: PROJ-P04-NEWS-RAG
+selected_project_ids:
+- PROJ-P04-NEWS-RAG
+- PROJ-P05-RESUME
+selected_project_reason: Draft selection by overlap with approved project wording;
+  review the business problem and full job requirements.
+resume_claim_ids:
+- CONTACT-EMAIL-001
+- CONTACT-GITHUB-001
+- CONTACT-PHONE-001
+- CONTACT-PORTFOLIO-001
+- COURSEWORK-MS-001
+- EDU-BE-001
+- EDU-MS-001
+- EXP-INSOPS-001
+- EXP-RA-001
+- EXP-SOLITON-PE-001
+- EXP-TA-001
+- IDENTITY-001
+- METRIC-DRAEGER-94
+- PROJ-P04-NEWS-RAG
+- PROJ-P05-RESUME
+- SKILL-CLOUD-001
+- SKILL-CV-TOOLS-001
+- SKILL-DATA-TOOLS-001
+- SKILL-DESKTOP-001
+- SKILL-GENAI-001
+- SKILL-LAKEHOUSE-001
+- SKILL-LANGUAGES-001
+- SKILL-ML-001
+- SKILL-STREAMING-001
+- SKILL-TEST-001
+- SKILL-TOUCHED-001
+held_claims_used: []
+studio_review_required: true
+source_evidence_errors:
+- 'Unknown source EVIDENCE ID on line 60: resume_items:bb71f8c34c854e58b2505427d0e8208b'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:d39691d4b9a14b55b0ce5759284b71eb'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:78240b2b37cc4612bb266e008d7e561a'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:12777766a2604259bc1429518bdcce48'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:f7f98af7f2174617acfc4f48ce7ac6ba'

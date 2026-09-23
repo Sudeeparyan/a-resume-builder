@@ -1,0 +1,46 @@
+candidate_revision: 2026-09-18.1
+job_id: 28f0f11eaa6d6495
+role_eligible: false
+job_snapshot_sha256: b4b6ba080fb39d7d4fdc6b2731c68d9c40249df4f1a5d045530f7d9cc5ef6d78
+supported_requirement_coverage: 0
+requirements: []
+company_problem:
+  statement: Pending review of the saved job description.
+  source_url: https://jobs.ashbyhq.com/snowflake/08ba6a41-fb63-4b51-aee7-be5501668909
+  published_or_accessed: '2026-09-22'
+  evidence_class: explicit
+  confidence: low
+selected_project_id: PROJ-P06-EXPENSE
+selected_project_ids:
+- PROJ-P06-EXPENSE
+- PROJ-P03-DUALFIT
+selected_project_reason: Draft selection by overlap with approved project wording;
+  review the business problem and full job requirements.
+resume_claim_ids:
+- CONTACT-EMAIL-001
+- CONTACT-GITHUB-001
+- CONTACT-PHONE-001
+- CONTACT-PORTFOLIO-001
+- COURSEWORK-MS-001
+- EDU-BE-001
+- EDU-MS-001
+- EXP-INSOPS-001
+- EXP-RA-001
+- EXP-SOLITON-PE-001
+- EXP-TA-001
+- IDENTITY-001
+- METRIC-DRAEGER-94
+- PROJ-P03-DUALFIT
+- PROJ-P06-EXPENSE
+- SKILL-CLOUD-001
+- SKILL-CV-TOOLS-001
+- SKILL-DATA-TOOLS-001
+- SKILL-DESKTOP-001
+- SKILL-GENAI-001
+- SKILL-LAKEHOUSE-001
+- SKILL-LANGUAGES-001
+- SKILL-ML-001
+- SKILL-STREAMING-001
+- SKILL-TEST-001
+- SKILL-TOUCHED-001
+held_claims_used: []

@@ -121,6 +121,12 @@ negation_guards:
   - 'no\s+(security\s+)?clearance\s+(is\s+)?(required|needed|necessary)'
   - '(clearance|citizenship)\s+(is\s+)?not\s+(required|needed|necessary)'
   - 'without\s+(the\s+need\s+for\s+)?(a\s+)?(security\s+)?clearance'
+  # Absence claims: the posting (or a researcher's note) says none of the
+  # restrictive language is present. The words "citizenship/clearance/ITAR"
+  # appear only to say they are absent — never a requirement.
+  - '\bno\s+[^.;]{0,100}(sponsorship|work[-\s]?authorization|citizenship|clearance|ITAR|EAR|permanent\s+residency)[^.;]{0,60}\b(language|mention|statement|wording|references?)\b'
+  - '(contains?|includes?|mentions?|states?|lists?|makes?)\s+(no|not\s+any)\s+[^.;]{0,100}(sponsorship|work[-\s]?authorization|citizenship|clearance|ITAR|EAR)\s+(language|mention|statement|wording|references?)'
+  - '\bno\s+(visa|work[-\s]?authorization|citizenship|clearance|sponsorship)[^.;]{0,40}\b(restrictions?|requirements?)\s+(stated|listed|mentioned|present)'
 
 # Words that look relevant but are innocent — require a refusal verb nearby,
 # never match the bare noun.

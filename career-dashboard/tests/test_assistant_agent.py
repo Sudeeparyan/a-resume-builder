@@ -474,3 +474,67 @@ def test_choosing_codex_as_the_main_ai_moves_both_tiers(service, monkeypatch):
     ai_settings.choose_main(service, runner.gateway, "codex", "codex-runtime")
     tiers = service.pref("ai_preferences")["tiers"]
     assert tiers == {"strong": {"provider": "codex", "model": "codex-runtime"}, "cheap": {"provider": "codex", "model": "codex-runtime"}}
+
+
+# --- diff cards, the trace and auto-apply -------------------------------------
+
+def test_confirm_tool_carries_a_before_after_diff(assistant, monkeypatch):
+    job = seed_job(assistant, monkeypatch)
+    team = ScriptedTeam(
+        call("update_job", job_id=job["id"], status="applied", application_date="2026-09-10"),
+        reply("Recorded."),
+    )
+    use_team(monkeypatch, team)
+    ask = assistant.send("mark it applied on the 10th", "d1")
+    assert ask["data"]["intent"] == "confirm_tool"
+    diff = ask["data"]["diff"]
+    assert any(r["field"] == "Status" and r["before"] == "prepared" and r["after"] == "applied" for r in diff)
+    assert any(r["field"] == "Application date" and r["after"] == "2026-09-10" for r in diff)
+    # The pending question carries the same diff, so a reload shows the same card.
+    assert assistant.s.pref("assistant_pending")["diff"] == diff
+    # And the change itself has not happened yet.
+    assert assistant.w.jobs()[0]["status"] == "prepared"
+
+
+def test_auto_apply_runs_gated_tools_without_the_pause(assistant, monkeypatch):
+    job = seed_job(assistant, monkeypatch)
+    assistant.auto_apply(True)
+    team = ScriptedTeam(
+        call("update_job", job_id=job["id"], status="applied", application_date="2026-09-10"),
+        reply("Recorded as applied."),
+    )
+    use_team(monkeypatch, team)
+    done = assistant.send("mark it applied on the 10th", "a1")
+    assert done["state"] == "done" and assistant.s.pref("assistant_pending") is None
+    assert assistant.w.jobs()[0]["status"] == "applied"
+    trace = done["data"]["trace"]
+    assert trace and trace[0]["tool"] == "update_job" and trace[0]["auto_applied"] is True
+    with assistant.w.connect() as db:
+        assert db.execute("SELECT 1 FROM activity WHERE action='assistant_auto_applied'").fetchone()
+
+
+def test_auto_apply_defaults_off_and_is_per_conversation(assistant):
+    assert assistant.auto_apply() is False
+    assistant.auto_apply(True)
+    assert assistant.auto_apply() is True
+    # A different thread does not inherit the permission given in this one.
+    first = assistant.conversation_id()
+    with assistant.w.connect() as db:
+        db.execute(
+            "INSERT INTO assistant_messages(id,message,response,state,steps,data,created_at,updated_at,conversation_id) VALUES(?,?,?,?,?,?,?,?,?)",
+            ("seedmsg", "hi", "hi", "done", "[]", "{}", assistant.s.now(), assistant.s.now(), first),
+        )
+    assistant.new_conversation()
+    assert assistant.conversation_id() != first
+    assert assistant.auto_apply() is False
+
+
+def test_the_trace_is_kept_with_the_message(assistant, monkeypatch):
+    seed_job(assistant, monkeypatch)
+    team = ScriptedTeam(call("list_jobs", query="acme"), reply("Found it."))
+    use_team(monkeypatch, team)
+    done = assistant.send("find the acme job", "t1")
+    assert done["data"]["trace"][0]["tool"] == "list_jobs"
+    overview = assistant.overview()
+    saved = next(m for m in overview["messages"] if m["id"] == "t1")
+    assert saved["data"]["trace"][0]["tool"] == "list_jobs"

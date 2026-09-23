@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from backend.ai import claude_code
+from backend.ai import claude_code, kimi_cli
 
 
 ACTIONS = {
@@ -163,6 +163,33 @@ class ClaudeCodeProvider:
         return self.invoke(prompt, schema, model=model, web=web)
 
 
+class KimiCliProvider:
+    """The local Kimi Code CLI, signed in to the user's membership.
+
+    Mirrors ClaudeCodeProvider: no key, calls count against the membership's
+    usage limits. Web search comes from the CLI's built-in tools; it has no
+    Gmail access, so the mailbox worker stays on Codex.
+    """
+
+    id = kimi_cli.ID
+    models = kimi_cli.MODELS
+    capabilities = {"structured", "web"}
+
+    def __init__(self, invoke=kimi_cli.invoke):
+        self.invoke = invoke
+
+    @property
+    def configured(self) -> bool:
+        return kimi_cli.available()
+
+    # Same convention as the Codex runtime: the web is on unless an action
+    # (hiring review, resume chat) switches it off.
+    def generate(self, prompt: str, schema: dict, *, model="kimi-runtime", web=True, **_options) -> dict:
+        if model not in self.models:
+            raise ValueError("Unsupported Kimi Code model")
+        return self.invoke(prompt, schema, model=model, web=web)
+
+
 class HostedProvider:
     """Any other provider in the Settings catalogue, reached through LangChain.
 
@@ -211,7 +238,7 @@ class HostedProvider:
 
 
 # Where a web- or Gmail-needing action goes when the chosen provider cannot do it.
-CAPABLE_ORDER = ("claude_code", "codex", "openai")
+CAPABLE_ORDER = ("claude_code", "codex", "kimi_cli", "openai")
 
 
 class AIGateway:
@@ -219,7 +246,7 @@ class AIGateway:
         from backend.ai import catalog
 
         self.s = service
-        self.providers = {provider.id: provider for provider in (OpenAIProvider(service.w.root), AnthropicProvider(service.w.root), CodexProvider(codex_invoke), ClaudeCodeProvider())}
+        self.providers = {provider.id: provider for provider in (OpenAIProvider(service.w.root), AnthropicProvider(service.w.root), CodexProvider(codex_invoke), ClaudeCodeProvider(), KimiCliProvider())}
         for provider_id in catalog.PROVIDERS:
             self.providers.setdefault(provider_id, HostedProvider(service.w.root, provider_id))
 
@@ -294,4 +321,27 @@ class AIGateway:
 
     def generate(self, action: str, prompt: str, schema: dict, *, provider=None, model=None, **options) -> dict:
         selected, model = self.resolve(action, provider, model)
-        return selected.generate(prompt, schema, model=model, **options)
+        try:
+            return selected.generate(prompt, schema, model=model, **options)
+        except ValueError as error:
+            # Graceful fallback: the Settings page can name a backup provider.
+            # One retry, recorded, and the UI surfaces that it happened.
+            fallback = self.preferences().get("fallback") or {}
+            fallback_id = fallback.get("provider")
+            if not fallback_id or fallback_id == selected.id:
+                raise
+            try:
+                backup, backup_model = self.resolve(action, fallback_id, fallback.get("model"))
+            except ValueError:
+                raise error from None
+            try:
+                result = backup.generate(prompt, schema, model=backup_model, **options)
+            except ValueError:
+                raise error from None
+            with self.s.w.connect() as db:
+                self.s.w.record_event(
+                    db, "provider_fallback", ai_action=action,
+                    from_provider=selected.id, to_provider=backup.id,
+                    reason=str(error)[:300],
+                )
+            return result

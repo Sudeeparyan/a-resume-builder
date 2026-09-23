@@ -157,6 +157,9 @@ export function elapsed(seconds: number): string {
 }
 
 /** "Today", "Yesterday", then "Mon, Sep 15" (with the year once it differs). */
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 export function dayLabel(iso: string, now: Date = new Date()): string {
   const at = new Date(iso);
   if (isNaN(at.getTime())) return "";
@@ -164,10 +167,10 @@ export function dayLabel(iso: string, now: Date = new Date()): string {
   const days = Math.round((midnight(now) - midnight(at)) / 86_400_000);
   if (days === 0) return "Today";
   if (days === 1) return "Yesterday";
-  return at.toLocaleDateString([], {
-    weekday: "short", month: "short", day: "numeric",
-    ...(at.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
-  });
+  // Fixed abbreviations: toLocaleDateString's short month is CLDR-dependent
+  // ("Sep" vs "Sept"), so the same day rendered differently across machines.
+  const base = `${DAY_NAMES[at.getDay()]}, ${MONTH_NAMES[at.getMonth()]} ${at.getDate()}`;
+  return at.getFullYear() === now.getFullYear() ? base : `${base}, ${at.getFullYear()}`;
 }
 
 /** Whether an exchange mentions the search words (all of them, in either side). */
@@ -286,7 +289,7 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
   const autoUntil = useRef(0);
   // On a phone the keyboard's Enter is a new line; the Send button sends.
   const touch = useMemo(() => typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches, []);
-  const mac = useMemo(() => /Mac|iPhone|iPad/.test(navigator.platform || ""), []);
+  const mac = useMemo(() => /Mac|iPhone|iPad/.test(navigator.userAgent || ""), []);
   const mod = mac ? "⌘" : "Ctrl+";
 
   /** A fresh overview from an action (new chat, open, delete) replaces whatever a slower poll would bring. */
@@ -565,12 +568,26 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
     }
   }
 
+  async function toggleAutoApply(enabled: boolean) {
+    try {
+      const next = await api<AssistantOverview>("/v2/assistant/auto-apply", "PUT", { enabled });
+      adopt(next);
+      notify(
+        enabled
+          ? "Auto-apply on: changes run without asking first. Each one is still listed in the chat, marked auto-applied."
+          : "Auto-apply off: every change asks for your yes first.",
+      );
+    } catch (e) {
+      notify((e as Error).message, true);
+    }
+  }
+
   async function chooseEngine(value: string) {
     const [provider, model] = value.split("::");
     try {
       await api("/v2/ai/main", "PUT", { provider, model });
-      await load();
-      notify("Everything now runs on " + (overview?.engine.options.find((o) => o.provider === provider && o.model === model)?.label || model));
+      const fresh = await load();
+      notify("Everything now runs on " + (fresh?.engine.options.find((o) => o.provider === provider && o.model === model)?.label || model));
     } catch (e) {
       notify((e as Error).message, true);
     }
@@ -921,6 +938,17 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
                 <kbd>Enter</kbd> sends · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line · <kbd>{mod}⇧O</kbd> new chat · <kbd>{mod}K</kbd> search
               </small>
             )}
+            <label
+              className="chat-auto-toggle"
+              title="When on, changes like marking a job applied run without the yes/no question. Every change is still listed in the chat, marked auto-applied."
+            >
+              <input
+                type="checkbox"
+                checked={!!overview?.auto_apply}
+                onChange={(e) => void toggleAutoApply(e.target.checked)}
+              />
+              Auto-apply changes
+            </label>
           </div>
         </form>
       </div>
@@ -1233,6 +1261,12 @@ export function AgentRail({
             </small>
           )}
           {engine.note && <small className="rail-warn">{engine.note}</small>}
+          {engine.last_fallback && (
+            <small className="rail-warn">
+              A call on {engine.last_fallback.from_provider} failed and was finished by {engine.last_fallback.to_provider}.
+              Set or change the backup in Settings.
+            </small>
+          )}
           {!engine.ready && !engine.moved_from && (
             <small className="rail-warn">Nothing is ready: install Claude Code or the ChatGPT app, or add a key in Settings.</small>
           )}
@@ -1463,6 +1497,33 @@ export function Exchange({
                   <RotateCcw size={14} /> {stopped ? "Send it again" : "Try again"}
                 </button>
               </div>
+            )}
+            {m.data.intent === "confirm_tool" && !!m.data.diff?.length && !working && (
+              <div className="chat-diff" role="group" aria-label="What will change">
+                <b>What changes if you say yes</b>
+                {m.data.diff.map((row, i) => (
+                  <div key={i} className="chat-diff-row">
+                    <span className="chat-diff-field">{row.field}</span>
+                    <span className="chat-diff-before">{row.before}</span>
+                    <span aria-hidden="true">→</span>
+                    <span className="chat-diff-after">{row.after}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!!m.data.trace?.length && !working && (
+              <details className="chat-trace">
+                <summary>What I did · {m.data.trace.length} {m.data.trace.length === 1 ? "action" : "actions"}</summary>
+                <ol>
+                  {m.data.trace.map((t, i) => (
+                    <li key={i} className={t.error ? "failed" : ""}>
+                      <b>{t.tool.replaceAll("_", " ")}</b>
+                      {t.auto_applied && <em className="chat-auto">auto-applied</em>}
+                      {t.summary && <small>{t.summary}</small>}
+                    </li>
+                  ))}
+                </ol>
+              </details>
             )}
             {hasResult && !working && (
               <div className="chat-result">

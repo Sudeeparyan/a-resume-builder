@@ -378,8 +378,12 @@ function Editor({
       const link = document.createElement("a");
       link.href = url;
       link.download = name;
+      document.body.appendChild(link);
       link.click();
-      URL.revokeObjectURL(url);
+      link.remove();
+      // Revoke on the next tick: revoking synchronously cancels the download
+      // in Firefox and Safari.
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) {
       setError((e as Error).message);
     }

@@ -162,3 +162,35 @@ describe("Sponsorship tiers and exclusions", () => {
     expect(renderToStaticMarkup(<ExcludedRoles jobs={[]} onRestore={() => {}} />)).toBe("");
   });
 });
+
+describe("Pipeline labels and fit scores", () => {
+  it("shows stage labels instead of raw statuses, and a fit badge with its rationale", () => {
+    const html = renderToStaticMarkup(
+      <JobList
+        jobs={[
+          { ...baseJob, id: "f", title: "Pipeline Role", url: "https://example.test/f",
+            created_at: "2026-09-17T10:00:00Z", fit_score: 85,
+            fit_rationale: "Fit 85/100 — strong overlap" },
+          { ...baseJob, id: "p", title: "Drafted Role", url: "https://example.test/p",
+            created_at: "2026-09-16T10:00:00Z", status: "prepared" },
+        ]}
+        onSelect={() => {}}
+      />,
+    );
+    expect(html).toContain("Discovered");
+    expect(html).toContain("Tailored");
+    expect(html).toContain("Fit 85");
+    expect(html).toContain('title="Fit 85/100 — strong overlap"');
+    expect(html).not.toContain(">saved<");
+    expect(html).not.toContain(">prepared<");
+  });
+  it("shows no fit badge before a job is scored", () => {
+    const html = renderToStaticMarkup(
+      <JobList
+        jobs={[{ ...baseJob, id: "u", title: "Unscored Role", url: "https://example.test/u", created_at: "2026-09-17T10:00:00Z" }]}
+        onSelect={() => {}}
+      />,
+    );
+    expect(html).not.toContain("Fit ");
+  });
+});

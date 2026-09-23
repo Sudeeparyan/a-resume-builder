@@ -7,7 +7,7 @@ values never appear in anything returned here.
 
 from __future__ import annotations
 
-from backend.ai import catalog, claude_code, keys, models
+from backend.ai import catalog, claude_code, keys, kimi_cli, models
 from backend.ai.agents.graph import AgentTeam, describe_provider_error
 from backend.ai.agents.specialists import REGISTRY
 
@@ -35,7 +35,21 @@ def _claude_code_entry() -> dict:
     }
 
 
-LOCAL_DEFAULTS = {"codex": CODEX["defaults"], claude_code.ID: claude_code.DEFAULTS}
+# The same idea on the Kimi side: the signed-in Kimi Code CLI, on the
+# membership's usage limits.
+def _kimi_cli_entry() -> dict:
+    return {
+        "id": kimi_cli.ID,
+        "label": kimi_cli.LABEL,
+        "configured": kimi_cli.available(),
+        "models": list(kimi_cli.MODELS),
+        "defaults": dict(kimi_cli.DEFAULTS),
+        "note": kimi_cli.NOTE,
+    }
+
+
+LOCAL_DEFAULTS = {"codex": CODEX["defaults"], claude_code.ID: claude_code.DEFAULTS,
+                  kimi_cli.ID: kimi_cli.DEFAULTS}
 
 
 def _preferences(services) -> dict:
@@ -100,6 +114,7 @@ def overview(services, refresh: bool = False, gateway=None) -> dict:
         })
     providers.append({**CODEX, "kind": "local"})
     providers.append({**_claude_code_entry(), "kind": "local"})
+    providers.append({**_kimi_cli_entry(), "kind": "local"})
     if gateway is not None:
         for entry in providers:
             engine = gateway.providers.get(entry["id"])
@@ -161,6 +176,21 @@ def test_provider(services, provider_id: str, model: str) -> dict:
             return {"ok": False, "provider": provider_id, "model": model, "detail": str(error)}
         return {"ok": True, "provider": provider_id, "model": model,
                 "detail": f"Answered: {str(answer.get('word', ''))[:40]}"}
+    if provider_id == kimi_cli.ID:
+        if not kimi_cli.available():
+            return {"ok": False, "provider": provider_id, "model": model,
+                    "detail": "Kimi Code is not installed on this machine. Install it from https://www.kimi.com/code and sign in."}
+        if not kimi_cli.signed_in():
+            return {"ok": False, "provider": provider_id, "model": model,
+                    "detail": "Kimi Code is installed but not signed in. Run `kimi login`, then retry."}
+        ping = {"type": "object", "properties": {"word": {"type": "string"}},
+                "required": ["word"], "additionalProperties": False}
+        try:
+            answer = kimi_cli.invoke("Reply with the single word: ready", ping, model=model)
+        except ValueError as error:
+            return {"ok": False, "provider": provider_id, "model": model, "detail": str(error)}
+        return {"ok": True, "provider": provider_id, "model": model,
+                "detail": f"Answered: {str(answer.get('word', ''))[:40]}"}
     if provider_id not in catalog.PROVIDERS:
         raise ValueError(f"Unknown AI provider: {provider_id}")
     from pydantic import BaseModel
@@ -183,7 +213,9 @@ def test_provider(services, provider_id: str, model: str) -> dict:
 
 
 def team(services, on_usage=None) -> AgentTeam:
-    return AgentTeam.from_preferences(services.w.root, _preferences(services), on_usage)
+    from backend.ai import usage_recorder
+
+    return AgentTeam.from_preferences(services.w.root, _preferences(services), on_usage or usage_recorder(services))
 
 
 def choose_main(services, gateway, provider_id: str, model: str) -> dict:
@@ -210,6 +242,25 @@ def choose_main(services, gateway, provider_id: str, model: str) -> dict:
     services.set_pref("ai_preferences", stored)
     with services.w.connect() as db:
         services.w.record_event(db, "ai_main_provider_chosen", provider=provider_id, model=model)
+    services.sync_projections()
+    return overview(services, gateway=gateway)
+
+
+def save_fallback(services, gateway, provider_id: str, model: str) -> dict:
+    """Name the backup provider used when the main one fails a call. Empty clears it."""
+    if provider_id:
+        provider = gateway.providers.get(provider_id)
+        if provider is None:
+            raise ValueError(f"Unknown AI provider: {provider_id}")
+        if not provider.configured:
+            raise ValueError("That provider is not ready yet. Add its API key (or install it) first.")
+        if model not in provider.models:
+            raise ValueError("That model is not offered by this provider")
+    stored = services.pref("ai_preferences", {}) or {}
+    stored["fallback"] = {"provider": provider_id, "model": model} if provider_id else None
+    services.set_pref("ai_preferences", stored)
+    with services.w.connect() as db:
+        services.w.record_event(db, "ai_fallback_chosen", provider=provider_id or "none", model=model)
     services.sync_projections()
     return overview(services, gateway=gateway)
 

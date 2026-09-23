@@ -9,25 +9,25 @@ career-dashboard/backend/.venv/
 # Node / built frontend (rebuilt by run.py on start)
 career-dashboard/frontend/node_modules/
 career-dashboard/frontend/dist/
-career-dashboard/frontend/tsconfig.tsbuildinfo
+# career-dashboard/frontend/tsconfig.tsbuildinfo
 
-# Live database and its snapshots — never commit personal application state
-career-dashboard/data/*.db
-career-dashboard/data/*.db-*
-career-dashboard/data/migrations/*.db
-career-dashboard/data/migrations/*.json
-career-dashboard/data/sponsors/index.db*
-career-dashboard/data/model-catalog.json
+# # Live database and its snapshots — never commit personal application state
+# career-dashboard/data/*.db
+# career-dashboard/data/*.db-*
+# career-dashboard/data/migrations/*.db
+# career-dashboard/data/migrations/*.json
+# career-dashboard/data/sponsors/index.db*
+# career-dashboard/data/model-catalog.json
 
-# Generated views (rebuilt from the database)
-career-dashboard/data/jobs.json
-career-dashboard/data/activity.json
-career-dashboard/data/active-profile.json
-career-dashboard/data/workspace-state.json
-career-dashboard/data/pipeline.md
-career-dashboard/data/application-tracker.md
-career-dashboard/data/applied-companies.md
-daily-job-search/*/run.json
+# # Generated views (rebuilt from the database)
+# career-dashboard/data/jobs.json
+# career-dashboard/data/activity.json
+# career-dashboard/data/active-profile.json
+# career-dashboard/data/workspace-state.json
+# career-dashboard/data/pipeline.md
+# career-dashboard/data/application-tracker.md
+# career-dashboard/data/applied-companies.md
+# daily-job-search/*/run.json
 
 # Local runtimes and caches
 daily-job-search/.runtime/

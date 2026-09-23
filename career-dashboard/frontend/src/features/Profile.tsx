@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Pencil, Plus, Trash2, ShieldCheck, CheckCheck } from "lucide-react";
 import { api } from "../api";
-import { Badge, Field, Modal, RichText } from "../components/UI";
+import { Badge, Field, Loading, Modal, RichText } from "../components/UI";
 import type { Knowledge, ProfileData } from "../types";
 const kinds = [
   "personal",
@@ -12,6 +12,16 @@ const kinds = [
   "certification",
   "fact",
 ];
+// The page reads top to bottom in the same order a resume is built.
+const SECTIONS: { kind: string; label: string; hint: string }[] = [
+  { kind: "personal", label: "Basics", hint: "Name, contact and links, exactly as they appear on resumes." },
+  { kind: "experience", label: "Experience", hint: "Roles, employers and dates. Agents propose; only you change these." },
+  { kind: "project", label: "Projects", hint: "Real, built projects a resume can draw on." },
+  { kind: "skill", label: "Skills", hint: "Tools and technologies you can defend in an interview." },
+  { kind: "education", label: "Education", hint: "Degrees, schools and coursework." },
+  { kind: "certification", label: "Certifications", hint: "Completed certificates only." },
+  { kind: "fact", label: "Preferences & facts", hint: "Goals, constraints and anything else the agents should know." },
+];
 export default function Profile({
   notify,
   refresh,
@@ -21,7 +31,6 @@ export default function Profile({
 }) {
   const [data, setData] = useState<ProfileData>();
   const [error, setError] = useState("");
-  const [category, setCategory] = useState("skill");
   const [edit, setEdit] = useState<Partial<Knowledge> | null>(null);
   const [remove, setRemove] = useState<Knowledge | null>(null);
   const [busy, setBusy] = useState(false);
@@ -41,12 +50,14 @@ export default function Profile({
   }, []);
   if (error)
     return (
-      <div role="alert">
+      <div className="callout warning" role="alert">
         {error}
-        <button onClick={load}>Retry</button>
+        <button className="secondary" onClick={load}>
+          Retry
+        </button>
       </div>
     );
-  if (!data) return <p>Loading your knowledge library…</p>;
+  if (!data) return <Loading label="Loading your knowledge library" />;
   return (
     <>
       <div className="page-title">
@@ -60,7 +71,7 @@ export default function Profile({
         <button
           className="primary"
           onClick={() =>
-            setEdit({ kind: category, title: "", summary: "", data: {} })
+            setEdit({ kind: "personal", title: "", summary: "", data: {} })
           }
         >
           <Plus size={17} />
@@ -127,8 +138,77 @@ export default function Profile({
           </div>
         </section>
       )}
-      <section className="card spaced">
-        <h2>Chat to update Profile</h2>
+      {SECTIONS.map(({ kind, label, hint }) => {
+        const items = data.items.filter((i) => i.kind === kind);
+        return (
+          <section className="card spaced" key={kind}>
+            <div className="section-title">
+              <h2>
+                {label} <span className="muted small">{items.length}</span>
+              </h2>
+              <button
+                className="secondary"
+                onClick={() => setEdit({ kind, title: "", summary: "", data: {} })}
+              >
+                <Plus size={15} /> Add
+              </button>
+            </div>
+            <p className="muted small">{hint}</p>
+            {items.length === 0 ? (
+              <p className="muted">Nothing here yet.</p>
+            ) : (
+              <div className="knowledge-grid">
+                {items.map((item) => (
+                  <article key={item.id} className="knowledge-item">
+                    <div className="section-title">
+                      <Badge
+                        tone={
+                          item.review_state === "registered" ? "green" : "amber"
+                        }
+                      >
+                        {item.review_state === "registered"
+                          ? item.data.status || "Registered"
+                          : "User updated"}
+                      </Badge>
+                      <div className="actions">
+                        <button
+                          className="icon-button"
+                          aria-label={"Edit " + item.title}
+                          onClick={() => setEdit({ ...item })}
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        <button
+                          className="icon-button"
+                          aria-label={"Remove " + item.title}
+                          onClick={() => setRemove(item)}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                    <h3>{item.title}</h3>
+                    <p className="preserve">
+                      {item.summary || "See source details below."}
+                    </p>
+                    <details>
+                      <summary>Evidence & original details</summary>
+                      <small>
+                        {item.id} · Revision {item.revision}
+                        <br />
+                        {item.source}
+                      </small>
+                      <pre>{JSON.stringify(item.data, null, 2)}</pre>
+                    </details>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })}
+      <details className="card spaced">
+        <summary><b>Chat to update Profile</b> — propose a change, review the preview, confirm</summary>
         <p>
           Propose an addition, correction or removal. Nothing changes until you
           review the structured preview and confirm it.
@@ -204,70 +284,9 @@ export default function Profile({
             </div>
           </div>
         )}
-      </section>
-      <section className="card spaced">
-        <div className="category-list">
-          {kinds.map((k) => (
-            <button
-              key={k}
-              className={category === k ? "selected" : ""}
-              onClick={() => setCategory(k)}
-            >
-              {k}
-              <span>{data.items.filter((i) => i.kind === k).length}</span>
-            </button>
-          ))}
-        </div>
-        <div className="knowledge-grid">
-          {data.items
-            .filter((i) => i.kind === category)
-            .map((item) => (
-              <article key={item.id} className="knowledge-item">
-                <div className="section-title">
-                  <Badge
-                    tone={
-                      item.review_state === "registered" ? "green" : "amber"
-                    }
-                  >
-                    {item.review_state === "registered"
-                      ? item.data.status || "Registered"
-                      : "User updated"}
-                  </Badge>
-                  <div className="actions">
-                    <button
-                      className="icon-button"
-                      aria-label={"Edit " + item.title}
-                      onClick={() => setEdit({ ...item })}
-                    >
-                      <Pencil size={16} />
-                    </button>
-                    <button
-                      className="icon-button"
-                      aria-label={"Remove " + item.title}
-                      onClick={() => setRemove(item)}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-                <h3>{item.title}</h3>
-                <p className="preserve">
-                  {item.summary || "See source details below."}
-                </p>
-                <details>
-                  <summary>Evidence & original details</summary>
-                  <small>
-                    {item.id} · Revision {item.revision}
-                    <br />
-                    {item.source}
-                  </small>
-                  <pre>{JSON.stringify(item.data, null, 2)}</pre>
-                </details>
-              </article>
-            ))}
-        </div>
-      </section>
-      <section className="card spaced">
+      </details>
+      <details className="card spaced">
+        <summary><b>Advanced</b> — agents using this profile, original sources, full registry</summary>
         <h2>Agents working for you</h2>
         <div className="agent-grid">
           {data.agents.map((a) => (
@@ -297,8 +316,6 @@ export default function Profile({
             </p>
           ))}
         </details>
-      </section>
-      <section className="card spaced">
         <h2>Original evidence & source documents</h2>
         <p>
           These preserved sources explain where your profile came from. Agents
@@ -319,7 +336,7 @@ export default function Profile({
           <summary>Complete evidence registry</summary>
           <pre>{JSON.stringify(data.registry, null, 2)}</pre>
         </details>
-      </section>
+      </details>
       {edit && (
         <Modal
           title={edit.id ? "Edit profile entry" : "Add profile entry"}

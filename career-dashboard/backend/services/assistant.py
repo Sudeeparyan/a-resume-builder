@@ -305,6 +305,22 @@ class Assistant:
         self.s.set_pref("assistant_pending", None)
         return self.get(id)
 
+    def auto_apply(self, enabled: bool | None = None) -> bool:
+        """Per-conversation: may confirmation-gated tools run without the yes/no pause?
+
+        Default is off. The flag lives with the conversation so an old thread
+        never inherits a blanket permission given in a new one.
+        """
+        with self.w.connect() as db:
+            cid = self.conversation_id(db)
+            flags = self.s.pref("assistant_auto_apply", {}) or {}
+            if enabled is None:
+                return bool(flags.get(cid))
+            flags[cid] = bool(enabled)
+            self.s.set_pref("assistant_auto_apply", flags, db)
+            self.w.record_event(db, "assistant_auto_apply_set", None, conversation_id=cid, enabled=bool(enabled))
+        return bool(enabled)
+
     def agents(self) -> list:
         """The agent registry with what the chat can reach: every tool names the agent it runs on."""
         from backend.services.workspace_v2 import AGENTS
@@ -331,6 +347,7 @@ class Assistant:
             "messages": messages,
             "pending": self.s.pref("assistant_pending"),
             "busy": any(m["state"] == "processing" for m in messages),
+            "auto_apply": self.auto_apply(),
             "ai_configured": any_provider_configured(self.w.root),
             "engine": engine(self.s),
             "agents": self.agents(),
@@ -864,6 +881,22 @@ class Assistant:
             entry["card"] = result["card"]
         return entry
 
+    @staticmethod
+    def _trace(transcript) -> list:
+        """The plan→calls→results record of an agent run, kept with the message
+        so the "what I did" view survives a reload."""
+        out = []
+        for e in transcript:
+            if e.get("role") != "tool":
+                continue
+            row = {"tool": e.get("tool"), "summary": (e.get("summary") or e.get("error") or "")[:200]}
+            if e.get("error"):
+                row["error"] = True
+            if e.get("auto_applied"):
+                row["auto_applied"] = True
+            out.append(row)
+        return out
+
     def _agent(self, id, text, transcript=None):
         from backend.ai import any_provider_configured, team_for
         from backend.ai.agents.graph import AgentError
@@ -887,19 +920,19 @@ class Assistant:
             except (AgentError, ValueError) as error:
                 self._finish_step(id, "failed", str(error)[:300])
                 return "failed", ("I could not reach the AI runtime, so nothing more was changed. " + str(error).rstrip(".")
-                                  + ". The exact commands (say *help*) still work without it."), {**data, "intent": "agent_failed"}
+                                  + ". The exact commands (say *help*) still work without it."), {**data, "intent": "agent_failed", "trace": self._trace(transcript)}
             # A decision that arrives after she pressed Stop is dropped: no tool runs, no reply shows.
             self._check_stop(id)
             thought = " ".join(turn.thought.split())[:200]
             suggestions = [s.strip() for s in turn.suggestions if isinstance(s, str) and 0 < len(s.strip()) <= 80][:4]
             if turn.action == "reply":
                 self._finish_step(id, "done", thought)
-                return "done", turn.reply.strip() or "Done.", {**data, "suggestions": suggestions}
+                return "done", turn.reply.strip() or "Done.", {**data, "trace": self._trace(transcript), "suggestions": suggestions}
             if turn.action == "ask":
                 self._finish_step(id, "done", thought)
                 question = turn.reply.strip() or "What would you like me to do?"
                 self.s.set_pref("assistant_pending", {"kind": "agent", "transcript": transcript + [{"role": "assistant", "asked": question}], "asked_at": self.s.now()})
-                return "needs_input", question, {**data, "intent": "agent_question", "suggestions": suggestions}
+                return "needs_input", question, {**data, "intent": "agent_question", "trace": self._trace(transcript), "suggestions": suggestions}
             try:
                 tool = self.tools.get(turn.tool)
                 arguments = self.tools.coerce(tool, json.loads(turn.arguments or "{}"))
@@ -907,17 +940,26 @@ class Assistant:
                 self._finish_step(id, "failed", str(error)[:200])
                 transcript.append({"role": "tool", "tool": turn.tool, "error": str(error)[:400]})
                 continue
-            if tool.confirm:
+            if tool.confirm and not self.auto_apply():
+                diff = self.tools.diff(tool.name, arguments)
                 self._finish_step(id, "done", thought)
                 self.s.set_pref("assistant_pending", {"kind": "confirm_tool", "tool": tool.name, "arguments": arguments,
-                                                      "transcript": transcript, "asked_at": self.s.now()})
+                                                      "diff": diff, "transcript": transcript, "asked_at": self.s.now()})
                 lead = turn.reply.strip()
                 question = (lead + "\n\n" if lead else "") + f"Ready to: {self.tools.describe(tool.name, arguments)}. Reply *yes* to go ahead or *no* to skip it."
-                return "needs_input", question, {**data, "intent": "confirm_tool", "tool": tool.name, "arguments": arguments, "suggestions": ["yes", "no"]}
+                return "needs_input", question, {**data, "intent": "confirm_tool", "tool": tool.name, "arguments": arguments,
+                                                 "diff": diff, "trace": self._trace(transcript), "suggestions": ["yes", "no"]}
             self._relabel_step(id, tool.label, thought, agent=tool.agent)
             entry = self._run_tool(id, tool, arguments)
+            if tool.confirm:
+                # Auto-apply is on for this conversation: the gated tool ran without
+                # the pause. The trace and the event log still record exactly what ran.
+                entry["auto_applied"] = True
+                entry["diff"] = self.tools.diff(tool.name, arguments)
+                with self.w.connect() as db:
+                    self.w.record_event(db, "assistant_auto_applied", None, tool=tool.name, arguments=arguments)
             transcript.append(entry)
             if entry.get("card"):
                 data.update(entry["card"])
         return "failed", (f"I stopped after {MAX_TURNS} steps without finishing. What was done is listed above; "
-                          "tell me how to continue, or split the request."), {**data, "intent": "agent_exhausted"}
+                          "tell me how to continue, or split the request."), {**data, "intent": "agent_exhausted", "trace": self._trace(transcript)}

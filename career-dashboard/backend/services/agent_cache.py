@@ -32,10 +32,19 @@ class AgentCache:
 
     def stats(self):
         with self.w.connect() as db:
-            used = db.execute('SELECT COUNT(*) FROM ai_calls WHERE day=?', (self.s.today(),)).fetchone()[0]
+            used = db.execute("SELECT COUNT(*) FROM ai_calls WHERE day=? AND cache_key != 'usage'", (self.s.today(),)).fetchone()[0]
             cache = db.execute('SELECT COUNT(*), COALESCE(SUM(hits),0) FROM ai_cache').fetchone()
+            by_provider = [
+                {'provider': row[0], 'calls': row[1], 'input_tokens': row[2], 'output_tokens': row[3]}
+                for row in db.execute(
+                    """SELECT provider, COUNT(*), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0)
+                    FROM ai_calls WHERE day=? GROUP BY provider ORDER BY provider""",
+                    (self.s.today(),),
+                )
+            ]
         return {**self.settings(), 'calls_today': used, 'cached_results': cache[0], 'cache_hits': cache[1],
                 'remaining_calls': max(0, self.settings()['daily_call_limit'] - used),
+                'by_provider': by_provider,
                 'note': 'Counts local AI invocations, including failures; actual credits and tokens vary.'}
 
     def execute(self, invoke, prompt, schema, *, cacheable=True, **options):
@@ -50,7 +59,7 @@ class AgentCache:
                     if not old['web'] or age < 7 * 86400:
                         db.execute('UPDATE ai_cache SET hits=hits+1 WHERE key=?', (key,))
                         return json.loads(old['result'])
-                used = db.execute('SELECT COUNT(*) FROM ai_calls WHERE day=?', (self.s.today(),)).fetchone()[0]
+                used = db.execute("SELECT COUNT(*) FROM ai_calls WHERE day=? AND cache_key != 'usage'", (self.s.today(),)).fetchone()[0]
                 policy = db.execute("SELECT value FROM preferences WHERE key='ai_policy'").fetchone()
                 limit = json.loads(policy[0])['daily_call_limit'] if policy else 6
                 if used >= limit:

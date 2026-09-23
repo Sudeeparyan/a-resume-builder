@@ -6,8 +6,8 @@ cheapest and most reliable discovery mode: it reads data/config/portals.yml,
 pulls each company's board, and hands the postings to the same relevance,
 sponsorship and never-re-apply gates as the AI search.
 
-Standard library only (urllib + json). Network failures skip a board; they never
-stop the pass.
+Standard library only (urllib + json). A board that cannot be read is reported as
+FETCH FAILED in the coverage notes; it never stops the pass and never looks empty.
 """
 from __future__ import annotations
 
@@ -86,14 +86,19 @@ def board_token(row: dict[str, Any]) -> tuple[str | None, str | None]:
 
 
 def _get_json(url: str):
+    """(data, error): a board that cannot be read reports why instead of looking empty."""
     request = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
     try:
         with urlopen(request, timeout=TIMEOUT) as response:
             if response.status != 200:
-                return None
-            return json.loads(response.read().decode("utf-8", errors="replace"))
-    except (HTTPError, URLError, TimeoutError, ValueError, OSError):
-        return None
+                return None, f"HTTP {response.status}"
+            return json.loads(response.read().decode("utf-8", errors="replace")), None
+    except HTTPError as exc:
+        return None, f"HTTP {exc.code}"
+    except (URLError, TimeoutError, OSError) as exc:
+        return None, f"unreachable ({type(exc).__name__})"
+    except ValueError:
+        return None, "the board returned invalid JSON"
 
 
 def _posting(row, source_id, title, url, location, description, employer_type="company"):
@@ -120,18 +125,20 @@ def _posting(row, source_id, title, url, location, description, employer_type="c
     }
 
 
-def fetch_board(row: dict[str, Any]) -> list[dict[str, Any]]:
+def fetch_board(row: dict[str, Any]) -> tuple[list[dict[str, Any]], str | None]:
+    """(postings, error). ``error`` is None on success, even an empty board."""
     ats, token = board_token(row)
     if not ats or not token:
-        return []
+        return [], None
     out: list[dict[str, Any]] = []
+    error: str | None = None
     if ats == "greenhouse":
-        data = _get_json(f"https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true") or {}
-        for job in data.get("jobs", []) or []:
+        data, error = _get_json(f"https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true")
+        for job in (data or {}).get("jobs", []) or []:
             out.append(_posting(row, job.get("id"), job.get("title"), job.get("absolute_url"),
                                 ((job.get("location") or {}).get("name") or ""), html_to_text(job.get("content") or "")))
     elif ats == "lever":
-        data = _get_json(f"https://api.lever.co/v0/postings/{token}?mode=json") or []
+        data, error = _get_json(f"https://api.lever.co/v0/postings/{token}?mode=json")
         for job in data or []:
             cats = job.get("categories") or {}
             body = job.get("descriptionPlain") or html_to_text(job.get("description") or "")
@@ -140,11 +147,11 @@ def fetch_board(row: dict[str, Any]) -> list[dict[str, Any]]:
             out.append(_posting(row, job.get("id"), job.get("text"), job.get("hostedUrl") or job.get("applyUrl"),
                                 cats.get("location") or "", body))
     elif ats == "ashby":
-        data = _get_json(f"https://api.ashbyhq.com/posting-api/job-board/{token}?includeCompensation=true") or {}
-        for job in data.get("jobs", []) or []:
+        data, error = _get_json(f"https://api.ashbyhq.com/posting-api/job-board/{token}?includeCompensation=true")
+        for job in (data or {}).get("jobs", []) or []:
             out.append(_posting(row, job.get("id") or job.get("jobId"), job.get("title"), job.get("jobUrl") or job.get("applyUrl"),
                                 job.get("location") or "", job.get("descriptionPlain") or html_to_text(job.get("descriptionHtml") or "")))
-    return out
+    return out, error
 
 
 def fetch_all(limit_per_board: int | None = None) -> tuple[list[dict[str, Any]], list[str]]:
@@ -156,7 +163,10 @@ def fetch_all(limit_per_board: int | None = None) -> tuple[list[dict[str, Any]],
         if not ats or not token:
             coverage.append(f"{row.get('name')}: no public ATS feed configured (careers page only)")
             continue
-        found = fetch_board(row)
+        found, error = fetch_board(row)
         postings.extend(found[:limit_per_board] if limit_per_board else found)
-        coverage.append(f"{row.get('name')}: {len(found)} open postings via {ats}")
+        if error:
+            coverage.append(f"{row.get('name')}: FETCH FAILED ({error}) via {ats}")
+        else:
+            coverage.append(f"{row.get('name')}: {len(found)} open postings via {ats}")
     return postings, coverage

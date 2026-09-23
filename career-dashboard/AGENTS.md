@@ -25,7 +25,7 @@ She is on **active F-1 OPT** and **is authorized to work in the US now**. The ga
 | **Says nothing** about sponsorship | **SHOWN.** Most postings; where most offers come from. |
 | Explicitly **will sponsor** | **SHOWN, ranked top.** |
 
-**Do not over-filter.** "Must be authorized to work in the United States" does not disqualify her. "No security clearance required" does not disqualify her. Only an explicit refusal or a citizenship/clearance requirement excludes.
+**Do not over-filter.** "Must be authorized to work in the United States" does not disqualify her. "No security clearance required" does not disqualify her. A sentence that *reports the absence* of restriction wording (for example a research note saying the posting carries no sponsorship, citizenship or ITAR/EAR language) is not a restriction — those absence claims are listed in `negation_guards`. Only an explicit refusal or a citizenship/clearance requirement excludes.
 
 **Sponsorship history never excludes anyone.** H-1B records, E-Verify and cap-exempt status are ranking signals only. Tiers: **S** cap-exempt employer (universities, academic medical centers, national labs, nonprofit research institutes; no lottery) · **A** posting says it sponsors · **B** proven H-1B sponsor, silent posting · **C** silent, no record (the normal case, still worth applying).
 
@@ -44,6 +44,7 @@ This overrides the previous edition's "never age an application automatically"; 
 ## Evidence and scope
 
 - **Never fabricate.** If it is not in `data/context/`, it does not go on a resume. A missing requirement is reported as a gap, never filled with a guess.
+- **The one carve-out: predicted Projects and Skills.** Per job, the Resume Studio tailor (`job_tailor`) may propose company-aligned projects and skills derived from the posting and employer research. They live only in the Projects and Technical Skills sections, are stored in `resume_items` with origin `predicted` (verified items are copied from the registry unchanged), and sit in the Assurance tab as pending until Annie keeps or removes them — before she applies. Employers, dates, degrees and personal details are never touched; predicted items never use the never-claim list, dates, percentages or banned filler; and nothing on the resume is marked "predicted" — the label exists only in the database and the review UI.
 - **Never state a total years of experience.** `EXP-TOTAL-YEARS` is missing by design.
 - **Never claim a publication.** Annie says she has one or more, but `PUB-001` stays on hold until she gives the title, venue, year and author position (Q3).
 - The ~94% test-automation figure belongs to **Dräger** (Q4, answered 2026-09-18) and is worded "approximately 94%". It may appear only in the Dräger bullet; the validator rejects it anywhere else.
@@ -59,7 +60,7 @@ This overrides the previous edition's "never age an application automatically"; 
 **Fight 1: get shortlisted.** Won by the resume, using only facts already in `data/context/`.
 **Fight 2: win the interview**, three to six weeks later. Won by preparation: `study-plan.md` in each application folder, written by the study-plan agent from the honest gaps.
 
-**The wall is absolute.** A skill in a study plan is a skill she does not have yet. It never appears on a resume, not as "familiar with", not as "exposure to", in no hedged form, until it is learned **and** written into `data/context/`. Say this each time you hand over a study plan.
+**The wall is absolute.** A skill in a study plan is a skill she does not have yet. It never appears on a resume, not as "familiar with", not as "exposure to", in no hedged form, until it is learned **and** written into `data/context/` — with one exception: per-company tailoring may propose it as a predicted Skills/Projects item under the 60/40 carve-out, which Annie reviews in Assurance before applying. The never-claim list (`SKILL-NEVER-001`) stays hard even for predicted items. Say this each time you hand over a study plan.
 
 ## Resume contract
 
@@ -67,8 +68,8 @@ The contract is read from `data/config/profile.yml resume_contract` by `backend/
 
 - **Exactly one US Letter page**, body text 10–11pt, fixed margins. **Never fix length by shrinking margins or fonts; cut content**, in the documented order: third bullet of the supporting project → last bullet of the oldest role → coursework line → second degree. Resume Studio's **Fit to one page** does this and never goes below 10pt.
 - Sections: Education, Technical Skills, Professional Experience, Projects. Tracks A and C put Experience first; B and D put Projects first.
-- **One signature project per company**, first in Projects, chosen for that employer alone and never reused as another company's signature (`signature_assignments`, projected to `data/signature-projects.md`). One supporting project may repeat freely. Projects registered `signature_eligible: false` (Pacman coursework) can only support. If nothing unused fits, ship the strongest real project and write a **build-now spec** into that company's `study-plan.md`. An unbuilt project never goes on a resume, in any tense.
-- Every content line carries a `% EVIDENCE:` tag naming registry IDs; company research never creates candidate experience.
+- **One signature project per company**, first in Projects, chosen for that employer alone and never reused as another company's signature (`signature_assignments`, projected to `data/signature-projects.md`). One supporting project may repeat freely. Projects registered `signature_eligible: false` (Pacman coursework) can only support. If nothing unused fits, ship the strongest real project and write a **build-now spec** into that company's `study-plan.md`. An unbuilt project goes on a resume only as a predicted, review-gated item under the 60/40 carve-out above — never as experience, never with dates or metrics.
+- Every content line carries a `% EVIDENCE:` tag naming registry IDs; company research never creates candidate experience. Predicted items tag their lines `% EVIDENCE: resume_items:<row id>`; an unresolved tag in Projects or Technical Skills is a validator **warning** (review queue), while Experience, Education and header tags stay hard failures. The Assurance tab (`GET /api/v2/assurance/<job_id>`, or `--report` on the validator) merges that claim scan with the keep/remove decisions.
 - **Banned filler:** passionate about, results-oriented, proven track record, leveraged, spearheaded, synergies, robust, seamless, cutting-edge, dynamic professional, plus everything in `data/context/08-voice.md` ("Responsible for", "Worked on", "Helped with").
 
 Each application folder is `data/output/applications/Annie_Manoharan_<Company>_<NN>/` (company with spaces and punctuation removed; NN counts per company) and holds:
@@ -98,7 +99,7 @@ Job fit, supported requirement coverage and artifact QA are different things; ne
 
 ## Layout and state
 
-The repo mirrors the reference layout: `career-dashboard/` (this app), `../daily-job-search/` (Tectonic runtime wrapper, `search.py`, dated run projections, `history.csv`), `../backup/` (the pre-port snapshot and any fresh-start snapshots).
+The repo mirrors the reference layout: `career-dashboard/` (this app), `../daily-job-search/` (Tectonic runtime wrapper, `search.py`, dated run projections, `history.csv`, and `morning_run.py` — the 07:00 scheduled daily run that discovers up to 5 jobs, tailors each resume and compiles the PDFs), `../backup/` (the pre-port snapshot and any fresh-start snapshots).
 
 Inside `career-dashboard/`: `frontend/` is the React UI; `backend/` holds all Python with its own `.venv` and `run.py` (`dashboard/` API, `services/` application services including `sponsorship.py` and `reapply.py`, `scripts/` executables, `workflows/` agent playbooks, `ai/` LangChain specialists); `data/` holds everything that is Annie's or generated (`career.db` is the single mutable authority; `context/`, `config/`, `templates/`, `sponsors/`, `output/`). `backend/paths.py` is the directory map and the single timezone (America/Chicago).
 

@@ -1,12 +1,3 @@
-export const fieldNames = [
-  "ResumeSummary",
-  "CoreSkills",
-  "SelectedProjectTitle",
-  "SelectedProjectContext",
-  "SelectedProjectBulletOne",
-  "SelectedProjectBulletTwo",
-  "SelectedProjectBulletThree",
-];
 export function macroSpan(source: string, name: string) {
   const prefix = new RegExp("\\\\newcommand\\{\\\\" + name + "\\}\\s*\\{").exec(
     source,

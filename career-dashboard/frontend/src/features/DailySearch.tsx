@@ -97,7 +97,7 @@ export default function DailySearch({
                 }).catch((err) => notify((err as Error).message, true));
               }}
             >
-              <option value="default">Default discovery · AI web search, US only</option>
+              <option value="default">Default discovery · exactly 5 jobs, ranked by fit · AI web search, US only</option>
               <option value="balanced_five">Balanced five · 2 startup, 1 mid, 2 large (mid/large need tier S, A or B)</option>
               <option value="portals">Tracked career pages · Greenhouse/Lever/Ashby feeds, no AI</option>
             </select>

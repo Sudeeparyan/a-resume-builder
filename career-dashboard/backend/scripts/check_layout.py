@@ -25,7 +25,7 @@ def main():
         if list(db.execute("PRAGMA foreign_key_check")):
             failures.append("Broken database relationships")
     packs = w.root / "data/historical-packs.json"
-    historical = json.loads(packs.read_text()) if packs.exists() else []
+    historical = json.loads(packs.read_text(encoding="utf-8")) if packs.exists() else []
     for item in historical:
         source = ROOT / item["folder"] / "resume.tex"
         if (
@@ -38,14 +38,14 @@ def main():
             failures.append("Missing draft: " + job["id"])
     for run in w.search_runs():
         target = ROOT / "daily-job-search" / run["date"] / "run.json"
-        if not target.exists() or json.loads(target.read_text()) != run:
+        if not target.exists() or json.loads(target.read_text(encoding="utf-8")) != run:
             failures.append("Stale search projection: " + run["date"])
     for name, expected in [
         ("jobs.json", w.jobs()),
         ("activity.json", w.activity(limit=-1)),
     ]:
         target = w.root / "data" / name
-        if not target.exists() or json.loads(target.read_text()) != expected:
+        if not target.exists() or json.loads(target.read_text(encoding="utf-8")) != expected:
             failures.append("Stale tracking projection: " + name)
     print(
         json.dumps(

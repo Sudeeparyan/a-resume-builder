@@ -132,6 +132,36 @@ AGENTS = [
 ]
 
 
+# The agents Annie can switch on and off from the Agents page. Ids are the run kinds
+# in services/agents.RUN_KINDS; helpers not listed here (sponsorship gate, posting
+# checks, never-re-apply) are deterministic, free and always on.
+AGENT_SWITCHES = [
+    {"id": "discovery", "label": "Job search", "uses_ai": True,
+     "description": "Finds new US postings that pass the sponsorship and never-re-apply gates. The 7am daily search uses this too."},
+    {"id": "research", "label": "Company & hiring research", "uses_ai": True,
+     "description": "Researches the employer, what the hiring manager will look for, and how your profile fits."},
+    {"id": "resume_advisor", "label": "Resume advice", "uses_ai": True,
+     "description": "Suggests which points, projects and skills to lead with for one job."},
+    {"id": "study_plan", "label": "Study plan", "uses_ai": True,
+     "description": "Writes the interview preparation notes for one company. Never touches the resume."},
+    {"id": "resume_match", "label": "Independent resume review", "uses_ai": True,
+     "description": "Reads only the finished PDF and the posting, then reports matches and gaps."},
+    {"id": "instruction_interpret", "label": "Resume chat", "uses_ai": True,
+     "description": "Turns your resume chat messages into edits on the draft."},
+    {"id": "email", "label": "Gmail sync", "uses_ai": True,
+     "description": "Reads Gmail for application confirmations and replies. Also runs on the mail schedule."},
+    {"id": "resume_build", "label": "Resume build & ATS check", "uses_ai": False,
+     "description": "Compiles the current draft into the one-page PDF and scores it."},
+]
+
+
+def agent_switch_label(kind):
+    for switch in AGENT_SWITCHES:
+        if switch["id"] == kind:
+            return switch["label"]
+    return str(kind).replace("_", " ")
+
+
 class CareerServices:
     def __init__(self, workspace):
         self.w = workspace
@@ -252,6 +282,74 @@ class CareerServices:
                 "INSERT INTO preferences VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                 (key, json.dumps(value)),
             )
+
+    def agent_enabled(self, kind):
+        """An agent runs only when its switch on the Agents page is on (the default)."""
+        switches = self.pref("agent_enabled", {}) or {}
+        return switches.get(kind, True) is not False
+
+    def set_agent_enabled(self, kind, enabled):
+        from backend.services.agents import RUN_KINDS
+
+        if kind not in RUN_KINDS:
+            raise ValueError("Unknown agent")
+        switches = self.pref("agent_enabled", {}) or {}
+        switches[kind] = bool(enabled)
+        self.set_pref("agent_enabled", switches)
+        with self.w.connect() as db:
+            self.w.record_event(db, "agent_switch_updated", kind=kind, enabled=bool(enabled))
+        self.export_state()
+        return self.agent_switch_settings()
+
+    def agent_switch_settings(self):
+        """The Agents page switches: on/off state plus what a run usually costs.
+
+        Token counts come from ai_calls where the runtime reported them; local
+        runtimes often record none, so est_tokens stays None and the page says so.
+        """
+        from backend.services.agents import RUN_ACTIONS
+
+        with self.w.connect() as db:
+            usage = {
+                row["kind"]: dict(row)
+                for row in db.execute(
+                    """SELECT r.kind AS kind, COUNT(DISTINCT r.id) AS runs,
+                       SUM(CASE WHEN json_extract(e.detail,'$.fresh') THEN 1 ELSE 0 END) AS fresh
+                       FROM agent_runs r
+                       LEFT JOIN agent_run_events e ON e.run_id=r.id AND e.kind='ai_call'
+                       WHERE r.state='completed' GROUP BY r.kind"""
+                )
+            }
+            try:
+                tokens = {
+                    row[0]: row[1]
+                    for row in db.execute(
+                        """SELECT action, AVG(input_tokens + output_tokens) FROM ai_calls
+                        WHERE state='completed' AND input_tokens IS NOT NULL AND output_tokens IS NOT NULL
+                        GROUP BY action"""
+                    )
+                }
+            except Exception:  # noqa: BLE001 - an older database may lack the token columns
+                tokens = {}
+        settings = []
+        for switch in AGENT_SWITCHES:
+            kind = switch["id"]
+            stats = usage.get(kind) or {}
+            runs = stats.get("runs") or 0
+            fresh = stats.get("fresh") or 0
+            avg_calls = round(fresh / runs, 1) if runs else None
+            per_call = tokens.get(RUN_ACTIONS.get(kind))
+            est_tokens = round(per_call * avg_calls) if per_call and avg_calls else None
+            settings.append(
+                {
+                    **switch,
+                    "enabled": self.agent_enabled(kind),
+                    "runs": runs,
+                    "avg_ai_calls": avg_calls if switch["uses_ai"] else 0,
+                    "est_tokens": est_tokens,
+                }
+            )
+        return settings
 
     def seed_profile(self, db):
         profile = self.w.profile()

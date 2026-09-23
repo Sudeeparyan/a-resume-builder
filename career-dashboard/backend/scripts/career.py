@@ -9,6 +9,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
@@ -55,7 +56,17 @@ def atomic_write(path, text):
     ) as f:
         f.write(text)
         tmp = Path(f.name)
-    tmp.replace(path)
+    # Windows: a scanner or another open handle makes the first replace fail
+    # with WinError 5; it almost always clears within a second.
+    for attempt in range(6):
+        try:
+            tmp.replace(path)
+            return
+        except PermissionError:
+            if attempt == 5:
+                tmp.unlink(missing_ok=True)
+                raise
+            time.sleep(0.3 * (attempt + 1))
 
 
 def safe_child(root, value):

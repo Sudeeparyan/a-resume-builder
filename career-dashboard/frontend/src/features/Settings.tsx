@@ -43,7 +43,7 @@ type SettingsData = {
   routes: RouteRow[];
   providers: Provider[];
   tiers: Record<string, string>;
-  preferences: { tiers: Record<string, Choice> };
+  preferences: { tiers: Record<string, Choice>; fallback?: Choice | null };
 };
 type Budget = { daily_call_limit: number; calls_today: number; remaining_calls: number };
 
@@ -61,6 +61,7 @@ const TIER_LABEL: Record<string, string> = {
 const BLURB: Record<string, string> = {
   claude_code: "Your Claude plan's usage limits",
   codex: "Your ChatGPT plan · only one with Gmail",
+  kimi_cli: "Your Kimi membership's usage limits",
   openai: "GPT models · has web search",
   anthropic: "Claude models, billed per call",
   openrouter: "Hundreds of models, one key",
@@ -68,7 +69,7 @@ const BLURB: Record<string, string> = {
   kimi: "Moonshot's Kimi models",
 };
 // Order on the page: the no-key options first.
-const ORDER = ["claude_code", "codex", "openai", "anthropic", "openrouter", "gemini", "kimi"];
+const ORDER = ["claude_code", "codex", "kimi_cli", "openai", "anthropic", "openrouter", "gemini", "kimi"];
 
 export default function Settings({
   notify,
@@ -82,6 +83,7 @@ export default function Settings({
   const [keys, setKeys] = useState<Record<string, string>>({});
   const [keyResult, setKeyResult] = useState<Record<string, { ok: boolean; detail: string }>>({});
   const [tiers, setTiers] = useState<Record<string, Choice>>({});
+  const [fallback, setFallback] = useState<Choice | null>(null);
   const [budget, setBudget] = useState<Budget>();
   const [limit, setLimit] = useState<number>();
   const [error, setError] = useState("");
@@ -95,6 +97,7 @@ export default function Settings({
       setData(next);
       setMain(next.main);
       setTiers(next.preferences.tiers);
+      setFallback(next.preferences.fallback || null);
       setBudget(control.budget);
       setLimit(control.budget.daily_call_limit);
       setError("");
@@ -343,7 +346,7 @@ export default function Settings({
               {r.provider ? (
                 <b>
                   {PROVIDER_LABEL[r.provider] || r.provider}
-                  {r.model && r.model !== "codex-runtime" ? ` · ${r.model}` : ""}
+                  {r.model && !["codex-runtime", "kimi-runtime"].includes(r.model) ? ` · ${r.model}` : ""}
                 </b>
               ) : (
                 <Badge tone="red">Not available</Badge>
@@ -478,6 +481,83 @@ export default function Settings({
           </form>
         </section>
       )}
+
+      <section className="card spaced">
+        <div className="section-title">
+          <h2>Backup provider</h2>
+          {fallback ? (
+            <Badge tone="green">
+              {PROVIDER_LABEL[fallback.provider] || fallback.provider} · {fallback.model}
+            </Badge>
+          ) : (
+            <Badge>None</Badge>
+          )}
+        </div>
+        <p className="muted">
+          If the main provider fails a call (out of credits, rate limited,
+          unreachable), the call is retried once on this backup and the switch
+          is shown in the activity log.
+        </p>
+        <div className="tier-row">
+          <select
+            aria-label="Backup provider"
+            value={fallback?.provider || ""}
+            onChange={(e) => {
+              const p = byId(e.target.value);
+              setFallback(
+                p
+                  ? { provider: p.id, model: p.defaults?.strong || p.models?.[0] || "" }
+                  : null,
+              );
+            }}
+          >
+            <option value="">No backup</option>
+            {providers
+              .filter((p) => p.configured)
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+          </select>
+          {fallback && (
+            <select
+              aria-label="Backup model"
+              value={fallback.model}
+              onChange={(e) => setFallback({ ...fallback, model: e.target.value })}
+            >
+              {!((byId(fallback.provider)?.models) || []).includes(fallback.model) && (
+                <option value={fallback.model}>{fallback.model}</option>
+              )}
+              {(byId(fallback.provider)?.models || []).map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          )}
+          <button
+            className="secondary"
+            disabled={busy === "fallback"}
+            onClick={() =>
+              act("fallback", async () => {
+                const next = await api<SettingsData>("/v2/ai/fallback", "PUT", {
+                  provider: fallback?.provider || "",
+                  model: fallback?.model || "",
+                });
+                setData(next);
+                notify(
+                  fallback
+                    ? `Backup set: if a call fails it retries on ${PROVIDER_LABEL[fallback.provider] || fallback.provider}.`
+                    : "Backup cleared. A failed call now just reports the error.",
+                );
+              })
+            }
+          >
+            {busy === "fallback" ? "Saving…" : "Save backup"}
+          </button>
+        </div>
+      </section>
 
       <details className="card spaced advanced">
         <summary>

@@ -1,0 +1,146 @@
+{
+  "created_at": "2026-09-19T23:12:00+00:00",
+  "database_copy": "data\\migrations\\pre-v1-career.db",
+  "artifacts": [
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_01\\company-research.md",
+      "size": 215,
+      "sha256": "2209a258a13ae76ec0d1109d4b3722ceca16961295829aa24f11a02d0aa230d2"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_01\\evaluation.md",
+      "size": 438,
+      "sha256": "16d96ff7ed22ea3ede12f72845611d54dc6415f4ea4afb7f88264563df771923"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_01\\evidence-map.yml",
+      "size": 1261,
+      "sha256": "999ca9b55cc28cff03c0d502b9ed3808bafd8a9afbf9388e281fe1151c38063b"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_01\\job-description.md",
+      "size": 4533,
+      "sha256": "037162f0551a01b6d9fed2344381ac861881897f93cc73580c00192b4cd668f7"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_01\\resume.tex",
+      "size": 9440,
+      "sha256": "f0f3b79223e38c2f9d62f91047af41c2c831074ecc1151d1ecdffb8b456f458e"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_01\\studio\\preview-2\\evidence-map.yml",
+      "size": 1319,
+      "sha256": "7780428f6d34105e29aa4b579aa242eaf3d0ac060b8be70ae09ce27d244f9c5e"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_01\\studio\\preview-2\\job-description.md",
+      "size": 4533,
+      "sha256": "037162f0551a01b6d9fed2344381ac861881897f93cc73580c00192b4cd668f7"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_01\\studio\\preview-2\\layout-review.json",
+      "size": 1471,
+      "sha256": "8fedd0c8fc53529c39b6e4c2b7004944069880bfee892f92ed3eabd2364c92d5"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_01\\studio\\preview-2\\page-01.png",
+      "size": 525896,
+      "sha256": "3faf3c6ec5dc6f6043b3e37384b0b0363d11b88df7d326cb68f14055d1baa318"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_01\\studio\\preview-2\\resume.pdf",
+      "size": 29081,
+      "sha256": "87cbc5d8ed2ec9df1698bacdfb2fb3682fc32fdb7d29aaee654d373005ef1c3f"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_01\\studio\\preview-2\\resume.tex",
+      "size": 9608,
+      "sha256": "dbffd408c2d84c0165e4dd2c3b68330c1f49caedbc1a1d496a3ee83bd41886be"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_01\\studio\\preview.json",
+      "size": 554,
+      "sha256": "b2c3849c1e9267f8c2206a857a2f173217630140fba40b828f18762844bb6eff"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_01\\studio\\resume.tex",
+      "size": 9608,
+      "sha256": "dbffd408c2d84c0165e4dd2c3b68330c1f49caedbc1a1d496a3ee83bd41886be"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_01\\study-plan.md",
+      "size": 5366,
+      "sha256": "11e5267281259255506806cba73f66499341ca9fff1cd3f7f36c7b51860150ca"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_02\\company-research.md",
+      "size": 215,
+      "sha256": "2209a258a13ae76ec0d1109d4b3722ceca16961295829aa24f11a02d0aa230d2"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_02\\evaluation.md",
+      "size": 438,
+      "sha256": "16d96ff7ed22ea3ede12f72845611d54dc6415f4ea4afb7f88264563df771923"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_02\\evidence-map.yml",
+      "size": 1261,
+      "sha256": "245686c1d9c69563730cda21ef9d96c62a1ea25acde8bd4a7c6b5c343ae56c01"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_02\\job-description.md",
+      "size": 3748,
+      "sha256": "400e9d489b567ae4afd7687aa7a2f165923c20ba6515d628dc85067c57fdd1d2"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_02\\resume.tex",
+      "size": 9440,
+      "sha256": "f0f3b79223e38c2f9d62f91047af41c2c831074ecc1151d1ecdffb8b456f458e"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_02\\studio\\preview-2\\evidence-map.yml",
+      "size": 1319,
+      "sha256": "7516857186734d7208c88c397a9283344a83ad7b58ed713a8ef4488976b6bf71"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_02\\studio\\preview-2\\job-description.md",
+      "size": 3748,
+      "sha256": "400e9d489b567ae4afd7687aa7a2f165923c20ba6515d628dc85067c57fdd1d2"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_02\\studio\\preview-2\\layout-review.json",
+      "size": 1341,
+      "sha256": "8cfac4c7e93a895f4f9664e4075953257058baeb6ad5cffe0100a8476906ec8c"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_02\\studio\\preview-2\\page-01.png",
+      "size": 525466,
+      "sha256": "a139e6f78e0caba4d710c64b24a92e35eec054be1b7536fd5895e6d93d50cbc4"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_02\\studio\\preview-2\\resume.pdf",
+      "size": 29076,
+      "sha256": "2a547b44470ba787d77c44c023b98f19738653dc5790297dabaa8a709e644ccb"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_02\\studio\\preview-2\\resume.tex",
+      "size": 9608,
+      "sha256": "cc275df64c52925e73ce893c948685d2347b13ef68d772a5158d50519e70611e"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_02\\studio\\preview.json",
+      "size": 554,
+      "sha256": "fb2de364c97a2ece4d4044638686506cb89d41eb32cb81c4f7d9768dd0221fd5"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_02\\studio\\resume.tex",
+      "size": 9608,
+      "sha256": "cc275df64c52925e73ce893c948685d2347b13ef68d772a5158d50519e70611e"
+    },
+    {
+      "path": "data\\output\\applications\\Annie_Manoharan_Snowflake_02\\study-plan.md",
+      "size": 4384,
+      "sha256": "408ac3307f3b43f9323cb7e24c12ff81417901e824d0484cd9b7ca5dd7f3f44d"
+    }
+  ]
+}

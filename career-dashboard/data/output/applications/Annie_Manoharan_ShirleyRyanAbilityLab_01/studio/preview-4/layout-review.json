@@ -1,0 +1,42 @@
+{
+  "revision": 4,
+  "source_sha256": "11fe94386bbf8cd2558f0551c43b6c3970547337f7f924356b73c5f9bda99301",
+  "page_count": 1,
+  "created_at": "2026-09-22T07:18:53+00:00",
+  "path": "applications\\Annie_Manoharan_ShirleyRyanAbilityLab_01\\studio\\preview-4",
+  "review_required": true,
+  "layout": {
+    "full_pages": true,
+    "page_count": 1,
+    "target_pages": 1,
+    "paper": "letter",
+    "pages": [
+      {
+        "page": 1,
+        "fill_percent": 99.8,
+        "bottom_blank_mm": 0.7,
+        "largest_internal_gap_mm": 4.6,
+        "paper_ok": true,
+        "words": 507,
+        "within_margins": true
+      }
+    ],
+    "target_fill_percent": 80,
+    "normal_margins_mm": 12.7
+  },
+  "ranking": {
+    "track": "B",
+    "section_order": [
+      "Education",
+      "Technical Skills",
+      "Projects",
+      "Professional Experience"
+    ],
+    "changes": [
+      "Track B: section order Education > Technical Skills > Projects > Professional Experience."
+    ],
+    "method": "Deterministic JD relevance ordering of registered evidence; not an ATS score.",
+    "cuts": []
+  },
+  "body_font_pt": 10.0
+}

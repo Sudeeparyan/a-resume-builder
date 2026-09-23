@@ -43,17 +43,24 @@ asserts both halves.
 ## Providers
 
 OpenRouter reaches GPT, Claude, Gemini and Kimi with one key and is the
-default. Each provider can also be used directly with its own key. Two local
+default. Each provider can also be used directly with its own key. Three local
 runtimes need no key at all and run on a subscription's usage limits instead:
-Codex (the ChatGPT app's `codex exec`) and Claude Code (the `claude` CLI that
-ships with the Claude app and the Claude Code extension). Both take the prompt
-on stdin and return a schema-checked JSON object. `backend/ai/claude_code.py`
-finds the newest installed CLI, runs it one-shot in restricted mode with no
-session, settings, MCP servers or CLAUDE.md files, and allows only web search
-and fetch when the action needs the web. It has no Gmail access, so the email
-worker stays on Codex. Claude Code serves both the agent runs (discovery,
-research, advisor, match) and the nine specialists above, chosen per tier in
-Settings.
+Codex (the ChatGPT app's `codex exec`), Claude Code (the `claude` CLI that
+ships with the Claude app and the Claude Code extension) and Kimi Code (the
+`kimi` CLI from the Kimi Code app, `backend/ai/kimi_cli.py`). Codex and Claude
+Code take the prompt on stdin and return a schema-checked JSON object. Kimi
+Code takes the prompt as an argument (`kimi -p … --output-format stream-json`),
+reads no stdin, and answers in its default model; prompts over 20,000
+characters are written to `prompt.md` in its fresh working directory and the
+argument points at that file. Its stdout is captured to a file rather than a
+pipe, because on Windows the CLI can lose buffered pipe output on long runs;
+when a turn fails without output, the error is read back from the CLI's own
+session log. All three CLIs run one-shot in restricted mode with no session,
+settings, MCP servers or CLAUDE.md files, and allow only web search and fetch
+when the action needs the web. Neither Claude Code nor Kimi Code has Gmail
+access, so the email worker stays on Codex. Claude Code and Kimi Code serve
+both the agent runs (discovery, research, advisor, match) and the nine
+specialists above, chosen per tier in Settings.
 
 One choice on the Settings page drives every agent: it becomes the gateway
 default and, for providers the specialist team can run on, both tiers. Keys
@@ -62,7 +69,7 @@ checked with a free model-list call, and never returned to the browser. With a
 key, OpenRouter, Gemini and Kimi join the gateway through LangChain
 (`HostedProvider` in `providers.py`). Work the chosen provider cannot do is not
 failed but routed: `resolve()` sends web research to the first ready provider
-with web search (Claude Code, Codex, OpenAI) and Gmail to Codex, and Settings
+with web search (Claude Code, Codex, Kimi Code, OpenAI) and Gmail to Codex, and Settings
 lists where each kind of work will run. A provider named explicitly is still
 refused when it lacks the capability.
 

@@ -153,6 +153,41 @@ MIGRATIONS: tuple[tuple[int, str, str], ...] = (
         CREATE INDEX IF NOT EXISTS idx_reapply_history_company ON reapply_history(company)
         """,
     ),
+    (
+        7,
+        "visibility_and_tailoring",
+        """
+        CREATE TABLE IF NOT EXISTS rejected_leads(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT,
+            company TEXT NOT NULL,
+            title TEXT NOT NULL,
+            url TEXT NOT NULL DEFAULT '',
+            stage TEXT NOT NULL DEFAULT '',
+            reason TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_rejected_leads_time ON rejected_leads(created_at DESC);
+        CREATE TABLE IF NOT EXISTS resume_items(
+            id TEXT PRIMARY KEY,
+            job_id TEXT NOT NULL REFERENCES jobs(id),
+            section TEXT NOT NULL CHECK(section IN ('projects','skills')),
+            content TEXT NOT NULL,
+            origin TEXT NOT NULL CHECK(origin IN ('verified','predicted')),
+            evidence_id TEXT NOT NULL DEFAULT '',
+            decision TEXT NOT NULL DEFAULT 'pending' CHECK(decision IN ('pending','kept','removed')),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_resume_items_job ON resume_items(job_id);
+        ALTER TABLE jobs ADD COLUMN fit_score INTEGER;
+        ALTER TABLE jobs ADD COLUMN fit_rationale TEXT NOT NULL DEFAULT '';
+        ALTER TABLE jobs ADD COLUMN raw_jd TEXT NOT NULL DEFAULT '';
+        CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+        CREATE INDEX IF NOT EXISTS idx_agent_runs_state_time ON agent_runs(state, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_ai_calls_day ON ai_calls(day)
+        """,
+    ),
 )
 
 

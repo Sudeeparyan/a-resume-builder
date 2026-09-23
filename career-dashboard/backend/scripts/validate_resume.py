@@ -173,34 +173,73 @@ def normalize_latex_text(value: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def evidence_ids_from_source(
-    source: str,
-    evidence: dict[str, Any],
-    failures: list[str],
-) -> set[str]:
-    """Require an evidence tag immediately before each candidate-content construct."""
+# One scanner feeds both the release gate and the --report mode so they never disagree.
+CLAIM_LINE_PATTERN = re.compile(
+    r"""(?x)
+    ^(?:
+      \\newcommand\{\\(?:ResumeSummary|ResumeName|ResumeContact|CoreSkills|Skills[A-Za-z]+|Coursework|(?:SelectedProject|SecondProject)(?:ID|Title|Context|BulletOne|BulletTwo|BulletThree))\}
+      |\\roleheading\b
+      |\\clientheading\b
+      |\\item\b
+      |\{\\LARGE\\bfseries\b
+      |\\ResumeContact\b
+      |\\textbf\{[^{}]+:
+    )
+    """
+)
+
+# 60/40 tailoring tags proposed content with its resume_items row id.
+PREDICTED_TAG = re.compile(r"^resume_items:([0-9A-Za-z]+)$")
+
+# The review confidence scale is deliberately coarse: registry-grounded wording is
+# full faith, a predicted (per-job proposed) item is a maybe, anything unresolved is none.
+CLAIM_CONFIDENCE = {"verified": 100, "predicted": 60, "missing": 0}
+
+# Proposed Projects/Skills content is stored behind review, so an unresolvable
+# evidence tag in those two sections is a warning; everywhere else it stays a failure.
+REVIEW_SECTIONS = {"Projects", "Technical Skills"}
+
+
+def _logical_section(macro_name: str | None, current: str | None) -> str:
+    """The section a claim line belongs to. Preamble macro definitions report the
+    section they feed, so Projects/Skills fields share their section's review rules."""
+    if current:
+        return current
+    if not macro_name:
+        return "Header"
+    if macro_name.startswith(("SelectedProject", "SecondProject")):
+        return "Projects"
+    if macro_name == "CoreSkills" or macro_name.startswith("Skills"):
+        return "Technical Skills"
+    if macro_name == "Coursework":
+        return "Education"
+    return "Header"
+
+
+def scan_claims(source: str, evidence: dict[str, Any], predicted: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    """One record per candidate-claim line: its EVIDENCE tags and where they resolve.
+
+    `predicted` maps resume_items row ids to their origin. A ``resume_items:<id>``
+    tag matching a predicted row is reported 'predicted'; matching anything else or
+    nothing is 'missing'. Registry-held ids count as missing: known but not usable.
+    A line is 'verified' only when every tag resolves in the registry. Each record
+    also carries `problems`, the gate's failure texts, so both consumers word the
+    same issue the same way.
+    """
     known = {
         item.get("id"): item
         for group in ("claims", "projects")
         for item in evidence.get(group, [])
         if isinstance(item, dict) and item.get("id")
     }
-    ids_used: set[str] = set()
+    predicted = predicted or {}
+    claims: list[dict[str, Any]] = []
     pending: list[str] | None = None
-    claim_pattern = re.compile(
-        r"""(?x)
-        ^(?:
-          \\newcommand\{\\(?:ResumeSummary|ResumeName|ResumeContact|CoreSkills|Skills[A-Za-z]+|Coursework|(?:SelectedProject|SecondProject)(?:ID|Title|Context|BulletOne|BulletTwo|BulletThree))\}
-          |\\roleheading\b
-          |\\clientheading\b
-          |\\item\b
-          |\{\\LARGE\\bfseries\b
-          |\\ResumeContact\b
-          |\\textbf\{[^{}]+:
-        )
-        """
-    )
+    section: str | None = None
     for line_number, line in enumerate(source.splitlines(), start=1):
+        heading = re.match(r"^\s*\\section\{([^{}]+)\}", line)
+        if heading:
+            section = heading.group(1)
         evidence_match = re.match(r"^\s*%\s*EVIDENCE:\s*(.*?)\s*$", line)
         if evidence_match:
             pending = [value for value in evidence_match.group(1).split() if value]
@@ -208,26 +247,127 @@ def evidence_ids_from_source(
         stripped = line.strip()
         if not stripped:
             continue
-        if claim_pattern.search(stripped):
-            if not pending:
-                failures.append(f"Candidate content on source line {line_number} lacks an EVIDENCE tag")
-            else:
-                for evidence_id in pending:
-                    item = known.get(evidence_id)
-                    if item is None:
-                        failures.append(
-                            f"Unknown source EVIDENCE ID on line {line_number}: {evidence_id}"
-                        )
-                    elif item.get("status") == "hold":
-                        failures.append(
-                            f"Held source EVIDENCE ID on line {line_number}: {evidence_id}"
-                        )
-                    else:
-                        ids_used.add(evidence_id)
-            pending = None
-        elif not stripped.startswith("%"):
-            pending = None
+        if not CLAIM_LINE_PATTERN.search(stripped):
+            if not stripped.startswith("%"):
+                pending = None
+            continue
+        macro = re.match(r"\\newcommand\{\\([A-Za-z@]+)\}", stripped)
+        line_section = _logical_section(macro.group(1) if macro else None, section)
+        evidence_ids = pending or []
+        problems: list[str] = []
+        predicted_hit = False
+        if not evidence_ids:
+            problems.append(f"Candidate content on source line {line_number} lacks an EVIDENCE tag")
+        for evidence_id in evidence_ids:
+            marker = PREDICTED_TAG.match(evidence_id)
+            if marker:
+                origin = predicted.get(marker.group(1))
+                if origin == "predicted":
+                    predicted_hit = True
+                elif origin is None:
+                    problems.append(f"Unknown source EVIDENCE ID on line {line_number}: {evidence_id}")
+                # A verified-origin review row resolves like a registry id.
+                continue
+            item = known.get(evidence_id)
+            if item is None:
+                problems.append(f"Unknown source EVIDENCE ID on line {line_number}: {evidence_id}")
+            elif item.get("status") == "hold":
+                problems.append(f"Held source EVIDENCE ID on line {line_number}: {evidence_id}")
+        if problems:
+            status = "missing"
+            note = "; ".join(problems)
+        elif predicted_hit:
+            status = "predicted"
+            note = "Proposed item from per-job tailoring; review before release"
+        else:
+            status = "verified"
+            note = "All evidence ids resolve in the registry"
+        claims.append(
+            {
+                "line": line_number,
+                "section": line_section,
+                "evidence_ids": evidence_ids,
+                "status": status,
+                "confidence": CLAIM_CONFIDENCE[status],
+                "note": note,
+                "problems": problems,
+            }
+        )
+        pending = None
+    return claims
+
+
+def evidence_ids_from_source(
+    source: str,
+    evidence: dict[str, Any],
+    failures: list[str],
+    warnings: list[str] | None = None,
+) -> set[str]:
+    """Require an evidence tag immediately before each candidate-content construct.
+
+    Returns the registry ids actually used. Inside Projects and Skills an
+    unresolvable tag (unknown, held, or an unreviewed resume_items row) or a
+    missing tag is a review warning; everywhere else it is a hard failure.
+    Callers that omit `warnings` keep the historical all-hard behavior.
+    """
+    known = {
+        item.get("id"): item
+        for group in ("claims", "projects")
+        for item in evidence.get(group, [])
+        if isinstance(item, dict) and item.get("id")
+    }
+    ids_used: set[str] = set()
+    for claim in scan_claims(source, evidence):
+        ids_used.update(
+            evidence_id
+            for evidence_id in claim["evidence_ids"]
+            if evidence_id in known and known[evidence_id].get("status") != "hold"
+        )
+        soft = claim["section"] in REVIEW_SECTIONS and warnings is not None
+        (warnings if soft else failures).extend(claim["problems"])
     return ids_used
+
+
+def load_predicted_origins(db_path) -> dict[str, str]:
+    """resume_items row id -> origin, for resolving ``resume_items:<id>`` evidence tags."""
+    if not db_path or not Path(db_path).is_file():
+        return {}
+    import sqlite3
+
+    try:
+        with sqlite3.connect(str(db_path)) as db:
+            rows = db.execute("SELECT id, origin FROM resume_items").fetchall()
+    except sqlite3.Error:
+        return {}  # An older database without the review table leaves every tag unresolved.
+    return {row[0]: row[1] for row in rows}
+
+
+def build_report(db_path, tex_path, evidence: dict[str, Any] | None = None, source: str | None = None) -> dict[str, Any]:
+    """Importable per-claim assurance report for one resume source (--report and the API).
+
+    The evidence registry is read from the workspace the database lives in
+    (<root>/data/career.db -> <root>/data/context/evidence.yml) unless supplied.
+    `source` lets an in-process caller pass the current draft text directly.
+    """
+    tex_path = Path(tex_path)
+    if source is None:
+        source = tex_path.read_text(encoding="utf-8")
+    if evidence is None:
+        workspace = Path(db_path).resolve().parent.parent if db_path else ROOT
+        candidate = workspace / "data/context/evidence.yml"
+        evidence = load_yaml(candidate if candidate.is_file() else EVIDENCE_PATH)
+    claims = scan_claims(source, evidence, load_predicted_origins(db_path))
+    summary = {status: sum(1 for claim in claims if claim["status"] == status) for status in CLAIM_CONFIDENCE}
+    return {
+        "source": str(tex_path),
+        "db": str(db_path) if db_path else None,
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "summary": summary,
+        "claims": [
+            {key: claim[key] for key in ("line", "section", "evidence_ids", "status", "confidence", "note")}
+            for claim in claims
+        ],
+    }
 
 
 def percentages_trace_to_tags(source: str, evidence: dict[str, Any], failures: list[str]) -> None:
@@ -763,9 +903,26 @@ def main() -> int:
         "--visual-reviewer",
         help="Reviewer name/identity; required when --visual-review is pass or fail",
     )
+    parser.add_argument(
+        "--report",
+        action="store_true",
+        help="Print the per-claim assurance report as JSON and exit (no validation gates run)",
+    )
+    parser.add_argument(
+        "--db",
+        type=Path,
+        help="career.db used to resolve resume_items:<id> evidence tags (default: <workspace>/data/career.db)",
+    )
     args = parser.parse_args()
 
     source_path = args.tex.expanduser().resolve()
+    if args.report:
+        if not source_path.is_file():
+            print(json.dumps({"error": f"Missing LaTeX source: {source_path}"}))
+            return 1
+        db_path = args.db.expanduser().resolve() if args.db else ROOT / "data/career.db"
+        print(json.dumps(build_report(db_path if db_path.is_file() else None, source_path), indent=2))
+        return 0
     failures: list[str] = []
     warnings: list[str] = []
     qa: dict[str, Any] = {
@@ -831,7 +988,7 @@ def main() -> int:
     unsafe_patterns = dict(UNSAFE_PATTERNS)
     if phone and candidate.get("phone_external_resume_policy") != "include_exactly_as_supplied":
         unsafe_patterns["unconfirmed phone"] = re.escape(phone)
-    source_evidence_ids = evidence_ids_from_source(source, evidence, failures)
+    source_evidence_ids = evidence_ids_from_source(source, evidence, failures, warnings)
     percentages_trace_to_tags(source, evidence, failures)
     qa["source_evidence_ids"] = sorted(source_evidence_ids)
 

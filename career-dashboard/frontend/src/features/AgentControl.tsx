@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import { Badge, Field, ReportView, Running } from "../components/UI";
+import { Badge, Field, Modal, ReportView, Running } from "../components/UI";
 import type { Summary } from "../types";
+
+type Preview = {
+  id: string;
+  requestId: string;
+  diff: string;
+  summary: string;
+};
 
 type Message = { id: string; message: string; response: string; state: string };
 type InstructionResult = Message;
@@ -12,6 +19,12 @@ type Budget = {
   cache_hits: number;
   remaining_calls: number;
   note: string;
+  by_provider: {
+    provider: string;
+    calls: number;
+    input_tokens: number;
+    output_tokens: number;
+  }[];
 };
 type Control = { budget: Budget; runs: Summary["runs"] };
 type AIProvider = {
@@ -51,6 +64,7 @@ export function AgentControl({
   const [catalog, setCatalog] = useState<AICatalog>();
   const [provider, setProvider] = useState("codex");
   const [model, setModel] = useState("codex-runtime");
+  const [preview, setPreview] = useState<Preview | null>(null);
   async function load() {
     const [c, m] = await Promise.all([
       api<Control>("/v2/agent-control"),
@@ -132,7 +146,7 @@ export function AgentControl({
             const text = message;
             void perform(async () => {
               const requestId = crypto.randomUUID();
-              const preview = await api<any>(
+              const result = await api<any>(
                 "/v2/studio/" + jobId + "/chat/preview",
                 "POST",
                 {
@@ -141,21 +155,13 @@ export function AgentControl({
                   expected_revision: revision,
                 },
               );
-              if (
-                !window.confirm(
-                  "Preview changes:\n\n" +
-                    preview.proposed_changes.diff +
-                    "\n\nApply this change set?",
-                )
-              )
-                return;
-              await api("/v2/studio/" + jobId + "/chat/apply", "POST", {
-                change_set_id: preview.id,
-                request_id: requestId,
-                expected_revision: revision,
+              // The change is reviewed in a modal and only applied from there.
+              setPreview({
+                id: result.id,
+                requestId,
+                diff: result.proposed_changes?.diff || "",
+                summary: result.proposed_changes?.summary || "",
               });
-              setMessage("");
-              await onChanged();
             });
           }}
         >
@@ -417,6 +423,17 @@ export function AgentControl({
             calls used today · {control.budget.cached_results} saved results ·{" "}
             {control.budget.cache_hits} cache hits
           </p>
+          {!!control.budget.by_provider?.length && (
+            <p className="small">
+              Today by provider:{" "}
+              {control.budget.by_provider
+                .map((p) => {
+                  const tokens = p.input_tokens + p.output_tokens;
+                  return `${p.provider} ${p.calls} call${p.calls === 1 ? "" : "s"}${tokens ? ` · ${tokens.toLocaleString()} tokens` : ""}`;
+                })
+                .join(" · ")}
+            </p>
+          )}
           <form
             className="actions"
             onSubmit={(e) => {
@@ -462,6 +479,35 @@ export function AgentControl({
         <p role="alert" className="callout warning">
           {error}
         </p>
+      )}
+      {preview && (
+        <Modal title="Review the proposed changes" onClose={() => setPreview(null)} wide>
+          {preview.summary && <p>{preview.summary}</p>}
+          <pre className="diff-view">{preview.diff || "(no visible diff)"}</pre>
+          <div className="actions">
+            <button
+              className="primary"
+              disabled={busy}
+              onClick={() =>
+                void perform(async () => {
+                  await api("/v2/studio/" + jobId + "/chat/apply", "POST", {
+                    change_set_id: preview.id,
+                    request_id: preview.requestId,
+                    expected_revision: revision,
+                  });
+                  setPreview(null);
+                  setMessage("");
+                  await onChanged();
+                })
+              }
+            >
+              Apply these changes
+            </button>
+            <button className="secondary" onClick={() => setPreview(null)}>
+              Discard
+            </button>
+          </div>
+        </Modal>
       )}
     </section>
   );

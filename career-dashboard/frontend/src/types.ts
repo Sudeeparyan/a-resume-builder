@@ -21,6 +21,8 @@ export type Job = {
   sponsorship_state?: string | null;
   sponsor_tier?: SponsorTier | null;
   sponsor_evidence?: SponsorEvidence | null;
+  fit_score?: number | null;
+  fit_rationale?: string | null;
   closed_at?: string | null;
 };
 export type SponsorTier = "S" | "A" | "B" | "C";
@@ -135,6 +137,35 @@ export type Agent = {
   implementation: string;
   guide: string;
 };
+export type AssuranceClaim = {
+  text: string;
+  section: string;
+  origin: "verified" | "predicted" | null;
+  evidence_status: "verified" | "predicted" | "missing";
+  confidence: number;
+  decision: "kept" | "removed" | "pending" | null;
+  items: string[];
+  evidence_ids: string[];
+  line?: number;
+  note?: string;
+};
+export type AssuranceReport = {
+  job_id: string;
+  company: string;
+  role: string;
+  generated_at: string;
+  summary: {
+    verified: number;
+    predicted: number;
+    missing: number;
+    kept: number;
+    removed: number;
+    pending: number;
+  };
+  claims: AssuranceClaim[];
+  score: number | null;
+  note: string | null;
+};
 export type Summary = {
   jobs: Job[];
   removed_jobs: Job[];
@@ -222,6 +253,10 @@ export type AssistantMessage = {
     warnings?: string[];
     suggestions?: string[];
     run_id?: string;
+    /** Field-level before/after shown on a confirmation card. */
+    diff?: { field: string; before: string; after: string }[];
+    /** Plan→calls→results record of an agent run ("what I did"). */
+    trace?: { tool: string; summary: string; error?: boolean; auto_applied?: boolean }[];
     [key: string]: unknown;
   };
   created_at: string;
@@ -235,6 +270,15 @@ export type AssistantEngine = {
   moved_from: string | null;
   /** What the runs the chat starts go through (the Settings main choice). */
   runs: { provider: string; model: string; label: string; ready: boolean };
+  /** The configured backup provider, if any. */
+  fallback: { provider: string; model: string } | null;
+  /** The most recent automatic switch to the backup provider, if ever. */
+  last_fallback: {
+    from_provider: string;
+    to_provider: string;
+    reason?: string;
+    at?: string;
+  } | null;
   note: string | null;
   options: { provider: string; model: string; label: string }[];
 };
@@ -268,6 +312,8 @@ export type AssistantOverview = {
     [key: string]: unknown;
   } | null;
   busy: boolean;
+  /** May confirmation-gated tools run without the yes/no pause in this chat? */
+  auto_apply: boolean;
   ai_configured: boolean;
   engine: AssistantEngine;
   agents: AssistantAgent[];

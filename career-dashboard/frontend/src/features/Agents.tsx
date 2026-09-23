@@ -9,18 +9,20 @@ import {
   FileCheck2,
   FileText,
   Globe,
+  ListOrdered,
   LoaderCircle,
   Play,
   Radar,
   RefreshCw,
   ScanSearch,
+  Send,
   ShieldCheck,
   Sparkles,
   UserRoundSearch,
   XCircle,
 } from "lucide-react";
 import { api } from "../api";
-import { Badge } from "../components/UI";
+import { Badge, Loading } from "../components/UI";
 import type { Summary } from "../types";
 
 // --- what the backend sends ----------------------------------------------------
@@ -70,6 +72,7 @@ type Activity = {
     running: number;
     by_provider: Record<string, number>;
   };
+  reviews: { pending: number; kept: number; removed: number; tailored_jobs: number };
   ai: { default: { provider: string; model: string } };
 };
 
@@ -78,6 +81,7 @@ type Activity = {
 export const PROVIDER_LABEL: Record<string, string> = {
   claude_code: "Claude Code",
   codex: "Codex",
+  kimi_cli: "Kimi Code",
   openai: "OpenAI",
   anthropic: "Claude API (Anthropic)",
   openrouter: "OpenRouter",
@@ -105,6 +109,14 @@ const OUTPUT_LABEL: Record<string, string> = {
 };
 
 type StepState = "done" | "active" | "failed" | "warn" | "idle";
+export type { StepState };
+export type PipelineStage = {
+  label: string;
+  icon: typeof Globe;
+  does: string;
+  state: StepState;
+  note: string;
+};
 type Step = {
   id: string;
   label: string;
@@ -199,7 +211,7 @@ const clock = (iso: string) =>
     second: "2-digit",
   });
 const providerText = (p?: string | null, m?: string | null) =>
-  p ? `${PROVIDER_LABEL[p] || p}${m && m !== "codex-runtime" ? " · " + m : ""}` : "";
+  p ? `${PROVIDER_LABEL[p] || p}${m && !["codex-runtime", "kimi-runtime"].includes(m) ? " · " + m : ""}` : "";
 
 function StateIcon({ state, size = 16 }: { state: StepState | string; size?: number }) {
   if (state === "active" || active(state))
@@ -294,6 +306,53 @@ function jobSteps(
   return out;
 }
 
+/** The simple view: where the whole pipeline stands, in five plain stages. */
+export function pipelineStages(
+  jobs: Summary["jobs"],
+  reviews: Activity["reviews"],
+  builtCount: number,
+  discovery?: ActivityRun,
+): PipelineStage[] {
+  const total = jobs.length;
+  const scored = jobs.filter((j) => typeof j.fit_score === "number").length;
+  const submitted = jobs.filter((j) => ["applied", "interview", "offer"].includes(j.status)).length;
+  const interviewing = jobs.filter((j) => ["interview", "offer"].includes(j.status)).length;
+  const discoveryState: StepState = !discovery
+    ? "idle"
+    : active(discovery.state)
+      ? "active"
+      : discovery.state === "completed"
+        ? "done"
+        : "failed";
+  return [
+    {
+      label: "Discover", icon: Radar, does: "5 latest US postings, every day",
+      state: discoveryState,
+      note: discovery ? `Last search ${ago(discovery.created_at)} · ${discovery.state}` : "No search yet",
+    },
+    {
+      label: "Rank", icon: ListOrdered, does: "Each job scored against your profile",
+      state: total === 0 ? "idle" : scored === total ? "done" : scored > 0 ? "warn" : "idle",
+      note: total ? `${scored}/${total} scored` : "No jobs yet",
+    },
+    {
+      label: "Tailor", icon: FileText, does: "A one-page resume fitted to each company",
+      state: total === 0 || reviews.tailored_jobs === 0 ? "idle" : reviews.tailored_jobs >= total ? "done" : "warn",
+      note: `${reviews.tailored_jobs}/${total} tailored · ${builtCount} PDF ready`,
+    },
+    {
+      label: "Guardrail", icon: ShieldCheck, does: "You review predicted projects and skills",
+      state: reviews.tailored_jobs === 0 ? "idle" : reviews.pending > 0 ? "warn" : "done",
+      note: reviews.tailored_jobs === 0 ? "Nothing tailored yet" : reviews.pending ? `${reviews.pending} items to review` : "All items reviewed",
+    },
+    {
+      label: "Apply", icon: Send, does: "You submit; replies are tracked for you",
+      state: submitted ? "done" : "idle",
+      note: submitted ? `${submitted} submitted · ${interviewing} in interviews` : "Nothing submitted yet",
+    },
+  ];
+}
+
 // --- the page ----------------------------------------------------------------------
 
 export default function Agents({
@@ -301,17 +360,20 @@ export default function Agents({
   notify,
   onJob,
   onSettings,
+  onAssurance,
 }: {
   data: Summary;
   notify: (text: string, error?: boolean) => void;
   onJob: (id: string) => void;
   onSettings: () => void;
+  onAssurance: () => void;
 }) {
   const [activity, setActivity] = useState<Activity>();
   const [error, setError] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "running" | "failed">("all");
   const [starting, setStarting] = useState("");
+  const [view, setView] = useState<"pipeline" | "advanced">("pipeline");
 
   const load = useCallback(async () => {
     try {
@@ -354,7 +416,7 @@ export default function Agents({
   );
 
   if (error && !activity) return <div className="callout warning">{error}</div>;
-  if (!activity) return <p>Loading agent activity…</p>;
+  if (!activity) return <Loading label="Loading agent activity" />;
 
   const running = activity.runs.filter((r) => active(r.state));
   const failedToday = activity.calls_today.failed;
@@ -394,6 +456,11 @@ export default function Agents({
     }
   }
 
+  // The simple view: where the whole pipeline stands, in five plain stages.
+  const total = data.jobs.length;
+  const reviews = activity.reviews;
+  const stages = pipelineStages(data.jobs, reviews, built.size, discovery);
+
   return (
     <>
       <div className="page-title">
@@ -407,6 +474,64 @@ export default function Agents({
           Running on {providerText(activity.ai.default.provider, activity.ai.default.model)}
         </button>
       </div>
+
+      <div className="segmented page-switch">
+        <button className={view === "pipeline" ? "selected" : ""} onClick={() => setView("pipeline")}>
+          Pipeline
+        </button>
+        <button className={view === "advanced" ? "selected" : ""} onClick={() => setView("advanced")}>
+          Advanced
+        </button>
+      </div>
+
+      {view === "pipeline" ? (
+        <>
+          {open_failures.length > 0 && (
+            <div className="callout warning" role="alert">
+              <AlertTriangle size={21} />
+              <div>
+                <b>{open_failures.length} agent run{open_failures.length === 1 ? "" : "s"} need a retry.</b>
+                <p>Nothing is lost — rerun what failed from the Advanced view.</p>
+              </div>
+              <button
+                className="secondary"
+                onClick={() => {
+                  setView("advanced");
+                  setFilter("failed");
+                }}
+              >
+                Review failures
+              </button>
+            </div>
+          )}
+          <section className="card spaced">
+            <div className="section-title">
+              <h2>Your job pipeline</h2>
+              <span className="small muted">
+                {total} saved {total === 1 ? "job" : "jobs"}
+              </span>
+            </div>
+            <ol className="flow">
+              {stages.map((stage) => (
+                <li key={stage.label} className={"flow-node" + (stage.state === "active" ? " live" : "")}>
+                  <span className="flow-icon"><stage.icon size={18} /></span>
+                  <b>{stage.label}</b>
+                  <small>{stage.does}</small>
+                  <span className="flow-count">
+                    <StateIcon state={stage.state} size={14} /> {stage.note}
+                  </span>
+                  {stage.label === "Guardrail" && reviews.pending > 0 && (
+                    <button className="secondary" onClick={onAssurance}>
+                      Review now
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </section>
+        </>
+      ) : (
+        <>
 
       <div className="obs-stats">
         <div className="card obs-stat">
@@ -626,6 +751,8 @@ export default function Agents({
           </div>
         )}
       </section>
+        </>
+      )}
     </>
   );
 }

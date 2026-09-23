@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { Component, useCallback, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import {
   LayoutDashboard,
   MessageSquareText,
   Search,
   FileText,
+  ShieldCheck,
   UserRound,
   SlidersHorizontal,
   Workflow,
@@ -12,11 +14,12 @@ import {
   X,
 } from "lucide-react";
 import { api } from "./api";
-import { Field, Modal, NoticeContext } from "./components/UI";
+import { Field, Loading, Modal, NoticeContext } from "./components/UI";
 import JobDetail from "./components/JobDetail";
 import Dashboard from "./features/Dashboard";
 import DailySearch from "./features/DailySearch";
 import ResumeStudio from "./features/ResumeStudio";
+import Assurance from "./features/Assurance";
 import Profile from "./features/Profile";
 import Settings from "./features/Settings";
 import Agents, { AGENT_LABEL } from "./features/Agents";
@@ -27,6 +30,7 @@ const tabs = [
   ["dashboard", "Dashboard", LayoutDashboard, "Your search"],
   ["daily", "Daily Search", Search, "Your search"],
   ["resumes", "Resume Studio", FileText, "Your search"],
+  ["assurance", "Assurance", ShieldCheck, "Your search"],
   ["profile", "Profile", UserRound, "You"],
   ["agents", "Agents", Workflow, "Behind the scenes"],
   ["settings", "Settings", SlidersHorizontal, "Behind the scenes"],
@@ -35,6 +39,38 @@ function routeFromHash() {
   const r = location.hash.slice(1).split("/")[0];
   // The chat is the front door: it opens first unless the address names a tab.
   return tabs.some((t) => t[0] === r) ? r : "assistant";
+}
+
+/** A render failure in one page must not unmount the whole app. */
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { message: string }
+> {
+  state = { message: "" };
+  static getDerivedStateFromError(error: unknown) {
+    return { message: error instanceof Error ? error.message : String(error) };
+  }
+  componentDidCatch(error: unknown) {
+    console.error("Page render failed:", error);
+  }
+  render() {
+    if (!this.state.message) return this.props.children;
+    return (
+      <div className="callout warning" role="alert">
+        Something on this page failed to display ({this.state.message}). Your
+        data is safe.
+        <button
+          className="secondary"
+          onClick={() => this.setState({ message: "" })}
+        >
+          Try again
+        </button>
+        <button className="secondary" onClick={() => location.reload()}>
+          Reload the app
+        </button>
+      </div>
+    );
+  }
 }
 export default function App() {
   const [route, setRoute] = useState(routeFromHash);
@@ -187,9 +223,9 @@ export default function App() {
               </div>
             )}
             {!data ? (
-              <p>Loading your workspace…</p>
+              <Loading label="Loading your workspace" />
             ) : (
-              <>
+              <ErrorBoundary>
                 {route === "assistant" && (
                   <Assistant
                     data={data}
@@ -226,6 +262,14 @@ export default function App() {
                     refresh={refresh}
                   />
                 )}
+                {route === "assurance" && (
+                  <Assurance
+                    data={data}
+                    notify={notify}
+                    refresh={refresh}
+                    onJob={openStudio}
+                  />
+                )}
                 {route === "settings" && <Settings notify={notify} />}
                 {route === "agents" && (
                   <Agents
@@ -233,12 +277,13 @@ export default function App() {
                     notify={notify}
                     onJob={openStudio}
                     onSettings={() => navigate("settings")}
+                    onAssurance={() => navigate("assurance")}
                   />
                 )}
                 {route === "profile" && (
                   <Profile refresh={refresh} notify={notify} />
                 )}
-              </>
+              </ErrorBoundary>
             )}
           </div>
         </main>

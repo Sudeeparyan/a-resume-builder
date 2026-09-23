@@ -2,50 +2,55 @@
 
 from pathlib import Path
 
-from .providers import AIGateway, AnthropicProvider, ClaudeCodeProvider, CodexProvider, OpenAIProvider
+from .providers import AIGateway, AnthropicProvider, ClaudeCodeProvider, CodexProvider, KimiCliProvider, OpenAIProvider
 
 __all__ = [
-    "AIGateway", "AnthropicProvider", "ClaudeCodeProvider", "CodexProvider", "OpenAIProvider",
+    "AIGateway", "AnthropicProvider", "ClaudeCodeProvider", "CodexProvider", "KimiCliProvider", "OpenAIProvider",
     "team_for", "any_provider_configured", "ready_providers", "resolve_tiers", "main_choice", "engine",
 ]
 
 # Where a tier goes when its chosen provider cannot run here: the signed-in local
 # runtimes first (no key, no per-call cost), then whichever hosted key exists.
-FALLBACK_ORDER = ("claude_code", "codex", "openrouter", "anthropic", "openai", "gemini", "kimi")
+FALLBACK_ORDER = ("claude_code", "codex", "kimi_cli", "openrouter", "anthropic", "openai", "gemini", "kimi")
 
 
 def ready_providers(root) -> dict:
-    """Which providers can actually run on this Mac right now, by id."""
-    from backend.ai import claude_code, codex, models
+    """Which providers can actually run on this machine right now, by id."""
+    from backend.ai import claude_code, codex, kimi_cli, models
 
     ready = dict(models.available(Path(root)))
     ready[claude_code.ID] = claude_code.available()
     ready[codex.ID] = codex.available()
+    ready[kimi_cli.ID] = kimi_cli.available()
     return ready
 
 
 def any_provider_configured(root) -> bool:
-    """True when a hosted provider has a key here, or a local CLI (Claude Code, Codex) is installed."""
+    """True when a hosted provider has a key here, or a local CLI (Claude Code, Codex, Kimi Code) is installed."""
     return any(ready_providers(root).values())
 
 
 def provider_label(provider_id: str) -> str:
-    from backend.ai import catalog, claude_code, codex
+    from backend.ai import catalog, claude_code, codex, kimi_cli
 
     if provider_id == claude_code.ID:
         return "Claude Code"
     if provider_id == codex.ID:
         return "Codex"
+    if provider_id == kimi_cli.ID:
+        return "Kimi Code"
     return catalog.PROVIDERS.get(provider_id, {}).get("label", provider_id)
 
 
 def _default_model(provider_id: str, tier: str) -> str:
-    from backend.ai import catalog, claude_code, codex
+    from backend.ai import catalog, claude_code, codex, kimi_cli
 
     if provider_id == claude_code.ID:
         return claude_code.DEFAULTS[tier]
     if provider_id == codex.ID:
         return codex.DEFAULTS[tier]
+    if provider_id == kimi_cli.ID:
+        return kimi_cli.DEFAULTS[tier]
     return catalog.default_model(provider_id, tier)
 
 
@@ -98,6 +103,42 @@ def resolve_tiers(root, preferences: dict, ready: dict | None = None) -> tuple[d
     return tiers, moved
 
 
+def usage_recorder(services):
+    """Persist specialist token usage into ``ai_calls`` so costs become real.
+
+    Rows are marked with ``cache_key='usage'`` so the daily call *budget* (which
+    counts reserved invocations) is not inflated by telemetry. Never raises:
+    usage recording must not break a run.
+    """
+
+    def record(usage: dict) -> None:
+        try:
+            import uuid
+
+            with services.w.connect() as db:
+                db.execute(
+                    """INSERT INTO ai_calls(id,cache_key,day,state,created_at,error,provider,model,action,cache_version,input_tokens,output_tokens)
+                    VALUES(?,?,?,?,?,NULL,?,?,?,?,?,?)""",
+                    (
+                        uuid.uuid4().hex,
+                        "usage",
+                        services.today(),
+                        "completed",
+                        services.now(),
+                        usage.get("provider") or "unknown",
+                        usage.get("model") or "unknown",
+                        "specialist:" + str(usage.get("agent") or "unknown"),
+                        "v1",
+                        usage.get("input_tokens"),
+                        usage.get("output_tokens"),
+                    ),
+                )
+        except Exception:
+            pass
+
+    return record
+
+
 def team_for(services, on_usage=None):
     """An AgentTeam built from the saved tier preferences, on a provider that is ready.
 
@@ -107,7 +148,7 @@ def team_for(services, on_usage=None):
 
     preferences = services.pref("ai_preferences", {}) or {}
     tiers, _moved = resolve_tiers(services.w.root, preferences)
-    return AgentTeam(services.w.root, tiers, on_usage)
+    return AgentTeam(services.w.root, tiers, on_usage or usage_recorder(services))
 
 
 def engine(services) -> dict:
@@ -117,7 +158,7 @@ def engine(services) -> dict:
     from the chat; choosing one goes through ``settings.choose_main`` like the
     Settings tab.
     """
-    from backend.ai import catalog, claude_code, codex
+    from backend.ai import catalog, claude_code, codex, kimi_cli
 
     root = services.w.root
     preferences = services.pref("ai_preferences", {}) or {}
@@ -133,6 +174,8 @@ def engine(services) -> dict:
             listed = list(claude_code.MODELS)
         elif provider_id == codex.ID:
             listed = list(codex.MODELS)
+        elif provider_id == kimi_cli.ID:
+            listed = list(kimi_cli.MODELS)
         else:
             cached = (catalog._read_cache(root).get(provider_id) or {}).get("models") or []
             defaults = catalog.PROVIDERS[provider_id]["defaults"]
@@ -143,6 +186,19 @@ def engine(services) -> dict:
     note = None
     if codex.ID in (provider, runs_provider) and ready.get(codex.ID) and not codex.signed_in():
         note = "Codex is installed but not signed in: open the ChatGPT app and sign in, or choose Claude Code."
+    stored_fallback = preferences.get("fallback") or None
+    last_fallback = None
+    try:
+        import json as _json
+
+        with services.w.connect() as db:
+            row = db.execute(
+                "SELECT details, occurred_at FROM activity WHERE action='provider_fallback' ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+        if row:
+            last_fallback = {**_json.loads(row[0]), "at": row[1]}
+    except Exception:
+        last_fallback = None  # telemetry only; never block the page on it
     return {
         "provider": provider, "model": model, "label": provider_label(provider) + " · " + model,
         "ready": bool(ready.get(provider)),
@@ -152,6 +208,8 @@ def engine(services) -> dict:
         "runs": {"provider": runs_provider, "model": runs_model,
                  "label": provider_label(runs_provider) + " · " + runs_model,
                  "ready": bool(ready.get(runs_provider))},
+        "fallback": stored_fallback,
+        "last_fallback": last_fallback,
         "note": note,
         "options": options,
     }

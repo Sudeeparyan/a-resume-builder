@@ -110,6 +110,9 @@ class AIMainInput(BaseModel):
     model: str = Field(min_length=1, max_length=200)
 
 
+class AIFallbackInput(BaseModel):
+    provider: str = Field(default="", max_length=40)  # empty clears the backup
+    model: str = Field(default="", max_length=200)
 class AIKeyInput(BaseModel):
     value: str = Field(min_length=1, max_length=500)
 
@@ -143,6 +146,14 @@ class ScheduleInput(BaseModel):
 class AssistantInput(BaseModel):
     message: str = Field(min_length=1, max_length=120000)
     request_id: str = Field(min_length=1, max_length=100)
+
+
+class AutoApplyInput(BaseModel):
+    enabled: bool
+
+
+class ItemDecision(BaseModel):
+    decision: str = Field(min_length=1, max_length=20)
 
 
 def attach(app, workspace, schedule: bool = False):
@@ -262,11 +273,33 @@ def attach(app, workspace, schedule: bool = False):
             )
         except Exception:
             return result
+        if not result.get("duplicate") and result.get("job"):
+            c = relevance.get("components") or {}
+            rationale = (
+                f"Fit {relevance['score']}/100 — requirement overlap {c.get('requirement_evidence', 0)}/40, "
+                f"role & seniority {c.get('role_seniority', 0)}/25, US location {c.get('location', 0)}/15, "
+                f"skills match {c.get('professional_fit', 0)}/15, domain {c.get('domain', 0)}/5."
+            )
+            with workspace.connect() as db:
+                db.execute(
+                    "UPDATE jobs SET fit_score=?, fit_rationale=?, "
+                    "raw_jd=CASE WHEN raw_jd='' THEN description ELSE raw_jd END WHERE id=?",
+                    (relevance["score"], rationale, result["job"]["id"]),
+                )
         return {**result, "relevance": relevance}
 
     @router.get("/excluded")
     def excluded_postings(include_restored: bool = False):
         return {"items": service.excluded(include_restored)}
+
+    @router.get("/rejected-leads")
+    def rejected_leads(limit: int = 50):
+        """Leads the discovery gates turned away, with the reason, newest first."""
+        with workspace.connect() as db:
+            rows = db.execute(
+                "SELECT * FROM rejected_leads ORDER BY id DESC LIMIT ?", (min(limit, 200),)
+            ).fetchall()
+        return {"items": [dict(row) for row in rows]}
 
     @router.post("/excluded/{excluded_id}/restore")
     def restore_excluded(excluded_id: str):
@@ -365,6 +398,12 @@ def attach(app, workspace, schedule: bool = False):
         from backend.ai import settings as ai_settings
 
         return ai_settings.choose_main(service, runner.gateway, data.provider, data.model)
+
+    @router.put("/ai/fallback")
+    def choose_fallback_ai(data: AIFallbackInput):
+        from backend.ai import settings as ai_settings
+
+        return ai_settings.save_fallback(service, runner.gateway, data.provider, data.model)
 
     @router.put("/ai/keys/{provider}")
     def save_ai_key(provider: str, data: AIKeyInput):
@@ -484,6 +523,28 @@ def attach(app, workspace, schedule: bool = False):
     def score_studio(job_id: str):
         return studio.score(job_id)
 
+    @router.post('/studio/{job_id}/tailor')
+    def tailor_studio(job_id: str):
+        from backend.ai import any_provider_configured, team_for
+
+        if not any_provider_configured(service.w.root):
+            raise ValueError("No AI runtime is set up on this machine, so the resume cannot be tailored automatically. Add an API key or sign in to a local runtime in Settings, then try again.")
+        return studio.tailor(job_id, team_for(service))
+
+    @router.get('/studio/{job_id}/items')
+    def studio_items(job_id: str):
+        return studio.items(job_id)
+
+    @router.post('/studio/{job_id}/items/{item_id}/decision')
+    def studio_item_decision(job_id: str, item_id: str, data: ItemDecision):
+        return studio.decide(job_id, item_id, data.decision)
+
+    @router.get('/assurance/{job_id}')
+    def job_assurance(job_id: str):
+        from backend.services.assurance import build_assurance
+
+        return build_assurance(service, studio, job_id)
+
     @router.get('/assistant')
     def assistant_overview():
         return assistant.overview()
@@ -501,6 +562,11 @@ def attach(app, workspace, schedule: bool = False):
     def assistant_stop(message_id: str):
         # The worker ends the reply at its next step; the row reads "Stopping…" until then.
         return assistant.stop(message_id)
+
+    @router.put('/assistant/auto-apply')
+    def assistant_auto_apply(data: AutoApplyInput):
+        assistant.auto_apply(data.enabled)
+        return assistant.overview()
 
     @router.get('/assistant/conversations')
     def assistant_conversations():

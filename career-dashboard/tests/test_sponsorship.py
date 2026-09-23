@@ -34,6 +34,11 @@ KEPT = [
     "You will report to the executive sponsor for the program.",
     "Join our sponsored content team.",
     "We build data platforms for hospitals.",
+    # Absence claims: restrictive-sounding words that only say the posting lacks them.
+    "The posting contains an EEO/affirmative-action statement but no visa sponsorship, work-authorization, citizenship, clearance or ITAR/EAR language of any kind.",
+    "No citizenship, clearance or ITAR language appears in this posting.",
+    "The employer states no sponsorship or work-authorization language in the listing.",
+    "No visa or citizenship restrictions stated in the posting.",
     "",
 ]
 

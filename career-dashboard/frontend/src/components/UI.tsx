@@ -36,6 +36,15 @@ export function Empty({
     </div>
   );
 }
+export function Loading({ label }: { label: string }) {
+  return (
+    <div role="status" aria-label={label}>
+      <div className="skeleton skeleton-title" />
+      <div className="skeleton skeleton-card" />
+      <div className="skeleton skeleton-card" />
+    </div>
+  );
+}
 export function Modal({
   title,
   children,
@@ -54,7 +63,16 @@ export function Modal({
     return () => ref.current?.close();
   }, []);
   return (
-    <dialog ref={ref} className={wide ? "wide" : ""} onCancel={onClose}>
+    <dialog
+      ref={ref}
+      className={wide ? "wide" : ""}
+      onCancel={onClose}
+      onMouseDown={(e) => {
+        // A press landing on the dialog element itself is the backdrop; a press
+        // inside the panel targets a child.
+        if (e.target === ref.current) onClose();
+      }}
+    >
       <div className="modal-head">
         <h2>{title}</h2>
         <button className="icon-button" aria-label="Close" onClick={onClose}>

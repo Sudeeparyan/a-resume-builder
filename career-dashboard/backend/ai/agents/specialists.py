@@ -172,6 +172,35 @@ POSTING_PARSER = Specialist(
     ),
 )
 
+JOB_TAILOR = Specialist(
+    name="job_tailor",
+    tier="strong",
+    schema=schemas.TailoringResult,
+    system=(
+        "You plan the Projects and Skills sections of a resume for one specific role, roughly 60% "
+        "verified material and 40% predicted material. The verified projects and skills supplied "
+        "below are the candidate's confirmed record: choose which of them to keep for this role and "
+        "copy each kept one unchanged, word for word, with its evidence id and origin 'verified'. "
+        "Then propose a smaller number of 'predicted' items: project and skill descriptions aligned "
+        "to the employer's stack as the job description and company research describe it, so the "
+        "candidate can review each one and keep or remove it before applying. The payload's "
+        "`never_claim` entries name skills and claims the candidate does not have: never use them "
+        "in any item, however well they match the role, and never name a date, a percentage, a "
+        "certification, a publication or a GPA.\n"
+        "Hard rules. Tailoring only ever covers Projects and Skills; experience, education and "
+        "personal details are not part of your output and must never be rewritten. A predicted item "
+        "never claims employment, a degree, a date, a metric or a certification, and never uses "
+        "inflated wording such as 'passionate about', 'results-oriented', 'proven track record', "
+        "'leveraged', 'spearheaded', 'synergies', 'robust', 'seamless', 'cutting-edge' or 'dynamic "
+        "professional'. A predicted project reads as a project the candidate could plausibly build "
+        "or have built with the employer's stack, not as a claim about a job. Never restate an "
+        "academic project as professional experience, never invent an employer, tool, metric, date "
+        "or responsibility, and never state a total of years of experience. List the kept verified "
+        "projects first in `projects`; the first entry fills the signature project slot. Put the "
+        "reasoning for the mix in `rationale`, in one short paragraph."
+    ),
+)
+
 WORKSPACE_AGENT = Specialist(
     name="workspace_agent",
     tier="strong",
@@ -210,6 +239,6 @@ REGISTRY = {
     for agent in (
         REQUIREMENT_EXTRACTOR, RELEVANCE_JUDGE, COMPANY_INVESTIGATOR, POSTING_VERIFIER,
         RESUME_TAILOR, PROFILE_CURATOR, HIRING_MANAGER, COVER_LETTER_WRITER, MAIL_CLASSIFIER,
-        POSTING_PARSER, WORKSPACE_AGENT,
+        POSTING_PARSER, JOB_TAILOR, WORKSPACE_AGENT,
     )
 }

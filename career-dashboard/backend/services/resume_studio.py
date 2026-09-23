@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import uuid
 import yaml
 from pathlib import Path
 from pypdf import PdfReader
@@ -86,6 +87,72 @@ def replace_macro(source, name, value):
     prefix = re.search(r'\\newcommand\{\\' + re.escape(name) + r'\}\s*\{', source)
     start = prefix.end()
     return source[:start] + tex_escape(value.replace('\n', ' ')) + source[start + len(old):]
+
+
+def macro_span(source, name):
+    """(start, end) offsets of a zero-argument macro's value; mirrors studioFields.ts macroSpan."""
+    prefix = re.search(r'\\newcommand\{\\' + re.escape(name) + r'\}\s*\{', source)
+    if not prefix:
+        return None
+    start, depth, index = prefix.end(), 1, prefix.end()
+    while index < len(source):
+        character = source[index]
+        if character == '\\':
+            index += 2
+            continue
+        if character == '{':
+            depth += 1
+        elif character == '}':
+            depth -= 1
+            if depth == 0:
+                return start, index
+        index += 1
+    return None
+
+
+def write_field(source, name, value):
+    """Rewrite one macro value in place; mirrors studioFields.ts writeField (same matching, same escaping)."""
+    span = macro_span(source, name)
+    if not span:
+        return source
+    replacements = {'\\': r'\textbackslash{}', '|': r'\textbar{}', '~': r'\textasciitilde{}', '^': r'\textasciicircum{}'}
+    escaped = re.sub(r'[\\&%$#_{}|~^]', lambda match: replacements.get(match[0], '\\' + match[0]), value.replace('\n', ' '))
+    return source[:span[0]] + escaped + source[span[1]:]
+
+
+# Tailoring rewrites Projects and Skills fields only; every other macro is out of bounds.
+TAILORED_MACRO_NAMES = {'CoreSkills'}
+TAILORED_MACRO_PREFIXES = ('SelectedProject', 'SecondProject', 'Skills')
+
+
+def tailored_macro(name):
+    return name in TAILORED_MACRO_NAMES or name.startswith(TAILORED_MACRO_PREFIXES)
+
+
+# A one-page fit may delete a slot's third-bullet macro outright (see the prepare cut
+# in career.py); tailoring restores a missing macro next to its siblings when new
+# content needs it, and leaves it cut when the new content leaves it empty.
+SLOT_SUFFIXES = ('ID', 'Title', 'Context', 'BulletOne', 'BulletTwo', 'BulletThree')
+
+
+def _restore_macro(source, slot, suffix, value, tag):
+    for earlier in reversed(SLOT_SUFFIXES[:SLOT_SUFFIXES.index(suffix)]):
+        match = re.search(r'\\newcommand\{\\' + re.escape(slot + earlier) + r'\}[^\n]*\}\n', source)
+        if match:
+            break
+    else:
+        raise ValueError('Template field is missing: ' + slot + suffix + '. Use the source editor to restore it.')
+    restored = '% EVIDENCE: ' + tag + '\n\\newcommand{\\' + slot + suffix + '}{}\n'
+    return write_field(source[:match.end()] + restored + source[match.end():], slot + suffix, value)
+
+
+def _add_evidence_tags(source, macro, tags):
+    """Merge evidence tags into the EVIDENCE comment above a macro definition."""
+    pattern = re.compile(r'% EVIDENCE: ([^\n]+)\n(\\newcommand\{\\' + macro + r'\})')
+    if pattern.search(source):
+        return pattern.sub(lambda match: '% EVIDENCE: ' + match[1] + ' ' + ' '.join(tags) + '\n' + match[2], source, count=1)
+    return re.sub(r'(\\newcommand\{\\' + macro + r'\})',
+                  lambda match: '% EVIDENCE: ' + ' '.join(tags) + '\n' + match[1], source, count=1)
 
 
 class ResumeStudio:
@@ -637,3 +704,356 @@ class ResumeStudio:
                                     profile_revision=self.w.evidence()['candidate_revision'], projects=[signature, supporting['id']])
             self.w.export_tracking()
             return self.get(job_id)
+
+    def tailor(self, job_id, team):
+        """Tailor this job's Projects and Skills: verified registry content plus reviewable predicted items.
+
+        The job_tailor specialist's plan is validated before anything is stored; only
+        Projects/Skills macros are rewritten, every item's origin is kept in resume_items
+        for review, and the rendered resume stays one seamless document.
+        """
+        from backend.ai.agents.graph import AgentError
+        with self.lock:
+            draft = self.open(job_id)
+            job = self.w.get_job(job_id)
+            registry = project_registry(self.w.evidence())
+            research = ''
+            if job['folder']:
+                research_file = self.w.current_folder(job_id) / 'company-research.md'
+                if research_file.exists():
+                    research = research_file.read_text()[:8000]
+            never_claim = next((c.get('approved_facts', []) or []
+                                for c in self.w.evidence().get('claims', []) if c.get('id') == 'SKILL-NEVER-001'), [])
+            payload = {
+                'role': {'title': job['title'], 'company': job['company'],
+                         'description': (job['description'] or '')[:12000]},
+                'company_research': research,
+                'verified_projects': self._verified_projects(registry),
+                'verified_skills': sorted(self._verified_skill_pool().values(), key=lambda skill: skill['name'].casefold()),
+                'never_claim': [str(fact) for fact in never_claim],
+            }
+            try:
+                result = team.run('job_tailor', payload)
+                source, projects, skills = self._apply_tailoring(draft['source'], result, registry, job)
+            except (AgentError, ValueError) as error:
+                with self.w.connect() as db:
+                    self.w.record_event(db, 'studio_tailor_failed', job_id, error=str(error)[:500])
+                raise ValueError('The resume could not be tailored for this role, so your saved draft was left unchanged. ' + str(error)) from None
+            stamp = self.s.now()
+            items = [*projects, *skills]
+            with self.w.connect() as db:
+                db.execute('BEGIN IMMEDIATE')
+                revision = db.execute('SELECT revision FROM studio_drafts WHERE job_id=?', (job_id,)).fetchone()[0] + 1
+                db.execute('DELETE FROM resume_items WHERE job_id=?', (job_id,))
+                for item in items:
+                    content = json.dumps(item['content'], ensure_ascii=False) if isinstance(item['content'], dict) else item['content']
+                    db.execute('INSERT INTO resume_items(id,job_id,section,content,origin,evidence_id,decision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)',
+                               (item['row_id'], job_id, item['section'], content, item['origin'], item['evidence_id'], 'pending', stamp, stamp))
+                db.execute('UPDATE studio_drafts SET source=?,revision=?,updated_at=? WHERE job_id=?', (source, revision, stamp, job_id))
+                db.execute('INSERT INTO studio_versions VALUES(?,?,?,?)', (job_id, revision, source, stamp))
+                if projects[0]['origin'] == 'verified':
+                    db.execute('INSERT OR REPLACE INTO signature_assignments(company_key, project_id, job_id, assigned_at) VALUES(?,?,?,?)',
+                               (company_key(job['company']), projects[0]['evidence_id'], job_id, stamp))
+                self.w.record_event(db, 'studio_tailored', job_id, revision=revision,
+                                    verified=sum(1 for item in items if item['origin'] == 'verified'),
+                                    predicted=sum(1 for item in items if item['origin'] == 'predicted'))
+            self.w.export_tracking()
+            try:
+                fitted = self.fit(job_id, revision)
+                try:
+                    self.score(job_id)
+                except ValueError:
+                    pass  # fit() already records and reports a scoring failure
+            except ValueError as error:
+                # The tailored draft is saved by now; a fitting problem must not read as a failed tailor.
+                with self.w.connect() as db:
+                    self.w.record_event(db, 'studio_tailor_fit_failed', job_id, revision=revision, error=str(error))
+                fitted = self.get(job_id)
+                fitted['warnings'] = [*fitted.get('warnings', []),
+                                      'Projects and Skills were tailored and saved, but the page could not be fitted automatically: ' + str(error)]
+            counts = {origin: sum(1 for item in items if item['origin'] == origin) for origin in ('verified', 'predicted')}
+            return {**fitted, 'tailored': True, 'items': counts}
+
+    @staticmethod
+    def _verified_projects(registry):
+        projects = []
+        for pid, project in registry.items():
+            content = project.get('resume_content')
+            if not content or project.get('status') in {'hold', 'missing'}:
+                continue
+            projects.append({'evidence_id': pid, 'title': content.get('title', ''),
+                             'context': content.get('context', ''), 'bullets': content.get('bullets', [])})
+        return projects
+
+    def _verified_skill_pool(self):
+        """Skill name (case-folded) -> display name and registry claim id."""
+        pool = {}
+        for claim in self.w.evidence().get('claims', []):
+            if claim.get('status') in {'hold', 'missing'}:
+                continue
+            if 'skill' not in str(claim.get('category', '')) and not str(claim.get('id', '')).startswith('SKILL'):
+                continue
+            for fact in claim.get('approved_facts', []) or []:
+                pool.setdefault(str(fact).casefold(), {'name': str(fact), 'evidence_id': claim['id']})
+        for item in self.s.profile_context():
+            if item['kind'] == 'skill' and item['review_state'] == 'registered':
+                pool.setdefault(item['title'].casefold(),
+                                {'name': item['title'], 'evidence_id': (item.get('details') or {}).get('evidence_id') or item['id']})
+        return pool
+
+    @staticmethod
+    def _check_predicted_text(text, contract):
+        for label, pattern in contract.unsafe_patterns.items():
+            if re.search(pattern, text):
+                raise ValueError('A predicted item used wording that is never allowed on a resume (' + label + '); the saved draft was left unchanged.')
+        if re.search(r'\b(?:19|20)\d{2}\b', text):
+            raise ValueError('A predicted item named a date; predicted items never claim dates, so the saved draft was left unchanged.')
+        if '%' in text:
+            raise ValueError('A predicted item cited a percentage; predicted items never invent metrics, so the saved draft was left unchanged.')
+
+    def _check_tailored_projects(self, result, registry, job, contract):
+        if not result.projects:
+            raise ValueError('The tailoring came back with no projects; the saved draft was left unchanged.')
+        projects = []
+        for entry in result.projects:
+            title, context = entry.title.strip(), entry.context.strip()
+            bullets = [bullet.strip() for bullet in entry.bullets if bullet.strip()][:3]
+            if not title or not bullets:
+                raise ValueError('A tailored project arrived without a title or bullets; the saved draft was left unchanged.')
+            if entry.origin == 'verified':
+                registered = registry.get(entry.evidence_id) or {}
+                content = registered.get('resume_content')
+                if not content or registered.get('status') in {'hold', 'missing'}:
+                    raise ValueError('The tailoring named ' + (entry.evidence_id or 'an unknown project') + ' as verified, but it is not a registered project; the saved draft was left unchanged.')
+                if (title, context, bullets) != (content.get('title', ''), content.get('context', ''), [str(b) for b in content.get('bullets', [])]):
+                    raise ValueError("Verified project '" + title + "' was reworded; verified items must be copied unchanged, so the saved draft was left unchanged.")
+                projects.append({'row_id': uuid.uuid4().hex, 'section': 'projects',
+                                 'content': {'title': title, 'context': context, 'bullets': bullets},
+                                 'origin': 'verified', 'evidence_id': entry.evidence_id,
+                                 'slot_id': entry.evidence_id, 'evidence_tag': entry.evidence_id})
+            else:
+                self._check_predicted_text(' '.join([title, context, *bullets]), contract)
+                row_id = uuid.uuid4().hex
+                projects.append({'row_id': row_id, 'section': 'projects',
+                                 'content': {'title': title, 'context': context, 'bullets': bullets},
+                                 'origin': 'predicted', 'evidence_id': '',
+                                 'slot_id': row_id, 'evidence_tag': 'resume_items:' + row_id})
+        first = projects[0]
+        second = projects[1] if len(projects) > 1 else None
+        if first['origin'] == 'verified':
+            if registry[first['evidence_id']].get('signature_eligible') is False:
+                raise ValueError(first['evidence_id'] + ' is registered as a supporting project only and cannot lead Projects; the saved draft was left unchanged.')
+            with self.w.connect() as db:
+                owner = db.execute('SELECT company_key FROM signature_assignments WHERE project_id=? AND company_key<>?',
+                                   (first['evidence_id'], company_key(job['company']))).fetchone()
+            if owner:
+                raise ValueError(first['evidence_id'] + ' is already the signature project for another company; the saved draft was left unchanged.')
+        if second and first['origin'] == second['origin'] == 'verified' and first['evidence_id'] == second['evidence_id']:
+            raise ValueError('The two project slots must hold distinct projects; the saved draft was left unchanged.')
+        return projects
+
+    def _check_tailored_skills(self, result, contract):
+        if not result.skills:
+            raise ValueError('The tailoring came back with no skills; the saved draft was left unchanged.')
+        pool = self._verified_skill_pool()
+        skills, seen = [], set()
+        for entry in result.skills:
+            name = ' '.join(entry.name.split())
+            key = name.casefold()
+            if not name or key in seen:
+                continue
+            if ',' in name or ';' in name:
+                raise ValueError("A tailored skill ('" + name + "') contains a list separator; the saved draft was left unchanged.")
+            seen.add(key)
+            if entry.origin == 'verified':
+                known = pool.get(key)
+                if not known:
+                    raise ValueError("The tailoring kept '" + name + "' as a verified skill, but it is not in the registered profile; the saved draft was left unchanged.")
+                skills.append({'row_id': uuid.uuid4().hex, 'section': 'skills', 'content': known['name'],
+                               'origin': 'verified', 'evidence_id': known['evidence_id']})
+            else:
+                self._check_predicted_text(name, contract)
+                skills.append({'row_id': uuid.uuid4().hex, 'section': 'skills', 'content': name,
+                               'origin': 'predicted', 'evidence_id': ''})
+        return skills
+
+    def _apply_tailoring(self, source, result, registry, job):
+        from backend.ai.agents.schemas import TailoringResult
+        from backend.resume_contract import contract_for
+        result = TailoringResult.model_validate(result)
+        contract = contract_for(self.w.root)
+        projects = self._check_tailored_projects(result, registry, job, contract)
+        skills = self._check_tailored_skills(result, contract)
+        tailored = self._write_project_slot(source, 'SelectedProject', projects[0])
+        if len(projects) > 1 and '% SECOND_PROJECT_BLOCK_START' in tailored:
+            tailored = self._write_project_slot(tailored, 'SecondProject', projects[1])
+        tailored = self._write_tailored_skills(tailored, skills)
+        old, new = extract_zero_argument_macros(source), extract_zero_argument_macros(tailored)
+        illegal = {name for name in set(old) | set(new) if old.get(name) != new.get(name) and not tailored_macro(name)}
+        if illegal:
+            raise ValueError('Tailoring may only change Projects and Skills fields, but it also touched: ' + ', '.join(sorted(illegal)))
+        return tailored, projects, skills
+
+    @staticmethod
+    def _write_project_slot(source, slot, project):
+        marker = 'SECOND_PROJECT' if slot == 'SecondProject' else 'SELECTED_PROJECT'
+        content = project['content']
+        bullets = (content['bullets'] + ['', '', ''])[:3]
+        values = {'ID': project['slot_id'], 'Title': content['title'], 'Context': content['context'],
+                  'BulletOne': bullets[0], 'BulletTwo': bullets[1], 'BulletThree': bullets[2]}
+        for suffix, value in values.items():
+            if macro_span(source, slot + suffix) is None:
+                if value:
+                    source = _restore_macro(source, slot, suffix, value, project['evidence_tag'])
+                continue
+            source = write_field(source, slot + suffix, value)
+        tag = project['evidence_tag']
+        # Evidence comments attached to replaced definitions must refer to what now fills the slot.
+        source = re.sub(r'% EVIDENCE: [^\n]+\n(\\newcommand\{\\' + slot + r'[^\n]+)',
+                        lambda match: '% EVIDENCE: ' + tag + '\n' + match[1], source)
+        block = '% ' + marker + '_BLOCK_START\n\\textbf{\\' + slot + 'Title} \\hfill \\textit{\\' + slot + 'Context}\n\\begin{resumeitems}\n'
+        for suffix in ['One', 'Two', 'Three'][:len(content['bullets'])]:
+            block += '% EVIDENCE: ' + tag + '\n\\item \\' + slot + 'Bullet' + suffix + '\n'
+        block += '\\end{resumeitems}\n% ' + marker + '_BLOCK_END'
+        return re.sub(r'% ' + marker + r'_BLOCK_START[\s\S]*?% ' + marker + r'_BLOCK_END', lambda _: block, source, count=1)
+
+    @staticmethod
+    def _write_tailored_skills(source, items):
+        """Replace every skills macro with the tailored list, keeping each macro's category.
+
+        Skills the list keeps stay in the macro that already held them (tailored order);
+        anything new joins the last skills macro so nothing lands in a made-up category.
+        A macro that gains items has their evidence tags merged into its EVIDENCE
+        comment, so a predicted skill stays traceable to its review row.
+        """
+        macros = [match[1] for match in re.finditer(r'\\newcommand\{\\([A-Za-z]+)\}', source)
+                  if match[1] == 'CoreSkills' or match[1].startswith('Skills')]
+        if not macros:
+            return source
+        wanted, seen = [], set()
+        for item in items:
+            name = item['content']
+            key = name.casefold()
+            if key not in seen:
+                seen.add(key)
+                tag = item['evidence_id'] if item['origin'] == 'verified' else 'resume_items:' + item['row_id']
+                wanted.append((key, name, tag))
+        per_macro, used = {}, set()
+        for macro in macros:
+            span = macro_span(source, macro)
+            raw = source[span[0]:span[1]]
+            separator = '; ' if '; ' in raw else ', '
+            current = {item.strip().casefold() for item in plain(raw).split(separator) if item.strip()}
+            per_macro[macro] = (separator, [display for key, display, _tag in wanted if key in current])
+            used |= {key for key, _display, _tag in wanted if key in current}
+        leftover = [(display, tag) for key, display, tag in wanted if key not in used]
+        added = {}
+        if leftover:
+            separator, kept = per_macro[macros[-1]]
+            per_macro[macros[-1]] = (separator, kept + [display for display, _tag in leftover])
+            added[macros[-1]] = [tag for _display, tag in leftover]
+        for macro, (separator, kept) in per_macro.items():
+            source = write_field(source, macro, separator.join(kept))
+            if macro in added:
+                source = _add_evidence_tags(source, macro, added[macro])
+        return source
+
+    @staticmethod
+    def _remove_tailored_skill(source, name, tag=None):
+        key = name.casefold()
+        macros = [match[1] for match in re.finditer(r'\\newcommand\{\\([A-Za-z]+)\}', source)
+                  if match[1] == 'CoreSkills' or match[1].startswith('Skills')]
+        for macro in macros:
+            span = macro_span(source, macro)
+            raw = source[span[0]:span[1]]
+            separator = '; ' if '; ' in raw else ', '
+            items = [item.strip() for item in plain(raw).split(separator) if item.strip()]
+            if key not in {item.casefold() for item in items}:
+                continue
+            source = write_field(source, macro, separator.join([item for item in items if item.casefold() != key]))
+        if tag:
+            source = re.sub(r'(% EVIDENCE:[^\n]*?) +' + re.escape(tag) + r'\b', r'\1', source)
+            source = re.sub(r'^% EVIDENCE:[ \t]*\n', '', source, flags=re.MULTILINE)
+        return source
+
+    def _revert_project_slot(self, source, row, job_id):
+        """Put a registry project back into the slot the removed item occupied."""
+        from backend.services.resume_projects import install_project
+        content = json.loads(row['content'])
+        macros = {name: plain(value) for name, value in extract_zero_argument_macros(source).items()}
+        slot = None
+        for candidate in ('SelectedProject', 'SecondProject'):
+            if row['evidence_id'] and macros.get(candidate + 'ID') == row['evidence_id']:
+                slot = candidate
+                break
+            if macros.get(candidate + 'Title') == content.get('title'):
+                slot = candidate
+                break
+        if not slot:
+            # The slot was already changed by hand; the review stands on its own.
+            return source, None
+        other = macros.get(('SecondProject' if slot == 'SelectedProject' else 'SelectedProject') + 'ID', '')
+        job = self.w.get_job(job_id)
+        registry = project_registry(self.w.evidence())
+        for project in self.w.rank_projects(job['description']):
+            if project['id'] == other:
+                continue
+            if slot == 'SelectedProject':
+                if registry.get(project['id'], {}).get('signature_eligible') is False:
+                    continue
+                with self.w.connect() as db:
+                    owner = db.execute('SELECT company_key FROM signature_assignments WHERE project_id=? AND company_key<>?',
+                                       (project['id'], company_key(job['company']))).fetchone()
+                if owner:
+                    continue
+            return install_project(source, project, slot == 'SecondProject'), (project['id'] if slot == 'SelectedProject' else None)
+        raise ValueError('There is no registry project left to restore into this slot; use Sync profile & rank projects to pick one.')
+
+    def items(self, job_id):
+        with self.w.connect() as db:
+            rows = db.execute('SELECT * FROM resume_items WHERE job_id=? ORDER BY rowid', (job_id,)).fetchall()
+        return [{**dict(row), 'content': json.loads(row['content']) if row['section'] == 'projects' else row['content']}
+                for row in rows]
+
+    def decide(self, job_id, item_id, decision):
+        """Record the review of one tailored item; a removal also repairs the draft and refits the page."""
+        if decision not in {'kept', 'removed'}:
+            raise ValueError('Choose kept or removed')
+        with self.lock:
+            draft = self.get(job_id)
+            with self.w.connect() as db:
+                row = db.execute('SELECT * FROM resume_items WHERE id=? AND job_id=?', (item_id, job_id)).fetchone()
+            if not row:
+                raise ValueError('That tailored item is not part of this job')
+            source, signature = draft['source'], None
+            if decision == 'removed':
+                if row['section'] == 'skills':
+                    tag = 'resume_items:' + row['id'] if row['origin'] == 'predicted' else None
+                    source = self._remove_tailored_skill(source, row['content'], tag)
+                else:
+                    source, signature = self._revert_project_slot(source, row, job_id)
+            stamp = self.s.now()
+            with self.w.connect() as db:
+                db.execute('BEGIN IMMEDIATE')
+                db.execute('UPDATE resume_items SET decision=?,updated_at=? WHERE id=?', (decision, stamp, item_id))
+                revision = draft['revision']
+                if source != draft['source']:
+                    revision += 1
+                    db.execute('UPDATE studio_drafts SET source=?,revision=?,updated_at=? WHERE job_id=?', (source, revision, stamp, job_id))
+                    db.execute('INSERT INTO studio_versions VALUES(?,?,?,?)', (job_id, revision, source, stamp))
+                    if signature:
+                        db.execute('INSERT OR REPLACE INTO signature_assignments(company_key, project_id, job_id, assigned_at) VALUES(?,?,?,?)',
+                                   (company_key(self.w.get_job(job_id)['company']), signature, job_id, stamp))
+                self.w.record_event(db, 'studio_item_reviewed', job_id, item_id=item_id, decision=decision, revision=revision)
+            self.w.export_tracking()
+            fitted = self.get(job_id)
+            if source != draft['source']:
+                try:
+                    fitted = self.fit(job_id, revision)
+                except ValueError as error:
+                    # The removal is saved by now; a fitting problem must not read as a failed review.
+                    with self.w.connect() as db:
+                        self.w.record_event(db, 'studio_tailor_fit_failed', job_id, revision=revision, error=str(error))
+                    fitted['warnings'] = [*fitted.get('warnings', []),
+                                          'The item was removed and saved, but the page could not be fitted automatically: ' + str(error)]
+            return {'items': self.items(job_id), 'draft': fitted}

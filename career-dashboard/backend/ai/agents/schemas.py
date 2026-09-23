@@ -128,6 +128,33 @@ class PostingFields(BaseModel):
     url: str = Field(default="", description="The application or posting link if the text contains one; empty otherwise")
 
 
+class TailoredProject(BaseModel):
+    """One project slot in a per-job resume plan.
+
+    'verified' entries are copied unchanged from the registry and carry its
+    evidence id; 'predicted' entries are proposed wording aligned to the
+    employer's stack and must be reviewed before they can reach a resume.
+    """
+    title: str
+    context: str = Field(description="The stack line printed beside the title, e.g. 'Apache Kafka, Python'")
+    bullets: list[str]
+    origin: Literal["verified", "predicted"]
+    evidence_id: str = Field(default="", description="Registry project id for verified items; empty for predicted")
+
+
+class TailoredSkill(BaseModel):
+    name: str
+    origin: Literal["verified", "predicted"]
+    evidence_id: str = Field(default="", description="Registry claim id for verified items; empty for predicted")
+
+
+class TailoringResult(BaseModel):
+    """A per-job Projects + Skills plan. Experience, Education and personal sections are never part of it."""
+    projects: list[TailoredProject]
+    skills: list[TailoredSkill]
+    rationale: str = Field(description="One short paragraph on why this mix fits the role")
+
+
 class AgentTurn(BaseModel):
     """One decision of the workspace agent: call a tool, ask the person something, or reply.
 

@@ -592,8 +592,11 @@ class AgentRunner:
                     if self.studio is not None:
                         assessment = self.studio.assessment(row["job_id"]) or {}
                         gaps = assessment.get("missing_unsupported") or assessment.get("gaps") or []
-                except Exception:  # noqa: BLE001 - no draft yet is fine; the JD alone still yields a plan
+                except Exception as exc:  # noqa: BLE001 - no draft yet is fine; the JD alone still yields a plan
                     gaps = []
+                    with self.w.connect() as db:
+                        self.w.record_event(db, "study_plan_degraded", row["job_id"],
+                                            error=f"{type(exc).__name__}: {exc}")
                 never = [c for c in self.w.evidence()["claims"] if c["id"] == "SKILL-NEVER-001"]
                 profile_items = self.s.profile_context()
                 registered = registered_skill_terms(profile_items)
@@ -817,7 +820,7 @@ class AgentRunner:
                         )
                     except (ValueError, KeyError):
                         continue
-                limit = min({"balanced_five": 5, "portals": 5}.get(row.get("preset"), 3), self.s.goals()["remaining_today"])
+                limit = min({"balanced_five": 5, "portals": 5}.get(row.get("preset"), 5), self.s.goals()["remaining_today"])
                 normalize = lambda value: re.sub(r"[^a-z0-9]+", "", value.casefold())
                 applied_roles = {
                     (normalize(m["company"]), normalize(m["role"])) for m in mail_roles
@@ -829,6 +832,7 @@ class AgentRunner:
                 output.setdefault("excluded", [])
                 verdicts = {}  # url -> Verdict; kept out of the JSON-serialised run result
                 evaluated = []
+                rejected_records = []  # structured copy of rejected_leads, persisted to the DB
                 for job in output["jobs"]:
                     # 1. The sponsorship gate first: an excluded posting is never a "lead", it is logged with its sentence.
                     verdict = sponsorship.evaluate(
@@ -846,6 +850,7 @@ class AgentRunner:
                             duplicates.append(job["url"])  # already saved or applied: a repeat, not a rejection
                         else:
                             output["rejected_leads"].append(job["url"] + ": never-re-apply rule " + gate["rule"] + " - " + gate["note"])
+                            rejected_records.append({"company": job["company"], "title": job["title"], "url": job["url"], "stage": "reapply", "reason": gate["rule"] + " - " + gate["note"]})
                         continue
                     relevance = JobQualityService(self.s).relevance(
                         job,
@@ -853,6 +858,7 @@ class AgentRunner:
                     )
                     if not relevance["eligible"]:
                         output["rejected_leads"].append(job["url"] + ": relevance gate " + "; ".join(relevance["blockers"]))
+                        rejected_records.append({"company": job["company"], "title": job["title"], "url": job["url"], "stage": "relevance", "reason": "; ".join(relevance["blockers"])})
                         continue
                     verdicts[job["url"]] = verdict
                     job["sponsor_tier"] = verdict.tier
@@ -877,6 +883,7 @@ class AgentRunner:
                     )
                     if company_check["state"] != "verified":
                         output["rejected_leads"].append(job["url"] + ": company legitimacy needs review")
+                        rejected_records.append({"company": job["company"], "title": job["title"], "url": job["url"], "stage": "legitimacy", "reason": "company legitimacy needs review"})
                         continue
                     evaluated.append({
                         **job,
@@ -924,21 +931,37 @@ class AgentRunner:
                         candidates = candidates[:limit]
                     output["balanced_shortages"] = shortages
                 else:
-                    if row.get("preset") == "portals":
-                        # A feed lists hundreds of postings in board order; the AI search already
-                        # ranks its few. Save the best-matching portal leads, not the first ones.
-                        unique.sort(key=lambda job: job["relevance"]["score"], reverse=True)
+                    # Best fit first in every mode: a feed lists hundreds of postings in board
+                    # order, and even the AI's shortlist deserves the deterministic score's say.
+                    unique.sort(key=lambda job: job["relevance"]["score"], reverse=True)
                     candidates = unique[:limit]
                 for job in candidates:
                     result = self.s.add_posting(job, source="discovery", verdict=verdicts.get(job["url"]))
                     if result.get("excluded") or result.get("blocked"):
-                        output["rejected_leads"].append(job["url"] + ": " + (result.get("note") or result.get("reason_label") or "not saved"))
+                        reason = result.get("note") or result.get("reason_label") or "not saved"
+                        output["rejected_leads"].append(job["url"] + ": " + reason)
+                        rejected_records.append({"company": job["company"], "title": job["title"], "url": job["url"], "stage": "save", "reason": reason})
                         continue
                     if result["duplicate"]:
                         duplicates.append(result["job"]["id"])
                     else:
                         added.append(result["job"]["id"])
                         self.w.track_search_job(result["job"]["id"])
+                        relevance = job.get("relevance") or {}
+                        if relevance.get("score") is not None:
+                            c = relevance.get("components") or {}
+                            rationale = (
+                                f"Fit {relevance['score']}/100 — requirement overlap {c.get('requirement_evidence', 0)}/40, "
+                                f"role & seniority {c.get('role_seniority', 0)}/25, US location {c.get('location', 0)}/15, "
+                                f"skills match {c.get('professional_fit', 0)}/15, domain {c.get('domain', 0)}/5. "
+                                f"Sponsorship tier {job.get('sponsor_tier', 'C')} ({job.get('sponsor_label', 'no sponsorship signal')})."
+                            )
+                            with self.w.connect() as db:
+                                db.execute(
+                                    "UPDATE jobs SET fit_score=?, fit_rationale=?, "
+                                    "raw_jd=CASE WHEN raw_jd='' THEN description ELSE raw_jd END WHERE id=?",
+                                    (relevance["score"], rationale, result["job"]["id"]),
+                                )
                         notes = "\n\n".join(
                             label + ": " + job[key]
                             for key, label in [
@@ -951,6 +974,14 @@ class AgentRunner:
                         )
                         if notes:
                             self.w.update_job(result["job"]["id"], "saved", notes=notes)
+                if rejected_records:
+                    # Persisted so the reasons survive beyond the run row's JSON.
+                    with self.w.connect() as db:
+                        for record in rejected_records:
+                            db.execute(
+                                "INSERT INTO rejected_leads(run_id,company,title,url,stage,reason,created_at) VALUES(?,?,?,?,?,?,?)",
+                                (id, record["company"], record["title"], record.get("url", ""), record["stage"], record["reason"], self.s.now()),
+                            )
                 shortage_note = (
                     "\n\nBalanced mix shortfall:\n" + "\n".join(output["balanced_shortages"])
                     if output.get("balanced_shortages")
@@ -1009,19 +1040,30 @@ class AgentRunner:
         self.s.set_pref("posting_sweep", {"last_run_at": self.s.now(), "checked": result["checked"]})
         return result
 
+    def _record_schedule_fault(self, kind: str, exc: Exception) -> None:
+        """Keep scheduler failures observable without killing the loop."""
+        try:
+            with self.w.connect() as db:
+                self.w.record_event(db, kind, error=f"{type(exc).__name__}: {exc}")
+            self.s.set_pref("last_schedule_fault", {"kind": kind, "error": str(exc), "at": self.s.now()})
+        except Exception:
+            pass  # If even the log write fails, the loop must still survive.
+
     def start_schedule(self):
         def loop():
             while not self.stop.wait(60):
                 try:
                     self.sweep_postings()
-                except Exception:
-                    # A network failure must not stop the scheduler thread.
-                    pass
+                except Exception as exc:
+                    # A network failure must not stop the scheduler thread, but
+                    # it must be visible: record it and expose it as the last
+                    # sweep error instead of vanishing.
+                    self._record_schedule_fault("sweep_failed", exc)
                 try:
                     # Annie's rule: applied and silent for 21 days becomes ghosted.
                     self.s.age_applications()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self._record_schedule_fault("aging_failed", exc)
                 config = self.s.pref("email_schedule", {"enabled": False, "hours": 6})
                 gmail = self.s.pref("gmail", {})
                 last = gmail.get("last_synced_at")

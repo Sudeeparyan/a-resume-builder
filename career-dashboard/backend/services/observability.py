@@ -44,6 +44,9 @@ def activity(services, runner, limit: int = 60) -> dict:
         calls = [dict(r) for r in db.execute(
             "SELECT provider,state,COUNT(*) AS n FROM ai_calls WHERE day=? GROUP BY provider,state",
             (services.today(),))]
+        review_counts = {r["decision"]: r["n"] for r in db.execute(
+            "SELECT decision, COUNT(*) AS n FROM resume_items GROUP BY decision")}
+        tailored_jobs = db.execute("SELECT COUNT(DISTINCT job_id) AS n FROM resume_items").fetchone()["n"]
     listed = []
     for r in runs:
         result = json.loads(r["result"]) if r["result"] else {}
@@ -78,6 +81,12 @@ def activity(services, runner, limit: int = 60) -> dict:
         "runs": listed,
         "budget": runner.cache.stats(),
         "calls_today": {**totals, "by_provider": by_provider},
+        "reviews": {
+            "pending": review_counts.get("pending", 0),
+            "kept": review_counts.get("kept", 0),
+            "removed": review_counts.get("removed", 0),
+            "tailored_jobs": tailored_jobs,
+        },
         "ai": runner.gateway.preferences(),
         "now": services.now(),
     }

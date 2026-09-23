@@ -53,7 +53,7 @@ flowchart TD
 | Email reviewer | Scoped Gmail read tools | Application evidence | Live, budgeted |
 | Release validator | Source, registry, evidence map, PDF, preview | Hard pass/fail gates | None |
 
-AI workers run as fresh Claude Code or Codex processes in temporary directories with shell tools disabled, or through an API provider chosen in Settings. Codex's structured output is strict, so every schema reaches it in closed form (`backend/ai/codex.py: strict_schema`: objects closed, every property required); a failed `codex exec` reports its last error line rather than a generic hint. One choice covers everything: the chat's tiers follow the main provider unless Settings set them apart, and a run the chat starts is enqueued on the chat's engine when that runtime can do the work. The hiring manager never receives candidate context.
+AI workers run as fresh Claude Code, Codex or Kimi Code CLI processes in temporary directories with shell tools disabled, or through an API provider chosen in Settings. Codex's structured output is strict, so every schema reaches it in closed form (`backend/ai/codex.py: strict_schema`: objects closed, every property required); a failed `codex exec` reports its last error line rather than a generic hint. One choice covers everything: the chat's tiers follow the main provider unless Settings set them apart, and a run the chat starts is enqueued on the chat's engine when that runtime can do the work. The hiring manager never receives candidate context.
 
 ## How to use the workflow
 

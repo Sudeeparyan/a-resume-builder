@@ -438,6 +438,30 @@ export type PipelineProvider = {
 };
 // tokens: measured tokens per job for this AI (the tailor reports usage), when known.
 export type PipelineSpeed = { factor: number; learned: boolean; runs: number; tokens?: number };
+/** One thing a posting asks for, quoted from it, and whether her registered evidence meets it. */
+export type FitRequirement = {
+  text: string;
+  category: "required" | "preferred" | "responsibility";
+  excerpt: string;
+  /** "unknown": the rules could not name it, so it is not scored. */
+  status: "met" | "partial" | "missing" | "unknown";
+  evidence_ids: string[];
+  note: string;
+};
+/** The verified requirement check for one job (GET /v2/jobs/{id}/fit, services/fit.py). */
+export type JobFit = {
+  matrix: { requirements: FitRequirement[]; hard_blockers: { excerpt: string; reason: string }[]; summary: string };
+  method: "ai" | "rules";
+  provider: string;
+  model: string;
+  provider_label: string;
+  score: number;
+  components: { requirements: number; role_seniority: number; location: number };
+  must_have_ok: boolean;
+  rationale: string;
+  ai_error: string;
+  checked_at?: string;
+};
 export type PipelineChoice = {
   count: number;
   source: string;

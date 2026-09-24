@@ -164,23 +164,28 @@ describe("Progress while a search runs", () => {
 describe("The setup card", () => {
   const render = (i = info(), c = choice()) =>
     renderToStaticMarkup(
-      <PipelineBuilder info={i} choice={c} onChoice={noop} running={false} starting={false} onStart={noop} onEditPlan={noop} onRaiseBudget={noop} />,
+      <PipelineBuilder info={i} choice={c} onChoice={noop} running={false} starting={false} onStart={noop} />,
     );
-  it("asks four plain questions and shows the totals before starting", () => {
+  it("asks three plain questions, names the AI from Settings, and shows the totals before starting", () => {
     const html = render();
-    for (const text of ["How many jobs do you want?", "Where should we look?", "Which AI should do the work?", "What should run for each job?"])
+    for (const text of ["How many jobs do you want?", "Where should we look?", "What should run for each job?"])
       expect(html).toContain(text);
+    // The AI is chosen in Settings only: a status line with a link, never a picker here.
+    expect(html).not.toContain("Which AI should do the work?");
+    expect(html).not.toContain('aria-label="Which AI"');
+    expect(html).toContain("AI: Claude Code · Sonnet");
+    expect(html).toContain('href="#settings"');
     expect(html).toContain("About 33 min");
     expect(html).toContain("From your Claude Code plan&#x27;s limit");
     expect(html).toContain("Start search");
     expect(html).toContain('role="switch"');
   });
-  it("shows an AI that is not on this PC as unavailable, with the reason", () => {
-    const html = render();
-    expect(html).toContain("Not found");
-    expect(html).toContain("Kimi Code is not installed on this PC.");
+  it("says when the AI chosen in Settings is not on this PC, and where to change it", () => {
+    const html = render(info(), choice({ provider: "kimi_cli", model: "kimi-runtime" }));
+    expect(html).toContain("Not ready on this PC.");
+    expect(html).toContain("is not ready on this PC. Choose another AI in Settings.");
   });
-  it("explains the paid-call limit in plain words and offers to raise it, only for a paid AI", () => {
+  it("explains the paid-call limit in plain words and sends a paid AI to Settings to raise it", () => {
     const azure = {
       id: "azure_openai", label: "Azure OpenAI", kind: "api" as const, ready: true, web: true,
       cost: "Pay per use on your Azure account.", note: null, models: [{ id: "gpt-6-luna", label: "gpt-6-luna", hint: "" }],
@@ -188,20 +193,21 @@ describe("The setup card", () => {
     const paid = info({ budget: { limit: 3, used: 1, remaining: 2 }, providers: [...info().providers, azure] });
     const onAzure = choice({ provider: "azure_openai", model: "gpt-6-luna" });
     const html = render(paid, onAzure);
-    expect(html).toContain("Allow 7 a day");
+    expect(html).toContain("Open Settings");
+    expect(html).not.toContain("Allow 7 a day");
     expect(html).toContain("This search needs 6 AI calls, but your paid limit has 2 left today.");
     expect(html).toContain("It uses 1 to find jobs and 5 for Study plan.");
     expect(html).toContain("An AI call is one request to your AI");
     expect(html).toContain("Paid calls left today: 2 of 3");
     // A free plan is never stopped by the paid limit.
     const free = render(paid);
-    expect(free).not.toContain("Allow 7 a day");
+    expect(free).not.toContain("Open Settings");
     expect(free).toContain("Free on your plan · no daily limit");
     const everything = render(paid, choice({ provider: "azure_openai", model: "gpt-6-luna", steps: { research: true, tailor: true, study_plan: true, pdf: true } }));
     expect(everything).toContain("1 to find jobs, 15 for Company research and 5 for Study plan");
     const done = render(info({ plan: { remaining_today: 0 } }));
     expect(done).toContain("Today&#x27;s plan is done");
-    expect(done).toContain("Edit plan");
+    expect(done).toContain('href="#dashboard"');
   });
   it("warns on the PDF switch when the PDF compiler is missing", () => {
     expect(render(info({ tools: { pdf: false } }))).toContain("PDF compiler (Tectonic) is not installed");
@@ -261,7 +267,7 @@ describe("How much of each plan's limit a search uses", () => {
       <PipelineBuilder
         info={info({ providers: [auto, ...info().providers] })}
         choice={choice({ provider: "auto", model: "auto" })}
-        onChoice={noop} running={false} starting={false} onStart={noop} onEditPlan={noop} onRaiseBudget={noop}
+        onChoice={noop} running={false} starting={false} onStart={noop}
       />,
     );
     expect(html).toContain("How much of each plan&#x27;s 5-hour limit this search uses");

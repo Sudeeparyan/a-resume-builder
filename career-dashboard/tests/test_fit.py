@@ -81,6 +81,21 @@ def test_the_code_verifies_every_excerpt_and_evidence_id(service):
     assert matrix["checks"] == {"dropped_ungrounded": 1, "downgraded": 3}
 
 
+def test_a_never_claim_tool_among_examples_caps_the_item_at_partial(service):
+    jd = "Familiarity with modern web stacks including Python, SQL and Kubernetes. Experience with Kubernetes is required."
+    raw = {"requirements": [
+        {"text": "web development (Python, SQL, Kubernetes)", "category": "required", "status": "met",
+         "excerpt": "Familiarity with modern web stacks including Python, SQL and Kubernetes.", "evidence_ids": ["SKILL-LANGUAGES-001"]},
+        {"text": "Kubernetes", "category": "required", "status": "met",
+         "excerpt": "Experience with Kubernetes is required.", "evidence_ids": ["SKILL-LANGUAGES-001"]},
+    ]}
+    by = {r["text"]: r for r in fit.verify(raw, jd, fit.catalogue(service))["requirements"]}
+    grouped = by["web development (Python, SQL, Kubernetes)"]
+    assert grouped["status"] == "partial" and grouped["evidence_ids"] == ["SKILL-LANGUAGES-001"]
+    assert "never-claim" in grouped["note"]
+    assert by["Kubernetes"]["status"] == "missing", "the requirement itself is never met"
+
+
 def test_a_typographic_difference_quotes_the_posting_itself(service):
     jd = "We use SQL daily – and Python too."
     raw = {"requirements": [{"text": "SQL", "category": "required", "excerpt": "We use SQL daily - and Python too.",
@@ -94,16 +109,25 @@ def test_the_score_follows_the_formula(service):
     def matrix(*statuses):
         return {"requirements": [{"text": f"r{i}", "category": "required", "excerpt": "x", "status": s, "evidence_ids": []}
                                  for i, s in enumerate(statuses)], "hard_blockers": []}
-    everything = fit.score(matrix("met", "met"), POSTING, root)
-    assert everything["score"] == fit.COVERAGE_POINTS + fit.ROLE_POINTS + fit.LOCATION_POINTS == 100
+    assert fit.COVERAGE_POINTS + fit.ROLE_POINTS + fit.LOCATION_POINTS == 100
+
+    def points(met, total):  # the coverage part: PRIOR_ITEMS imaginary half-met items weigh in
+        return round(fit.COVERAGE_POINTS * (met + 0.5 * fit.PRIOR_ITEMS) / (total + fit.PRIOR_ITEMS))
+
+    everything = fit.score(matrix(*["met"] * 10), POSTING, root)
+    assert everything["score"] == points(10, 10) + 25 and everything["must_have_ok"]
     half = fit.score(matrix("met", "missing"), POSTING, root)
-    assert half["score"] == round(fit.COVERAGE_POINTS * 0.5) + 25 and half["must_have_ok"]
+    assert half["score"] == points(1, 2) + 25 == round(fit.COVERAGE_POINTS * 0.5) + 25 and half["must_have_ok"]
     short = fit.score(matrix("met", "missing", "missing"), POSTING, root)
     assert not short["must_have_ok"]
     abroad = fit.score(matrix("met"), {**POSTING, "location": "Dublin, Ireland", "title": "Senior Data Engineer"}, root)
-    assert abroad["components"] == {"requirements": 75, "role_seniority": 0, "location": 0}
+    assert abroad["components"] == {"requirements": points(1, 1), "role_seniority": 0, "location": 0}
     nothing = fit.score(matrix(), POSTING, root)
     assert nothing["components"]["requirements"] == round(fit.COVERAGE_POINTS * 0.5)
+    # Two recognised must-haves, both met, is a thinner case than twelve of thirteen met.
+    sparse = fit.score(matrix("met", "met"), POSTING, root)
+    thorough = fit.score(matrix(*["met"] * 12, "missing"), POSTING, root)
+    assert thorough["score"] > sparse["score"]
 
 
 def test_the_rules_path_matches_her_own_skills_and_knows_what_she_lacks(service):
@@ -114,6 +138,15 @@ def test_the_rules_path_matches_her_own_skills_and_knows_what_she_lacks(service)
     assert by["Apache Kafka"]["status"] == "met"
     assert by["Kubernetes"]["status"] == "missing"
     assert "Checked by rules" in analysis["rationale"] and "Missing: Kubernetes" in analysis["rationale"]
+
+
+def test_the_rules_credit_a_field_from_the_tools_that_prove_it(service):
+    # "Machine learning" is rarely written in her evidence; PyTorch, computer vision and her lab projects are.
+    posting = {**POSTING, "description": "Required: hands-on machine learning experience and SQL. " * 3}
+    by = {r["text"]: r for r in fit.analyse(service, posting)["matrix"]["requirements"] if r["status"] != "unknown"}
+    assert by["ML"]["status"] == "met"
+    assert any(i.startswith(("SKILL-ML", "PROJ-")) for i in by["ML"]["evidence_ids"]), by["ML"]
+    assert "COURSEWORK-MS-001" not in by["ML"]["evidence_ids"][:1], "real work, not only coursework, proves it"
 
 
 def test_the_ai_path_is_verified_and_scored(service):
@@ -155,6 +188,24 @@ def test_the_matrix_is_cached_per_posting_and_evidence(service, monkeypatch):
     upgraded = fit.for_job(service, job["id"], team=team)
     assert upgraded["method"] == "ai" and fit.cached(service, job["id"])["method"] == "ai"
     assert fit.for_job(service, job["id"], team=StubTeam(error="unused"))["method"] == "ai"  # served from the cache
+
+
+def test_saved_jobs_are_brought_up_to_date_by_rules_without_ai(service, monkeypatch):
+    job = add(service.w)
+    # Saved before the requirement check: an old word-overlap score, no matrix.
+    with service.w.connect() as db:
+        db.execute("UPDATE jobs SET fit_score=13, fit_rationale='old overlap score' WHERE id=?", (job["id"],))
+    monkeypatch.setattr(fit, "fit_team", lambda services: pytest.fail("the start-up refresh never calls an AI"))
+    assert fit.backfill(service) == 1
+    checked = fit.cached(service, job["id"])
+    assert checked["method"] == "rules"
+    assert service.w.get_job(job["id"])["fit_score"] == checked["score"] != 13
+    assert fit.backfill(service) == 0, "nothing to do the second time"
+    # The formula changed but the matrix did not: only the shown score moves.
+    with service.w.connect() as db:
+        db.execute("UPDATE jobs SET fit_score=1 WHERE id=?", (job["id"],))
+    assert fit.backfill(service) == 1 and service.w.get_job(job["id"])["fit_score"] == checked["score"]
+    assert "Checked by rules" in service.w.get_job(job["id"])["fit_rationale"]
 
 
 def test_coverage_uses_the_matrix_and_its_evidence_words(service):

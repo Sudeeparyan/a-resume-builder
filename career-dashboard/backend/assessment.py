@@ -29,7 +29,8 @@ ALIASES = {
     "data quality": ("data quality", "data validation"),
     "dashboards": ("dashboard", "dashboards"),
     "stakeholders": ("stakeholder", "stakeholders"),
-    "requirements": ("requirements", "business requirements", "brd"),
+    # The skill, not the word: "Requirements:" heads most postings and is not something to meet.
+    "requirements": ("business requirements", "requirements gathering", "gather requirements", "gathering requirements", "brd"),
     "ETL": ("etl", "extract transform load"),
     "data modelling": ("data modelling", "data modeling"),
     "statistics": ("statistics", "statistical"),

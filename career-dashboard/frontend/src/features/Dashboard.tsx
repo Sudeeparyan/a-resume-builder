@@ -14,6 +14,7 @@ import {
 import { api, fileUrl, safeUrl } from "../api";
 import { AskAssistant, Badge, Empty, Modal, Field, Running } from "../components/UI";
 import { JobList } from "../components/JobList";
+import { PlanEditor, WeekCard } from "../components/WeekPlan";
 import type { Summary, Mail, Job, CoverLetter, ExcludedJob } from "../types";
 type Props = {
   data: Summary;
@@ -36,6 +37,7 @@ export default function Dashboard({
   const [busy, setBusy] = useState(false);
   const [schedule, setSchedule] = useState<any>(null);
   const [coverLetter, setCoverLetter] = useState<CoverLetter | null>(null);
+  const [editingPlan, setEditingPlan] = useState(false);
   const running = data.runs.find(
     (r) => r.kind === "email" && ["queued", "running"].includes(r.state),
   );
@@ -121,6 +123,9 @@ export default function Dashboard({
               { label: "Anything to follow up on?", text: "Which applications have gone quiet or need a follow-up, and are any emails waiting for me?" },
             ]}
           />
+          <button className="secondary" onClick={() => setEditingPlan(true)}>
+            <Settings2 size={17} /> Edit plan
+          </button>
           <button className="primary" onClick={onAdd}>
             ＋ Save a job
           </button>
@@ -157,7 +162,7 @@ export default function Dashboard({
                 : "Your progress starts with one well-matched role."}
             </p>
             <button onClick={onDaily}>
-              Open daily plan <ArrowRight size={17} />
+              Open Daily Search <ArrowRight size={17} />
             </button>
           </div>
           <div className="progress-dial">
@@ -254,6 +259,10 @@ export default function Dashboard({
         </section>
         )}
       </div>
+      <WeekCard goals={data.goals} />
+      {editingPlan && (
+        <PlanEditor goals={data.goals} onClose={() => setEditingPlan(false)} onSaved={refresh} notify={notify} />
+      )}
       <section className="card workspace-panel">
         <div className="section-title">
           <div className="segmented">

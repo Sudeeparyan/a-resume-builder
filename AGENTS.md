@@ -63,6 +63,7 @@ The skills live in `.agents/skills/<name>/SKILL.md` (Codex and Kimi Code load th
 | "I built X", "I finished a course", an answer to a question in `QUESTIONS-FOR-YOU.md`, an updated CV | `.agents/skills/profile-intake/SKILL.md` |
 | "I have an interview at X", practice questions | `.agents/skills/interview-prep/SKILL.md` |
 | "is this posting still live", "clean up the job list" | `.agents/skills/verify-job-url/SKILL.md` |
+| "remove AI marks", "strip watermarks or metadata"; it also runs on **every** resume and cover letter | `.agents/skills/remove-ai-marks/SKILL.md` (for resumes, its "In this workspace" section: the app does it built in, never the Layer B rewrite) |
 
 For a daily search follow `daily-job-search/DAILY_BRIEF.md`. Application folders live once, under `career-dashboard/data/output/applications/Annie_Manoharan_<Company>_<NN>/`. Use exact job IDs; if Annie names an ambiguous employer or role, ask which posting. Record a submission only from her explicit confirmation or a verified matching email, and keep the date she states.
 

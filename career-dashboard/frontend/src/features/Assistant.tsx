@@ -1,16 +1,11 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity,
   ArrowDown,
-  BookOpen,
-  Bot,
   CalendarCheck,
   Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  CircleHelp,
-  ClipboardList,
   ClipboardPaste,
   Copy,
   Cpu,
@@ -19,23 +14,18 @@ import {
   FileText,
   History,
   LoaderCircle,
-  Mail,
   MessageSquare,
-  Network,
+  MoreHorizontal,
   Paperclip,
   Pencil,
   RefreshCw,
   RotateCcw,
-  ScanSearch,
   Search,
   Send,
-  ShieldCheck,
   Sparkles,
   Square,
   SquarePen,
   Trash2,
-  UserRound,
-  Workflow,
   X,
   XCircle,
 } from "lucide-react";
@@ -44,12 +34,10 @@ import { API_BASE, api, fileUrl, safeUrl, uploadFile } from "../api";
 import { Badge, Modal, RichText } from "../components/UI";
 import QuestionCard from "../components/QuestionCard";
 import type {
-  AssistantAgent,
   AssistantConversation,
   AssistantMessage,
   AssistantOverview,
   AssistantStep,
-  Run,
   Summary,
 } from "../types";
 import { useTierTitles } from "../components/JobList";
@@ -64,16 +52,15 @@ type Props = {
   onAsked?: () => void;
 };
 
-/** What the front page offers: each is a real message the agent understands. */
-const STARTERS: { label: string; hint: string; send?: string; icon: ComponentType<{ size?: number }> }[] = [
+type Starter = { label: string; hint: string; send?: string; icon: ComponentType<{ size?: number }> };
+
+/** What an empty chat offers: each is a real message the agent understands. "Paste a posting" focuses the box. */
+const STARTERS: Starter[] = [
   { label: "Paste a posting", hint: "The whole job description plus its link; the one-page PDF comes back.", icon: ClipboardPaste },
-  { label: "Search jobs for my profile", hint: "Today's search through the tracked career pages and portals.", send: "find jobs", icon: Search },
-  { label: "Which saved jobs still have no resume? Build them", hint: "Every draft goes through the one-page fit and the scorer.", icon: FileText },
-  { label: "What did I apply to this week, and what's still waiting?", hint: "Read from the tracker; nothing changes.", icon: CalendarCheck },
-  { label: "Research the newest saved job and write its study plan", hint: "Company research, the independent hiring review, then the plan.", icon: BookOpen },
-  { label: "Show my open profile questions", hint: "The answers that sharpen every future resume.", icon: CircleHelp },
+  { label: "Find jobs for me", hint: "Today's search through your company list and the job boards, checked against your must-haves.", send: "find jobs", icon: Search },
+  { label: "Build missing resumes", hint: "Every saved job without a resume gets one, fitted to one page and scored.", send: "Which saved jobs still have no resume? Build them", icon: FileText },
+  { label: "What's waiting on me?", hint: "Read from the tracker; nothing changes.", send: "What did I apply to this week, and what's still waiting?", icon: CalendarCheck },
 ];
-const ALSO = ["status", "set my weekly target to 12", "how does the sponsorship rule work?", "excluded"];
 
 const PENDING_LABEL: Record<string, string> = {
   posting_link: "Waiting for the posting link",
@@ -84,54 +71,24 @@ const PENDING_LABEL: Record<string, string> = {
   agent: "Waiting for your answer",
 };
 
-/** Icon, short name and the message a click on the rail pre-fills, per registry agent.
- *  A prompt ending in a space wants a job or company name typed after it. */
-const AGENT_UI: Record<string, { icon: ComponentType<{ size?: number }>; short: string; prompt: string }> = {
-  assistant: { icon: Bot, short: "Assistant", prompt: "help" },
-  orchestrator: { icon: Cpu, short: "Orchestrator", prompt: "what is running right now?" },
-  sponsorship: { icon: ShieldCheck, short: "Sponsorship gate", prompt: "excluded" },
-  reapply: { icon: ShieldCheck, short: "Never re-apply", prompt: "which companies are off limits right now and why?" },
-  discovery: { icon: Search, short: "Job discovery", prompt: "find jobs" },
-  resume: { icon: FileText, short: "Resume Studio", prompt: "build the resume for " },
-  resume_match: { icon: ScanSearch, short: "Resume scorer", prompt: "score the resume for " },
-  resume_advisor: { icon: FileText, short: "Resume advisor", prompt: "resume advice for " },
-  resume_tracker: { icon: ClipboardList, short: "Tracker", prompt: "status" },
-  research: { icon: Network, short: "Company research", prompt: "research " },
-  hiring: { icon: UserRound, short: "Hiring review", prompt: "research " },
-  match: { icon: ScanSearch, short: "Profile comparison", prompt: "research " },
-  study_plan: { icon: BookOpen, short: "Study planner", prompt: "study plan for " },
-  profile: { icon: UserRound, short: "Profile curator", prompt: "show my pending profile entries" },
-  email: { icon: Mail, short: "Email evidence", prompt: "which application emails are waiting for me?" },
-  instruction_tracker: { icon: MessageSquare, short: "Instruction chat", prompt: "open " },
-};
-/** Which registry agents a background run of each kind lights up. */
-const RUN_AGENTS: Record<string, string[]> = {
-  research: ["research", "hiring", "match"],
-  resume_advisor: ["resume_advisor"],
-  discovery: ["discovery", "sponsorship", "reapply"],
-  resume_build: ["resume", "resume_match"],
-  resume_match: ["resume_match"],
-  study_plan: ["study_plan"],
-  email: ["email"],
-  instruction_interpret: ["instruction_tracker"],
-};
-const RUN_LABEL: Record<string, string> = {
-  research: "Company & hiring review",
-  resume_advisor: "Resume advisor",
-  email: "Gmail sync",
+/** The short name a step shows for the registry agent that took it. */
+const AGENT_SHORT: Record<string, string> = {
+  assistant: "Assistant",
+  orchestrator: "Orchestrator",
+  sponsorship: "Sponsorship gate",
+  reapply: "Never re-apply",
   discovery: "Job discovery",
-  resume_build: "Resume build & score",
-  resume_match: "Independent review",
-  instruction_interpret: "Instruction interpreter",
-  study_plan: "Study plan",
+  fit: "Requirement check",
+  resume: "Resume Studio",
+  resume_match: "Resume scorer",
+  resume_tracker: "Tracker",
+  research: "Company research",
+  hiring: "Hiring review",
+  match: "Profile comparison",
+  study_plan: "Study planner",
+  profile: "Profile curator",
+  email: "Email evidence",
 };
-/** The pipeline a pasted posting goes through, shown before the first message. */
-const DEFAULT_FLOW = ["assistant", "sponsorship", "resume", "resume_match"];
-/** Rail order: the chat's own path first, then the agents it starts, then the plumbing. */
-const RAIL_ORDER = [
-  "assistant", "sponsorship", "reapply", "discovery", "resume", "resume_match", "research", "hiring", "match",
-  "study_plan", "resume_advisor", "profile", "resume_tracker", "email", "orchestrator", "instruction_tracker",
-];
 
 /** Polling: quick while a reply is being worked on, relaxed when idle, slow in a hidden tab. */
 const POLL_BUSY = 1200;
@@ -270,7 +227,7 @@ export default function Assistant({ data, refresh, notify, onJob, asked, onAsked
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [stepsOpen, setStepsOpen] = useState<Record<string, boolean>>({});
-  const [railOpen, setRailOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -596,10 +553,9 @@ export default function Assistant({ data, refresh, notify, onJob, asked, onAsked
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [askedN, !!overview]);
 
-  /** A rail click pre-fills the composer and never sends: a tap on a list is not a request.
-   *  A complete message is one Enter away; one that needs a job name waits for it. */
+  /** Pre-fills the composer and never sends (an edit, a suggestion to finish, a question from
+   *  another tab that would start work). A complete message is one Enter away. */
   function prompt(text: string) {
-    setRailOpen(false);
     setDraft(text);
     const box = boxRef.current;
     if (box) {
@@ -627,17 +583,6 @@ export default function Assistant({ data, refresh, notify, onJob, asked, onAsked
     }
   }
 
-  async function chooseEngine(value: string) {
-    const [provider, model] = value.split("::");
-    try {
-      await api("/v2/ai/main", "PUT", { provider, model });
-      const fresh = await load();
-      notify("Everything now runs on " + (fresh?.engine.options.find((o) => o.provider === provider && o.model === model)?.label || model));
-    } catch (e) {
-      notify((e as Error).message, true);
-    }
-  }
-
   function grow(el: HTMLTextAreaElement) {
     el.style.height = "";
     el.style.height = Math.min(el.scrollHeight, 260) + "px";
@@ -656,8 +601,8 @@ export default function Assistant({ data, refresh, notify, onJob, asked, onAsked
         toggleSearch();
       } else if (e.key === "Escape") {
         if (confirmDelete || confirmClear) return; // the dialog closes itself
+        if (moreOpen) return; // the menu closes itself
         if (historyOpen) setHistoryOpen(false);
-        else if (railOpen) setRailOpen(false);
         else if (searchOpen) toggleSearch(false);
       } else if (e.key === "/" && !cmd && !e.altKey) {
         const t = e.target as HTMLElement | null;
@@ -676,15 +621,16 @@ export default function Assistant({ data, refresh, notify, onJob, asked, onAsked
   const current = latest?.state === "processing" ? latest.steps[latest.steps.length - 1] : undefined;
   const startedAt = echo ? new Date(echo.at).getTime() : latest?.state === "processing" ? new Date(latest.created_at).getTime() : 0;
   const quick = quickReplies(overview?.pending ?? null);
-  const names = new Map(overview?.agents.map((a) => [a.id, AGENT_UI[a.id]?.short || a.name]));
+  const names = new Map(overview?.agents.map((a) => [a.id, AGENT_SHORT[a.id] || a.name]));
   const conversations = overview?.conversations || [];
   const currentConversation = conversations.find((c) => c.current);
   const q = query.trim();
   const shown = q ? messages.filter((m) => matches(m, q)) : messages;
   const empty = messages.length === 0 && !echo;
   const heading = currentConversation?.title || (empty ? "New chat" : "Assistant");
+  const engine = overview?.engine;
   return (
-    <div className="chat chat-with-rail">
+    <div className="chat">
       <div className="chat-main">
         <div className="chat-bar">
           <div className="chat-bar-title">
@@ -698,6 +644,15 @@ export default function Assistant({ data, refresh, notify, onJob, asked, onAsked
                 {messages.length > 0 && <span className="chat-bar-count"> · {messages.length} {messages.length === 1 ? "exchange" : "exchanges"}</span>}
               </small>
             </div>
+          </div>
+          <div className="chat-bar-status">
+            {engine && <EngineChip engine={engine} />}
+            {runningNow > 0 && (
+              <a className="chat-chip busy" href="#agents" title="Background runs the chat or a search started: open the Agents tab">
+                <LoaderCircle className="spin" size={13} />
+                {runningNow} running
+              </a>
+            )}
           </div>
           <div className="chat-bar-actions" role="toolbar" aria-label="Chat actions">
             <button type="button" className="bar-button" onClick={() => void newChat()} title={`New chat (${mac ? "⌘⇧O" : "Ctrl+Shift+O"})`}>
@@ -716,38 +671,28 @@ export default function Assistant({ data, refresh, notify, onJob, asked, onAsked
               <span>History</span>
               {conversations.length > 1 && <em className="bar-count">{conversations.length}</em>}
             </button>
-            <button
-              type="button"
-              className={"bar-button" + (searchOpen ? " on" : "")}
-              onClick={() => toggleSearch()}
-              title={`Search this chat (${mod}K)`}
-              aria-pressed={searchOpen}
-              disabled={empty}
-            >
-              <Search size={15} />
-              <span>Search</span>
-            </button>
-            <button type="button" className="bar-button" onClick={exportChat} title="Download this chat as a Markdown file" disabled={empty}>
-              <Download size={15} />
-              <span>Export</span>
-            </button>
-            <button
-              type="button"
-              className="bar-button chat-rail-toggle"
-              onClick={() => setRailOpen(true)}
-              aria-label="Show the agents"
-              title="The agents linked to this chat"
-            >
-              <Workflow size={15} />
-              <span>Agents</span>
-              {(working || runningNow > 0) && <span className="rail-live" aria-label="working" />}
-            </button>
+            <MoreMenu
+              open={moreOpen}
+              onOpen={setMoreOpen}
+              empty={empty}
+              searchLabel={`Search this chat (${mod}K)`}
+              onSearch={() => toggleSearch(true)}
+              onExport={exportChat}
+              autoApply={!!overview?.auto_apply}
+              onAutoApply={(enabled) => void toggleAutoApply(enabled)}
+            />
           </div>
         </div>
         {overview && !overview.ai_configured && (
           <div className="chat-notice" role="status">
-            <Badge tone="amber">No AI runtime</Badge>
-            <span>Shortcuts only. Install Claude Code or the ChatGPT app, or add a provider key in Settings, and the chat can do the rest.</span>
+            <Badge tone="amber">No AI ready</Badge>
+            <span>Shortcuts only. Sign in to Kimi Code, Codex or Claude Code, or add a key in Settings, and the chat can do the rest.</span>
+          </div>
+        )}
+        {engine?.note && (
+          <div className="chat-notice" role="status">
+            <Badge tone="amber">AI</Badge>
+            <span>{engine.note}</span>
           </div>
         )}
         {searchOpen && (
@@ -778,51 +723,15 @@ export default function Assistant({ data, refresh, notify, onJob, asked, onAsked
             {error}
           </div>
         )}
-        <div className="chat-thread" aria-live="polite">
+        <div className={"chat-thread" + (empty && overview ? " welcome" : "")} aria-live="polite">
           {!overview ? (
             <p className="muted chat-loading">
               <LoaderCircle className="spin" size={15} /> Loading the conversation…
             </p>
           ) : empty ? (
-            <section className="chat-welcome">
-              <span className="chat-welcome-icon" aria-hidden="true">
-                <Sparkles size={22} />
-              </span>
-              <h2>{greeting()}. What would you like done?</h2>
-              <p>
-                Paste a posting and get the one-page PDF back, or ask for anything in plain words. The agent uses the same
-                tools the tabs use, asks before anything hard to undo, and never submits for you.
-              </p>
-              <div className="chat-starters">
-                {STARTERS.map((s) => {
-                  const Icon = s.icon;
-                  return (
-                    <button
-                      key={s.label}
-                      type="button"
-                      className="chat-starter"
-                      onClick={() =>
-                        s.label === "Paste a posting" ? boxRef.current?.focus() : send(s.send || s.label)
-                      }
-                    >
-                      <span className="chat-starter-icon" aria-hidden="true">
-                        <Icon size={16} />
-                      </span>
-                      <b>{s.label}</b>
-                      <span>{s.hint}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="chat-also">
-                <span className="muted">Also try</span>
-                {ALSO.map((s) => (
-                  <button key={s} type="button" className="chip" onClick={() => send(s)}>
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </section>
+            <Welcome
+              onPick={(starter) => (starter.send ? void send(starter.send) : boxRef.current?.focus())}
+            />
           ) : q && shown.length === 0 ? (
             <p className="muted chat-empty-search">Nothing in this chat mentions “{q}”.</p>
           ) : (
@@ -936,7 +845,7 @@ export default function Assistant({ data, refresh, notify, onJob, asked, onAsked
             <textarea
               ref={boxRef}
               rows={1}
-              placeholder={touch ? "Paste a posting or ask for anything…" : "Paste a job description with its link, or ask for anything…"}
+              placeholder={touch ? "Ask, or paste a job posting…" : "Ask anything, or paste a job posting with its link…"}
               value={draft}
               maxLength={120000}
               aria-label="Message the assistant"
@@ -995,41 +904,26 @@ export default function Assistant({ data, refresh, notify, onJob, asked, onAsked
               </button>
             </div>
           </div>
-          <div className="chat-hint">
-            {draft.length > 1000 ? (
-              <small className="muted">{draft.length.toLocaleString()} characters · a whole posting is fine</small>
-            ) : touch ? (
-              <small className="muted">Long pastes are fine</small>
-            ) : (
-              <small className="muted">
-                <kbd>Enter</kbd> sends · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line · <kbd>{mac ? "⌘⇧O" : "Ctrl+Shift+O"}</kbd> new chat · <kbd>{mod}K</kbd> search
-              </small>
-            )}
-            <label
-              className="chat-auto-toggle"
-              title="When on, changes like marking a job applied run without the yes/no question. Every change is still listed in the chat, marked auto-applied."
-            >
-              <input
-                type="checkbox"
-                checked={!!overview?.auto_apply}
-                onChange={(e) => void toggleAutoApply(e.target.checked)}
-              />
-              Auto-apply changes
-            </label>
-          </div>
+          {(!touch || overview?.auto_apply) && (
+            <div className="chat-hint">
+              {/* Keyboard hints are for keyboards; a phone gets only the auto-apply note. */}
+              {!touch &&
+                (draft.length > 1000 ? (
+                  <small className="muted">{draft.length.toLocaleString()} characters · a whole posting is fine</small>
+                ) : (
+                  <small className="muted">
+                    <kbd>Enter</kbd> sends · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line · <kbd>{mac ? "⌘⇧O" : "Ctrl+Shift+O"}</kbd> new chat · <kbd>{mod}K</kbd> search
+                  </small>
+                ))}
+              {overview?.auto_apply && (
+                <small className="chat-auto-on" title="Changes run without the yes/no question in this chat. Turn it off in the ⋯ menu.">
+                  Auto-apply on
+                </small>
+              )}
+            </div>
+          )}
         </form>
       </div>
-      {overview && (
-        <AgentRail
-          overview={overview}
-          data={data}
-          latest={latest}
-          open={railOpen}
-          onClose={() => setRailOpen(false)}
-          onPrompt={prompt}
-          onEngine={chooseEngine}
-        />
-      )}
       <HistoryDrawer
         conversations={conversations}
         open={historyOpen}
@@ -1221,213 +1115,116 @@ export function HistoryDrawer({
   );
 }
 
-type FlowNode = {
-  id: string;
-  state: "done" | "running" | "failed" | "idle";
-  detail: string;
-  run?: Run;
-};
-
-/** The real chain behind the latest message: one node per agent, in the order its steps ran. */
-export function flowFor(latest: AssistantMessage | undefined, runs: Run[]): { nodes: FlowNode[]; live: boolean } {
-  if (!latest || latest.steps.length === 0) {
-    return { nodes: DEFAULT_FLOW.map((id) => ({ id, state: "idle", detail: "" })), live: false };
-  }
-  const byId = new Map<string, FlowNode>();
-  for (const step of latest.steps) {
-    const id = step.agent || "assistant";
-    const run = step.run_id ? runs.find((r) => r.id === step.run_id) : undefined;
-    let state: FlowNode["state"] = step.state;
-    let detail = step.detail;
-    if (run && active(run.state)) {
-      state = "running";
-      detail = RUN_LABEL[run.kind] + " · " + (run.result?.stage || run.state);
-    } else if (run && run.state === "failed") {
-      state = "failed";
-      detail = run.error || detail;
-    }
-    const node = byId.get(id);
-    if (node) {
-      // A later step on the same agent updates it, but a running one always wins.
-      if (node.state !== "running") Object.assign(node, { state, detail, run: run || node.run });
-    } else byId.set(id, { id, state, detail, run });
-  }
-  const nodes = [...byId.values()];
-  return { nodes, live: latest.state === "processing" || nodes.some((n) => n.state === "running") };
-}
-
-export function AgentRail({
-  overview,
-  data,
-  latest,
-  open,
-  onClose,
-  onPrompt,
-  onEngine,
-}: {
-  overview: AssistantOverview;
-  data: Summary;
-  latest?: AssistantMessage;
-  open: boolean;
-  onClose: () => void;
-  onPrompt: (text: string) => void;
-  onEngine: (value: string) => void;
-}) {
-  const agents = useMemo(() => new Map(overview.agents.map((a) => [a.id, a])), [overview.agents]);
-  const runs = data.runs;
-  const running = runs.filter((r) => active(r.state));
-  const lit = new Set<string>();
-  for (const r of running) for (const id of RUN_AGENTS[r.kind] || []) lit.add(id);
-  const { nodes, live } = flowFor(latest, runs);
-  // A reply that used no tools (help, a shortcut) leaves the pipeline preview in place.
-  const real = !!latest && latest.steps.length > 0;
-  for (const n of nodes) if (n.state === "running") lit.add(n.id);
-  if (overview.busy) lit.add("assistant");
-  const jobName = (id: string | null) => {
-    const job = id ? data.jobs.find((j) => j.id === id) : undefined;
-    return job ? job.company : "";
-  };
-  const engine = overview.engine;
-  const current = engine.provider + "::" + engine.model;
-  const listed = engine.options.some((o) => o.provider + "::" + o.model === current);
-  const runsElsewhere = engine.runs && (engine.runs.provider !== engine.provider || engine.runs.model !== engine.model);
+/** The greeting and four starters, sitting just above the composer before the first message. */
+export function Welcome({ onPick, now = new Date() }: { onPick: (starter: Starter) => void; now?: Date }) {
   return (
-    <>
-      {open && <div className="rail-backdrop" onClick={onClose} aria-hidden="true" />}
-      <div className={"agent-rail" + (open ? " open" : "")} role="complementary" aria-label="Agents">
-        <div className="rail-head">
-          <div>
-            <div className="eyebrow">AGENTS</div>
-            <h2>Linked to this chat</h2>
-          </div>
-          <button type="button" className="icon-button rail-close" aria-label="Hide the agents" onClick={onClose}>
-            <X size={20} />
-          </button>
-        </div>
-
-        <section className="rail-section rail-engine">
-          <label>
-            <span className="rail-label">
-              <Cpu size={13} /> Runs on
-            </span>
-            <select value={listed ? current : ""} onChange={(e) => e.target.value && onEngine(e.target.value)} aria-label="AI runtime for the assistant and the runs it starts">
-              {!listed && <option value="">{engine.label}{engine.ready ? "" : " (not ready)"}</option>}
-              {engine.options.map((o) => (
-                <option key={o.provider + "::" + o.model} value={o.provider + "::" + o.model}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {engine.moved_from && (
-            <small className="muted">{engine.moved_from} is not ready on this machine, so {engine.label.split(" · ")[0]} answers the chat.</small>
-          )}
-          {runsElsewhere && (
-            <small className={engine.runs.ready ? "muted" : "rail-warn"}>
-              Background runs go through {engine.runs.label}{engine.runs.ready ? "" : ", which is not ready"}. Pick a runtime above to use one engine for everything.
-            </small>
-          )}
-          {engine.note && <small className="rail-warn">{engine.note}</small>}
-          {engine.last_fallback && (
-            <small className="rail-warn">
-              A call on {engine.last_fallback.from_provider} failed and was finished by {engine.last_fallback.to_provider}.
-              Set or change the backup in Settings.
-            </small>
-          )}
-          {!engine.ready && !engine.moved_from && (
-            <small className="rail-warn">Nothing is ready: install Claude Code or the ChatGPT app, or add a key in Settings.</small>
-          )}
-        </section>
-
-        <section className="rail-section">
-          <div className="rail-label">
-            <Workflow size={13} /> {real ? (live ? "Live flow" : "Last flow") : "What a pasted posting goes through"}
-            {live && <span className="rail-live" aria-label="working" />}
-          </div>
-          <ol className={"rail-flow" + (live ? " live" : "")}>
-            {nodes.map((n, i) => {
-              const ui = AGENT_UI[n.id] || { icon: Bot, short: agents.get(n.id)?.name || n.id, prompt: "help" };
-              const Icon = ui.icon;
-              const next = nodes[i + 1];
-              return (
-                <li key={n.id} className={"rail-node " + n.state} style={{ animationDelay: i * 60 + "ms" }}>
-                  <div className="rail-dot" aria-hidden="true">
-                    {n.state === "running" ? <LoaderCircle className="spin" size={14} /> : n.state === "failed" ? <XCircle size={14} /> : n.state === "done" ? <CheckCircle2 size={14} /> : <Icon size={14} />}
-                  </div>
-                  <div className="rail-body">
-                    <b>{ui.short}</b>
-                    {n.detail && <small>{n.detail}</small>}
-                  </div>
-                  {next && <span className={"rail-link" + (n.state === "running" || next.state === "running" || (live && n.state === "done" && next.state !== "done") ? " active" : "")} aria-hidden="true" />}
-                </li>
-              );
-            })}
-          </ol>
-        </section>
-
-        <section className="rail-section">
-          <div className="rail-label">
-            <Activity size={13} /> Running now
-          </div>
-          {running.length === 0 ? (
-            <p className="muted rail-empty">No agent is running. Start one from the chat or the list below.</p>
-          ) : (
-            <ul className="rail-runs">
-              {running.map((r) => (
-                <li key={r.id}>
-                  <LoaderCircle className="spin" size={13} />
-                  <div>
-                    <b>{RUN_LABEL[r.kind] || r.kind}</b>
-                    <small>{[jobName(r.job_id), r.result?.stage || r.state].filter(Boolean).join(" · ")}</small>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="rail-section">
-          <div className="rail-label">
-            <Bot size={13} /> All agents
-          </div>
-          <ul className="rail-agents">
-            {[...overview.agents]
-              .sort((a, b) => (RAIL_ORDER.indexOf(a.id) + 1 || 99) - (RAIL_ORDER.indexOf(b.id) + 1 || 99))
-              .map((a) => (
-                <AgentRow key={a.id} agent={a} active={lit.has(a.id)} onPrompt={onPrompt} />
-              ))}
-          </ul>
-          <a className="rail-more" href="#agents">
-            Every run, stage and AI call on the Agents tab →
-          </a>
-        </section>
+    <section className="chat-welcome" aria-label="Start a chat">
+      <h2>{greeting(now)}. What would you like done?</h2>
+      <p>Paste a posting for its one-page PDF, or ask in plain words. Nothing is ever sent for you.</p>
+      <div className="chat-starters" role="list">
+        {STARTERS.map((s) => {
+          const Icon = s.icon;
+          return (
+            <button key={s.label} type="button" role="listitem" className="chat-starter" title={s.hint} onClick={() => onPick(s)}>
+              <Icon size={15} />
+              <span>{s.label}</span>
+            </button>
+          );
+        })}
       </div>
-    </>
+    </section>
   );
 }
 
-function AgentRow({ agent, active: isActive, onPrompt }: { agent: AssistantAgent; active: boolean; onPrompt: (text: string) => void }) {
-  const ui = AGENT_UI[agent.id] || { icon: Bot, short: agent.name, prompt: "help" };
-  const Icon = ui.icon;
-  const title = agent.does + (agent.tools.length ? "\n\nFrom the chat: " + agent.tools.join(", ") : "");
+/** Which AI answers: the Settings choice, as one small chip that opens Settings. */
+export function EngineChip({ engine }: { engine: AssistantOverview["engine"] }) {
+  const auto = engine.provider === "auto";
+  const label = auto ? "Auto · free plans first" : engine.label;
+  const switched = engine.last_fallback;
+  const title =
+    (engine.ready ? `The chat and its runs use ${label}.` : `${label} is not ready on this PC.`) +
+    (switched ? ` Last switch: ${switched.from_provider} → ${switched.to_provider}.` : "") +
+    " Change it in Settings.";
   return (
-    <li className={"rail-agent" + (isActive ? " active" : "") + (agent.linked ? "" : " unlinked")}>
+    <a className={"chat-chip engine" + (engine.ready ? "" : " warn")} href="#settings" title={title}>
+      <Cpu size={13} />
+      <span className="chat-chip-label">{engine.ready ? label : "No AI ready"}</span>
+    </a>
+  );
+}
+
+/** The chat's less-used actions: search, download, and the per-chat auto-apply switch. */
+export function MoreMenu({
+  open,
+  onOpen,
+  empty,
+  searchLabel,
+  onSearch,
+  onExport,
+  autoApply,
+  onAutoApply,
+}: {
+  open: boolean;
+  onOpen: (open: boolean) => void;
+  empty: boolean;
+  searchLabel: string;
+  onSearch: () => void;
+  onExport: () => void;
+  autoApply: boolean;
+  onAutoApply: (enabled: boolean) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent | TouchEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onOpen(false);
+    };
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onOpen(false);
+    document.addEventListener("mousedown", away);
+    document.addEventListener("touchstart", away);
+    document.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      document.removeEventListener("touchstart", away);
+      document.removeEventListener("keydown", key);
+    };
+  }, [open, onOpen]);
+  const pick = (action: () => void) => () => {
+    onOpen(false);
+    action();
+  };
+  return (
+    <div className="chat-more" ref={ref}>
       <button
         type="button"
-        title={title}
-        disabled={!agent.linked}
-        onClick={() => onPrompt(ui.prompt)}
+        className={"bar-button icon" + (open ? " on" : "")}
+        aria-label="More chat actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="More"
+        onClick={() => onOpen(!open)}
       >
-        <span className="rail-agent-icon">
-          <Icon size={15} />
-        </span>
-        <span className="rail-agent-name">
-          <b>{ui.short}</b>
-          <small>{isActive ? "active now" : agent.linked ? "linked" : "Agents tab only"}</small>
-        </span>
-        <span className={"rail-status" + (isActive ? " on" : agent.linked ? " linked" : "")} aria-hidden="true" />
+        <MoreHorizontal size={16} />
       </button>
-    </li>
+      {open && (
+        <div className="chat-menu" role="menu" aria-label="More chat actions">
+          <button type="button" role="menuitem" disabled={empty} onClick={pick(onSearch)} title={searchLabel}>
+            <Search size={15} /> Search this chat
+          </button>
+          <button type="button" role="menuitem" disabled={empty} onClick={pick(onExport)}>
+            <Download size={15} /> Download as a file
+          </button>
+          <div className="chat-menu-sep" role="separator" />
+          <label className="chat-menu-toggle" role="menuitemcheckbox" aria-checked={autoApply}>
+            <input type="checkbox" checked={autoApply} onChange={(e) => onAutoApply(e.target.checked)} />
+            <span>
+              <b>Auto-apply changes</b>
+              <small>In this chat, changes like marking a job applied run without asking first. Each one is still listed.</small>
+            </span>
+          </label>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1480,6 +1277,7 @@ export function Exchange({
   const showSteps = stepsOpen ?? (working || failed);
   const stepSummary = m.steps.map((s) => s.label).filter((label, i, all) => all.indexOf(label) === i).slice(0, 3).join(" · ");
   const currentStep = working ? m.steps[m.steps.length - 1] : undefined;
+  const failedActions = (m.data.trace || []).filter((t) => t.error).length;
   // "Add these roles: …" is a template to finish, not a message: it goes to the composer.
   const useSuggestion = (text: string) => {
     const open = unfinished(text);
@@ -1589,8 +1387,16 @@ export function Exchange({
               </div>
             )}
             {!!m.data.trace?.length && !working && (
-              <details className="chat-trace">
-                <summary>What I did · {m.data.trace.length} {m.data.trace.length === 1 ? "action" : "actions"}</summary>
+              // A failed action is never hidden behind a fold: the list opens with it marked.
+              <details className="chat-trace" open={failedActions > 0}>
+                <summary>
+                  What I did · {m.data.trace.length} {m.data.trace.length === 1 ? "action" : "actions"}
+                  {failedActions > 0 && (
+                    <em className="chat-trace-failed">
+                      <XCircle size={12} /> {failedActions} failed
+                    </em>
+                  )}
+                </summary>
                 <ol>
                   {m.data.trace.map((t, i) => (
                     <li key={i} className={t.error ? "failed" : ""}>

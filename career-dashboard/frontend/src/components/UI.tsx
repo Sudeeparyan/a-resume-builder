@@ -204,7 +204,7 @@ export function Running({ run }: { run: Run }) {
       </span>
       <div>
         <b>
-          {({research: "Company & hiring review", resume_advisor: "Resume advisor", email: "Gmail sync", discovery: "Job discovery", resume_build: "Resume build & score", resume_match: "Independent document review", instruction_interpret: "Instruction interpreter"} as Record<string, string>)[run.kind] || run.kind}{" "}
+          {({research: "Company & hiring review", email: "Gmail sync", discovery: "Job discovery", resume_build: "Resume build & score", resume_match: "Independent document review", study_plan: "Study plan"} as Record<string, string>)[run.kind] || run.kind}{" "}
           · {run.state}
         </b>
         <small>{run.error || run.result?.stage || "Waiting to start"}</small>

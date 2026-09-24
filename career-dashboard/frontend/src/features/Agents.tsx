@@ -17,7 +17,6 @@ import {
   ScanSearch,
   Send,
   ShieldCheck,
-  Sparkles,
   UserRoundSearch,
   XCircle,
 } from "lucide-react";
@@ -100,10 +99,8 @@ export const PROVIDER_LABEL: Record<string, string> = {
 export const AGENT_LABEL: Record<string, string> = {
   discovery: "Job search",
   research: "Company & hiring research",
-  resume_advisor: "Resume advice",
   resume_build: "Resume build & ATS check",
   resume_match: "Independent resume review",
-  instruction_interpret: "Resume chat",
   email: "Gmail sync",
   job_quality: "Posting check",
   study_plan: "Study plan",
@@ -112,7 +109,6 @@ const OUTPUT_LABEL: Record<string, string> = {
   research: "Company research",
   hiring: "Hiring-manager view",
   comparison: "Fit with your profile",
-  advice: "Resume advice",
   review: "Independent review",
   plan: "Study plan",
 };
@@ -165,14 +161,6 @@ const FLOW: Step[] = [
     tags: [{ text: "Uses your profile", tone: "amber" }],
     icon: ShieldCheck,
     run: "research",
-  },
-  {
-    id: "advice",
-    label: "Resume advice",
-    does: "Points, projects and skills to lead with",
-    tags: [{ text: "AI", tone: "green" }],
-    icon: Sparkles,
-    run: "resume_advisor",
   },
   {
     id: "build",
@@ -291,7 +279,6 @@ function jobSteps(
     };
   });
   for (const [step, kind] of [
-    ["advice", "resume_advisor"],
     ["review", "resume_match"],
   ]) {
     const run = latest(kind);
@@ -761,7 +748,7 @@ export default function Agents({
                 open={open === r.id}
                 onToggle={() => setOpen(open === r.id ? null : r.id)}
                 onRetry={
-                  r.state === "failed" && !fixed.has(r.id) && r.job_id && ["research", "resume_advisor", "resume_match"].includes(r.kind)
+                  r.state === "failed" && !fixed.has(r.id) && r.job_id && ["research", "resume_match"].includes(r.kind)
                     ? () => start(r.kind, r.job_id!)
                     : undefined
                 }

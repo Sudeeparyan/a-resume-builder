@@ -6,6 +6,7 @@ from datetime import datetime, timezone, date
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from backend.ai_marks import clean_text
 from backend.services.planning import plan
 from backend.services.postings import canonical_url, posting_key
 
@@ -1464,6 +1465,7 @@ class CareerServices:
                 candidate["full_name"],
             ]
         )
+        letter = clean_text(letter)  # posting text can carry hidden characters (AI marks)
         with self.w.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             version = (

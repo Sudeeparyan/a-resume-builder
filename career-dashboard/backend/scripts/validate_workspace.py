@@ -64,7 +64,7 @@ REQUIRED_FILES = (
 # The skills every AI app reads (Claude Code, Codex, Kimi Code, ...), at the repo root beside the
 # one AGENTS.md; relative to REPO_ROOT.
 SKILLS_DIR = ".agents/skills"
-REQUIRED_SKILLS = ("hunt", "job-hunter", "resume-tailor", "profile-intake", "interview-prep", "verify-job-url")
+REQUIRED_SKILLS = ("hunt", "job-hunter", "resume-tailor", "profile-intake", "interview-prep", "verify-job-url", "remove-ai-marks")
 
 # The previous edition of this app belonged to another candidate. None of his
 # identity, employers, clients or Irish immigration terms may reach Annie's active
@@ -291,7 +291,7 @@ def validate_profile(profile: dict[str, Any], registry: dict[str, Any]) -> None:
 def validate_agents(profile: dict[str, Any]) -> None:
     name = (profile.get("candidate") or {}).get("full_name", "")
     builder = read(f"{SKILLS_DIR}/resume-tailor/SKILL.md", REPO_ROOT)
-    for value in (name, "data/context/evidence.yml", "one page", "signature project", "backend/scripts/validate_resume.py"):
+    for value in (name, "data/context/evidence.yml", "one page", "signature project", "backend/scripts/validate_resume.py", "remove-ai-marks"):
         if value and value.lower() not in builder.lower():
             fail(f"The resume-tailor skill is missing its contract: {value}")
     hunter = read(f"{SKILLS_DIR}/job-hunter/SKILL.md", REPO_ROOT)

@@ -118,7 +118,9 @@ def build_assurance(service, studio, job_id: str) -> dict[str, Any]:
         "missing": sum(1 for claim in claims if claim["evidence_status"] == "missing"),
         "kept": sum(1 for row in rows if row["decision"] == "kept"),
         "removed": sum(1 for row in rows if row["decision"] == "removed"),
-        "pending": sum(1 for row in rows if row["decision"] == "pending"),
+        # What still waits for her: suggestions only. Registry items start "pending" in the table
+        # but never need a decision (on 24 Sep a tailored draft showed "76 still waiting" for 5).
+        "pending": sum(1 for row in rows if row["decision"] == "pending" and row["origin"] == "predicted"),
     }
     return {
         "job_id": job_id,

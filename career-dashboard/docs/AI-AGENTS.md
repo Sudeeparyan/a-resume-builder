@@ -1,37 +1,95 @@
 # The agent layer
 
 Built on LangChain and LangGraph. One general-purpose prompt was replaced by
-nine specialists, each with a narrow brief, its own output schema, and a
-service tier.
+narrow specialists, each with a brief, its own output schema, and a service
+tier (`backend/ai/agents/specialists.py`).
 
 ## Specialists
 
 | Agent | Job | Tier |
 |---|---|---|
-| `requirement_extractor` | Job description to grounded requirements, each with a verbatim excerpt | reading |
-| `relevance_judge` | Whether a posting is worth the candidate's time | reading |
-| `company_investigator` | Whether the employer is real, its size, sponsorship evidence, fraud signals | reading |
-| `posting_verifier` | Whether a posting is still open, from the fetched page | reading |
+| `fit_analyst` | A posting's requirements, each quoted from it, matched to her registered evidence (see *The requirement matrix*) | reading |
+| `posting_parser` | A pasted posting to company, title, location and text | reading |
 | `mail_classifier` | What one job-related email is | reading |
+| `intake_auditor` | Checks a new profile's extracted facts against its documents | reading |
+| `job_tailor` | Per-company Projects and Skills for one role, from the verified requirements | writing |
 | `resume_tailor` | Evidence-bound resume edits for one role | writing |
 | `profile_curator` | Proposed profile additions and corrections | writing |
 | `cover_letter_writer` | A covering letter from registered evidence | writing |
 | `hiring_manager` | What a strong application must show — **isolated** | writing |
+| `workspace_agent` | The chat's agent loop: one tool call, question or reply per turn | writing |
+| `profile_extractor`, `intake_interviewer` | Building a new profile from its documents | writing |
 
-## Two tiers, not nine model choices
+The earlier posting graph (`requirement_extractor`, `relevance_judge`,
+`company_investigator`, `posting_verifier`, `evaluate_posting`) was never
+called in production and was removed on 24 Sep 2026: discovery verifies
+postings and employers in code (`job_quality.verify_posting`,
+`assess_company`), and `fit_analyst` replaced the extractor and the judge.
+
+## Two tiers, not a model per agent
 
 The reading tier does extraction and classification; the writing tier produces
 text that reaches an employer. Choosing a model per tier in Settings is the
-cost control: a discovery pass over one posting runs three reading agents for
-roughly four thousand tokens.
+cost control.
 
 ## Routing is deterministic
 
 The workflow decides which specialist runs, not a model. A run's cost is
 therefore predictable, and a routing mistake is a code bug rather than a prompt
-bug. `evaluate_posting` fans out verification, relevance, company research and
-requirement extraction in parallel; each writes its own state key, so the
-branches never contend, and one failing agent leaves the others intact.
+bug. When a specialist's answer does not match its schema, `AgentTeam` asks the
+same endpoint once more with the first validation errors
+(`graph._repairing`); under Auto a failure also moves the step to the next plan.
+
+## The requirement matrix (`services/fit.py`)
+
+One verified list per job answers "does she have what this job asks for?", and
+every feature reads the same list:
+
+1. **The AI proposes.** `fit_analyst` (reading tier, free plans only:
+   `fit.fit_team` copies the Auto route with every paid endpoint switched off,
+   and is `None` when no free plan is ready) returns each requirement with its
+   category (required, preferred, responsibility), a verbatim excerpt, a status
+   (met, partial, missing) and the evidence ids that meet it, plus hard
+   blockers such as a clearance or a required licence.
+2. **The code verifies** (`fit.verify`). An excerpt that is not in the posting
+   (after whitespace and typography are normalised) is dropped; an evidence id
+   not in her registry (`fit.catalogue`: registered skills, resume-ready
+   projects, employment, education, coursework, languages) is removed, and an
+   item left without proof becomes missing; coursework alone is at most
+   partial; a requirement that is itself a never-claim skill is always missing,
+   and one that only names such a tool among its bracketed examples ("web
+   development (Python, SQL, React)") is at most partial; work-permit wording is
+   dropped from the blockers (the sponsorship gate owns it). The prompt keeps
+   personality lines out and turns an "including X, Y, Z" list into one item.
+3. **Rules when no free plan is free.** `fit._rules` reads the posting with the
+   fixed vocabulary plus her own skill names and the never-claim list; a field
+   (ML, AI, deep learning) counts as met by the tools that prove it
+   (`FIELD_EVIDENCE`: PyTorch, scikit-learn, computer vision, …); an item
+   with no nameable skill is `unknown` and not scored. The page and the
+   rationale say which method checked it.
+4. **The score is arithmetic** (`fit.score`, 0–100): requirement coverage 75
+   (required 55, preferred 10, responsibilities 10, re-weighted over the
+   categories present; met 1, partial 0.5, and each category counts
+   `PRIOR_ITEMS = 2` imaginary half-met items so a score read from two items is
+   less certain than one read from twelve), role family and seniority 15,
+   location 10. A job is eligible with no blocker, a score of at least
+   `FIT_THRESHOLD` (65) and at least half its must-haves met.
+   `backend/scripts/eval_fit.py` prints the score of every saved job, every job
+   she removed and recent exclusions, without writing anything, to calibrate the
+   threshold.
+5. **Cached** in `job_fit` (migration 8), keyed by the posting's hash, her
+   evidence hash and `FIT_VERSION`; a rules check is upgraded to an AI one when
+   a free plan is back. `jobs.fit_score` and `fit_rationale` carry the result.
+
+Where it is used: discovery (the hard gates first, then the rules score picks a
+shortlist of `limit + DISCOVERY_SPARES`, and only the shortlist gets the AI
+check, two at a time, at most three rounds), tailoring (the `job_tailor`
+payload's `requirements`; verified skills proving a met must-have are topped up,
+at most `TOP_UP_SKILLS`), resume coverage (`AssessmentService.requirements`,
+`SCORING_VERSION` v6: the aliases are the requirement and the evidence terms
+that met it), the study plan's genuine gaps, the research comparison
+(`verified_requirement_check`), the chat's snapshot and its `job_fit` tool, and
+Resume Studio's *Check match* step (`GET`/`POST /api/v2/jobs/{id}/fit`).
 
 ## The isolation boundary
 
@@ -59,7 +117,7 @@ session log. All three CLIs run one-shot in restricted mode with no session,
 settings, MCP servers or CLAUDE.md files, and allow only web search and fetch
 when the action needs the web. Neither Claude Code nor Kimi Code has Gmail
 access, so the email worker stays on Codex. Claude Code and Kimi Code serve
-both the agent runs (discovery, research, advisor, match) and the nine
+both the agent runs (discovery, research, match, study plan) and the
 specialists above, chosen per tier in Settings.
 
 One choice on the Settings page drives every agent: it becomes the gateway

@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from backend.resume_contract import contract_for, load_contract  # noqa: E402
 from backend.pdf_compiler import tectonic_executable  # noqa: E402
+from backend.ai_marks import clean_pdf, find_marks, pdf_leftovers  # noqa: E402
 
 # ROOT is where the code lives; DATA_ROOT is the workspace whose resume is checked.
 # They are the same for Annie; --workspace points DATA_ROOT at another profile.
@@ -594,6 +595,8 @@ def compile_latex(source_path: Path, output_dir: Path) -> tuple[Path | None, str
     if result.returncode or not pdf_path.is_file():
         detail = chatter.strip() or log_text.strip() or f"tectonic exited {result.returncode}"
         return None, log_text, detail
+    # Every compiled resume leaves with only its title and author (backend/ai_marks.py).
+    clean_pdf(pdf_path)
     return pdf_path, log_text, chatter
 
 
@@ -1013,6 +1016,10 @@ def main() -> int:
         return finish(args.qa_json, qa, 1)
 
     qa["source_sha256"] = sha256(source_path)
+    qa["ai_marks"] = {"source": find_marks(source)}
+    if qa["ai_marks"]["source"]:
+        failures.append("Hidden or look-alike characters (AI marks) in the resume source; delete or retype them: "
+                        + "; ".join(qa["ai_marks"]["source"][:5]))
     clean = strip_latex_comments(source)
     required_order = list(REQUIRED_SECTIONS)
     layout_clean = clean
@@ -1281,6 +1288,9 @@ def main() -> int:
                     and str(qa["pdf_metadata"].get("title", "")).startswith(CONTRACT.pdf_author),
                     "Compiled PDF metadata author/title does not match the candidate",
                 )
+                qa["ai_marks"]["pdf"] = pdf_leftovers(pdf_path)
+                add_failure(failures, not qa["ai_marks"]["pdf"],
+                            "Compiled PDF still carries metadata beyond title and author: " + ", ".join(qa["ai_marks"]["pdf"]))
 
                 for page in pages:
                     if not isinstance(page, dict):

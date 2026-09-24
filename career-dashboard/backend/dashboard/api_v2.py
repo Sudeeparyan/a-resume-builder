@@ -1,5 +1,6 @@
 """Versioned API for the four-tab React application."""
 
+import threading
 from typing import Any, Optional
 from contextlib import asynccontextmanager
 from fastapi import APIRouter, Request
@@ -721,6 +722,18 @@ def attach(app, workspace, schedule: bool = False):
         # so it starts only for a real server run, never for a constructed app.
         if schedule:
             runner.start_schedule()
+
+            def refresh_fit():
+                # Saved jobs show the verified requirement check's score, not an older formula's.
+                from backend.services import fit
+
+                try:
+                    fit.backfill(service)
+                except Exception as exc:  # noqa: BLE001 - a stale score must never stop the server
+                    with workspace.connect() as db:
+                        workspace.record_event(db, "fit_backfill_failed", error=str(exc)[:300])
+
+            threading.Thread(target=refresh_fit, name="fit-backfill", daemon=True).start()
 
     def stop_background(stop_search: bool = False):
         # Closing a profile (reset/delete) also asks a running Daily Search to stop at

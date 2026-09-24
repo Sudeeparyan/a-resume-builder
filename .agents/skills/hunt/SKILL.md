@@ -70,7 +70,9 @@ runs short, say so and put a build-now spec in that company's study plan.
 3. Tailor with the `resume-tailor` skill: registry facts only, recruiter audit, fit exactly **one US
    Letter page** (cut content in the documented order; never shrink fonts below 10pt or touch margins).
 4. Validate: `career check-resume <folder>/resume.tex --compile --output <folder>/resume.pdf
-   --render-dir <folder>/resume-preview --qa-json <folder>/qa.json`. Look at `page-01.png`.
+   --render-dir <folder>/resume-preview --qa-json <folder>/qa.json`. Look at `page-01.png`. It also
+   removes AI marks (the `remove-ai-marks` skill, built in): the PDF keeps only its title and author,
+   and a hidden or look-alike character in `resume.tex` fails the check.
 5. Study plan → `study-plan.md`: `career ws run --kind study_plan --job-id JOB_ID` (or `modes/upskill.md`
    by hand).
 
@@ -103,7 +105,7 @@ the same database without redoing work.
 ## Non-negotiable
 
 - Both `resume.tex` and `resume.pdf` in every folder.
-- Every resume exactly one page, verified.
+- Every resume exactly one page, verified, with no AI marks (`qa.json` → `ai_marks` empty).
 - Ten companies means ten different signature projects.
 - Never surface an excluded, already-applied or recently-rejecting company.
 - Never invent a listing, a link or a fact. If fewer than asked, say so and why. Never apply for her.

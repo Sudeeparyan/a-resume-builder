@@ -183,6 +183,9 @@ def test_chat_previews_are_idempotent_and_profile_requires_confirmation(service)
     ("Austin, TX", True), ("Remote (US)", True), ("United States", True), ("Boston, Massachusetts", True),
     ("Dublin, OH", True), ("Dublin, CA 94568", True), ("Vancouver, WA", True), ("London, KY", True), ("Paris, TX", True),
     ("Remote - US or Canada", True), ("New York, NY or London, UK", True),
+    # A work-arrangement note after the state (Penumbra's "Alameda, CA — on-site" was turned away on 24 Sep).
+    ("Alameda, CA — on-site", True), ("Austin, TX (Hybrid)", True), ("Irvine, CA - Remote", True),
+    ("Berlin, DE — hybrid", False), ("Toronto, ON (Hybrid)", False), ("Bengaluru, IN - on-site", False),
     ("Dublin, Ireland", False), ("London, UK", False), ("Vancouver, BC", False), ("Toronto, ON", False),
     ("Bengaluru, IN", False), ("Berlin, DE", False), ("Remote (EMEA)", False), ("Hyderabad, India", False), ("", False),
 ])

@@ -16,6 +16,7 @@ from validate_resume import extract_zero_argument_macros, inspect_pdf, evidence_
 from backend.services.resume_layout import ranked_source, set_density, measure_pages
 from backend.pdf_compiler import tectonic_executable
 from backend.resume_contract import contract_for
+from backend.ai_marks import clean_pdf, clean_text
 
 
 LEGACY_PROJECT_SECTION = re.compile(r'\\section\{(?:Selected|Academic) Projects?\}')
@@ -408,6 +409,7 @@ class ResumeStudio:
                     source = install_project(source, project, second)
             if extract_zero_argument_macros(before).get('SelectedProjectID') != extract_zero_argument_macros(source).get('SelectedProjectID'):
                 source = re.sub(r'% STUDIO_PROJECT_SKILLS\n% EVIDENCE:[^\n]+\n[^\n]+\n', '', source)
+            source = clean_text(source)  # hidden characters pasted into the source editor
             if not source.strip() or len(source) > 150000:
                 raise ValueError('Resume source must contain 1–150,000 characters')
             if source != before:
@@ -462,6 +464,7 @@ class ResumeStudio:
                     raise ValueError('Preview timed out. Your source is saved; check it for loops or very large content.') from None
                 if run.returncode or not (build / 'resume.pdf').exists():
                     raise ValueError('Preview could not compile. Your edits are saved.\n' + (run.stderr + run.stdout)[-3500:])
+                clean_pdf(build / 'resume.pdf')
                 if len(PdfReader(str(build / 'resume.pdf')).pages) > 10:
                     raise ValueError('Preview exceeds ten pages. Reduce the content before compiling again.')
                 report = inspect_pdf(build / 'resume.pdf', build / 'pages')
@@ -523,6 +526,7 @@ class ResumeStudio:
                             raise ValueError('Page fitting timed out. Your previous draft remains unchanged.') from None
                         if result.returncode or not (build / 'resume.pdf').exists():
                             raise ValueError('Could not compile the ranked draft. Your previous version is preserved.\n' + (result.stderr + result.stdout)[-2000:])
+                        clean_pdf(build / 'resume.pdf')
                         page_count = len(PdfReader(str(build / 'resume.pdf')).pages)
                         if page_count > contract.pages:
                             continue  # try a smaller allowed font, then cut content

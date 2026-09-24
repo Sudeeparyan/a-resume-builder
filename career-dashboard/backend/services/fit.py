@@ -24,7 +24,7 @@ import unicodedata
 
 from backend.assessment import _contains, _sentences, extract_requirements
 
-FIT_VERSION = "fit-v1"
+FIT_VERSION = "fit-v3"
 # A job is worth her time at this score, with at least half its must-haves met.
 FIT_THRESHOLD = 65
 MUST_HAVE_FLOOR = 0.5
@@ -33,6 +33,10 @@ WEIGHTS = {"required": 55, "preferred": 10, "responsibility": 10}
 COVERAGE_POINTS = 75
 ROLE_POINTS = 15
 LOCATION_POINTS = 10
+# Each category's ratio starts from this many imaginary half-met requirements, so a score read
+# from two requirements counts as less certain than one read from twelve: a posting whose only
+# recognised must-haves are SQL and CSS no longer outranks a data role meeting 12 of 13.
+PRIOR_ITEMS = 2
 # Two AI calls at once at most: a shortlist is checked in parallel without crowding a plan.
 PARALLEL = 2
 # Evidence kinds that can prove a requirement; notes only limit what may be claimed.
@@ -158,6 +162,20 @@ def named_terms(terms, text: str) -> list[str]:
     return [t for t in terms if _contains(text, aliases(t))]
 
 
+# A posting asks for a field ("ML", "AI"); her evidence names the tools and methods of it.
+# The rules path counts those as proof of the field, as the AI path does when it reads them.
+_ML_WORK = ("machine learning", "deep learning", "pytorch", "tensorflow", "keras", "scikit-learn",
+            "computer vision", "neural network", "lstm", "xgboost", "object detection")
+_AI_WORK = _ML_WORK + ("artificial intelligence", "llm", "large language model", "generative ai", "rag", "nlp")
+FIELD_EVIDENCE = {
+    "ml": _ML_WORK,
+    "machine learning": _ML_WORK,
+    "ai": _AI_WORK,
+    "artificial intelligence": _AI_WORK,
+    "deep learning": ("deep learning", "pytorch", "tensorflow", "keras", "neural network", "lstm", "cnn", "transformer"),
+}
+
+
 def _rules(jd: str, cat: dict) -> dict:
     never = {t.casefold() for t in cat["never"]}
     requirements = []
@@ -171,7 +189,8 @@ def _rules(jd: str, cat: dict) -> dict:
         if item["requirement"].casefold() in never:
             status, ids = "missing", []
         else:
-            proving = [e["id"] for e in cat["entries"] if e["kind"] in PROVING and _contains(e["text"], words)]
+            proof = words + FIELD_EVIDENCE.get(item["requirement"].casefold(), ())
+            proving = [e["id"] for e in cat["entries"] if e["kind"] in PROVING and _contains(e["text"], proof)]
             studied = [e["id"] for e in cat["entries"] if e["kind"] == "coursework" and _contains(e["text"], words)]
             status, ids = ("met", proving) if proving else ("partial", studied) if studied else ("missing", [])
         requirements.append({"text": item["requirement"], "category": item["category"], "excerpt": item["excerpt"],
@@ -234,14 +253,20 @@ def verify(raw: dict, jd: str, cat: dict) -> dict:
             status = "missing"
         if status == "met" and all(known[i]["kind"] == "coursework" for i in ids):
             status = "partial"
-        if _names_never(text, never):
-            status = "missing"
+        note = " ".join(str(item.get("note") or "").split())
+        if _names_never(re.sub(r"\([^)]*\)", " ", text), never):
+            status = "missing"  # the requirement itself is a skill she must never claim
+        elif status == "met" and _names_never(text, never):
+            # Only among the examples ("web development (Python, SQL, React)"): she shows the topic
+            # without that tool, so at most partial, and the never-claim tool is never counted.
+            status = "partial"
+            note = (note + " Partial: the examples include a tool on the never-claim list.").strip()
         if status == "missing":
             ids = []
         if status != claimed:
             downgraded += 1
         requirements.append({"text": text, "category": category, "excerpt": excerpt, "status": status,
-                             "evidence_ids": ids[:4], "note": " ".join(str(item.get("note") or "").split())[:200]})
+                             "evidence_ids": ids[:4], "note": note[:200]})
         if len(requirements) >= MAX_REQUIREMENTS:
             break
     blockers = []
@@ -272,9 +297,10 @@ def score(matrix: dict, posting: dict, root) -> dict:
         met = sum(r["status"] == "met" for r in items)
         partial = sum(r["status"] == "partial" for r in items)
         parts[category] = {"total": len(items), "met": met, "partial": partial,
-                           "ratio": (met + 0.5 * partial) / len(items) if items else None}
+                           "ratio": (met + 0.5 * partial) / len(items) if items else None,
+                           "weighed": (met + 0.5 * partial + 0.5 * PRIOR_ITEMS) / (len(items) + PRIOR_ITEMS)}
     present = [c for c in WEIGHTS if parts[c]["ratio"] is not None]
-    coverage = (sum(WEIGHTS[c] * parts[c]["ratio"] for c in present) / sum(WEIGHTS[c] for c in present)) if present else 0.5
+    coverage = (sum(WEIGHTS[c] * parts[c]["weighed"] for c in present) / sum(WEIGHTS[c] for c in present)) if present else 0.5
     requirement_points = round(COVERAGE_POINTS * coverage)
     must = parts["required"]
     return {
@@ -303,7 +329,8 @@ def rationale(analysis: dict) -> str:
     for blocker in analysis["matrix"]["hard_blockers"]:
         lines.append(f"Blocker: {blocker['reason']} (“{blocker['excerpt'][:140]}”).")
     how = (f"Checked by AI ({analysis['provider_label']}) against your registered evidence."
-           if analysis["method"] == "ai" else "Checked by rules against your registered skills (no free AI plan was free).")
+           if analysis["method"] == "ai"
+           else "Checked by rules against your registered skills; an AI check on a free plan replaces it when one is free.")
     return " ".join(lines + [how])
 
 
@@ -445,6 +472,32 @@ def for_job(services, job_id: str, *, team=None, use_ai: bool = True, refresh: b
     analysis = analyse(services, services.w.get_job(job_id), team=team, cat=cat)
     save(services, job_id, analysis)
     return analysis
+
+
+def backfill(services) -> int:
+    """Bring every saved job's shown fit up to date, by rules only (no AI call).
+
+    A job saved before the requirement check, or checked under older rules, gets the rules
+    check; one whose saved check is current but whose shown score came from an older formula
+    gets the new score. A free plan upgrades a job to an AI check when it is tailored or
+    checked again. Returns how many jobs changed.
+    """
+    cat = catalogue(services)
+    changed = 0
+    for job in services.w.jobs():
+        if not str(job.get("description") or "").strip():
+            continue
+        current = cached(services, job["id"], cat=cat)
+        if current is None:
+            save(services, job["id"], analyse(services, job, cat=cat))
+        elif job.get("fit_score") != current["score"]:
+            with services.w.connect() as db:
+                db.execute("UPDATE jobs SET fit_score=?, fit_rationale=? WHERE id=?",
+                           (current["score"], current["rationale"], job["id"]))
+        else:
+            continue
+        changed += 1
+    return changed
 
 
 def coverage_requirements(analysis: dict, cat: dict) -> list[dict]:

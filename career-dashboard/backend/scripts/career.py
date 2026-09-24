@@ -19,6 +19,7 @@ from tracking import Tracking, today
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(ROOT))
+from backend.ai_marks import clean_text
 from backend.migrations import migrate
 from backend.paths import TIMEZONE, app_root_for
 from backend.services.postings import canonical_url, posting_key
@@ -109,6 +110,7 @@ def _tex_unicode(c):
 
 
 def tex_escape(text):
+    # Hidden characters and look-alike letters (AI marks) never reach resume.tex.
     return "".join(
         {
             "\\": r"\textbackslash{}",
@@ -126,7 +128,7 @@ def tex_escape(text):
             "²": r"\textsuperscript{2}",
             "³": r"\textsuperscript{3}",
         }.get(c) or _tex_unicode(c)
-        for c in text
+        for c in clean_text(text)
     )
 
 

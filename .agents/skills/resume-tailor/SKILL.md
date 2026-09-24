@@ -75,8 +75,11 @@ personal details.
 `career check-resume <folder>/resume.tex --compile --output <folder>/resume.pdf --render-dir
 <folder>/resume-preview --qa-json <folder>/qa.json` (it runs
 `career-dashboard/backend/scripts/validate_resume.py`). Release needs exactly **one page** of US Letter,
-10–11pt, two distinct registered projects, no unsafe content, a fresh PDF, and a manual visual review of
-`page-01.png`. Too long: cut in the documented order (supporting project's third bullet → last bullet of
+10–11pt, two distinct registered projects, no unsafe content, no AI marks, a fresh PDF, and a manual
+visual review of `page-01.png`. The same command runs the `remove-ai-marks` skill, built into the app
+(`.agents/skills/remove-ai-marks/SKILL.md` → "In this workspace"): the PDF leaves with only its title
+and author, and a hidden or look-alike character in `resume.tex` fails the check. Retype the word it
+names. Too long: cut in the documented order (supporting project's third bullet → last bullet of
 the oldest role → coursework line → second degree); never shrink fonts or margins. At most three repairs.
 
 ## Hard rules
@@ -90,10 +93,13 @@ the oldest role → coursework line → second degree); never shrink fonts or ma
 - `[FILL IN: …]` markers are how you ask for a number only Annie knows; the validator refuses to pass a
   resume that still contains one.
 - Always ship both `resume.tex` and `resume.pdf`.
+- No AI marks in a resume or cover letter: no hidden characters, look-alike letters or tool metadata
+  (`qa.json` → `ai_marks` is empty). Never run the skill's Layer B paraphrase on them; the wording
+  stays the registered wording.
 - Never label coverage an "ATS score", claim a guaranteed shortlist or hide a failed gate.
 
 ## Report
 
 Tier and why, job fit, supported coverage and hard gaps, the signature project and its alignment, all
-nine artifact paths, QA and visual-review status, and facts Annie should confirm (also appended to
-`QUESTIONS-FOR-YOU.md`). For 2–10 JDs, or "give me 10 companies", use the `hunt` skill.
+nine artifact paths, QA (including AI marks) and visual-review status, and facts Annie should confirm
+(also appended to `QUESTIONS-FOR-YOU.md`). For 2–10 JDs, or "give me 10 companies", use the `hunt` skill.

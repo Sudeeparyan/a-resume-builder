@@ -11,6 +11,7 @@ import {
   Workflow,
   CheckCircle2,
   LoaderCircle,
+  Menu,
   X,
 } from "lucide-react";
 import { api, PROFILE_ID } from "./api";
@@ -27,6 +28,7 @@ import Profile from "./features/Profile";
 import Settings from "./features/Settings";
 import Agents, { AGENT_LABEL } from "./features/Agents";
 import Assistant from "./features/Assistant";
+import { PHONE_SHORT, PhoneMore } from "./components/PhoneNav";
 import type { Summary } from "./types";
 const tabs = [
   ["assistant", "Assistant", MessageSquareText, "Your search"],
@@ -103,6 +105,10 @@ export default function App() {
       : null,
   );
   const [add, setAdd] = useState(false);
+  // The phone's More sheet (the tabs that are not in its bottom bar).
+  const [moreOpen, setMoreOpen] = useState(false);
+  const closeMore = useCallback(() => setMoreOpen(false), []);
+  useEffect(() => setMoreOpen(false), [route]);
   // A new profile is set up in the chat; the form is one click away (remembered per browser).
   const [setupForm, setSetupForm] = useState(() => {
     try {
@@ -198,7 +204,7 @@ export default function App() {
           )}
           <nav aria-label="Main navigation">
             {tabs.map(([id, label, Icon, group], i) => (
-              <div key={id} className="nav-item">
+              <div key={id} className={"nav-item" + (id in PHONE_SHORT ? "" : " nav-extra")}>
                 {group !== tabs[i - 1]?.[3] && (
                   <span className="nav-group">{group}</span>
                 )}
@@ -211,6 +217,9 @@ export default function App() {
                 >
                   <Icon size={20} />
                   <span>{label}</span>
+                  <small className="nav-short" aria-hidden="true">
+                    {PHONE_SHORT[id] || label}
+                  </small>
                   {id === "agents" && working.length > 0 && (
                     <span className="nav-count" aria-label={`${working.length} working`}>
                       {working.length}
@@ -219,6 +228,26 @@ export default function App() {
                 </button>
               </div>
             ))}
+            {/* Phones only: the fifth tab, opening the sheet with Assurance, Profile, Agents and Settings. */}
+            <div className="nav-item nav-more">
+              <button
+                type="button"
+                title="More: Assurance, Profile, Agents, Settings"
+                aria-haspopup="dialog"
+                aria-expanded={moreOpen}
+                className={!onboarding && !(route in PHONE_SHORT) ? "active" : ""}
+                disabled={onboarding}
+                onClick={() => setMoreOpen(!moreOpen)}
+              >
+                <Menu size={20} />
+                <small className="nav-short">More</small>
+                {working.length > 0 && (
+                  <span className="nav-count" aria-label={`${working.length} working`}>
+                    {working.length}
+                  </span>
+                )}
+              </button>
+            </div>
           </nav>
           <div className="sidebar-note">
             <span className="status-dot" /> Personal workspace
@@ -230,6 +259,14 @@ export default function App() {
             <small>Saved locally · {timeLabel(current?.market?.timezone)}</small>
           </div>
         </aside>
+        <PhoneMore
+          open={moreOpen}
+          tabs={tabs.map(([id, label, Icon]) => ({ id, label, Icon }))}
+          route={route}
+          working={working.length}
+          onClose={closeMore}
+          onGo={navigate}
+        />
         <main>
           <header>
             <span className="crumb">

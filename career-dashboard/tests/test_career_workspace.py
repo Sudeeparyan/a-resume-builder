@@ -21,6 +21,7 @@ def workspace(tmp_path):
     # validate_resume.py runs as a subprocess from the copied root and imports the contract.
     shutil.copy2(ROOT/'backend/resume_contract.py', tmp_path/'backend/resume_contract.py')
     shutil.copy2(ROOT/'backend/pdf_compiler.py', tmp_path/'backend/pdf_compiler.py')
+    shutil.copy2(ROOT/'backend/ai_marks.py', tmp_path/'backend/ai_marks.py')
     (tmp_path/'backend/__init__.py').write_text('')
     (tmp_path/'data').mkdir(exist_ok=True)
     (tmp_path/'data/historical-packs.json').write_text('[]')

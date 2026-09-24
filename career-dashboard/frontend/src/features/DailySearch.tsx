@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Settings2, ArrowUpRight } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { api } from "../api";
-import { useMarket } from "../profiles";
-import { AskAssistant, Badge, Field, Modal, Running, Empty } from "../components/UI";
+import { AskAssistant, Running, Empty } from "../components/UI";
 import { JobList } from "../components/JobList";
 import { PipelineBuilder, PipelineProgress } from "./SearchPipeline";
 import type { PipelineChoice, PipelineInfo, PipelineRun, PipelineStatus, Summary } from "../types";
+/** What a search sends: the AI is left out, so the one chosen in Settings does the work. */
+function searchOnly({ count, source, steps }: PipelineChoice) {
+  return { count, source, steps };
+}
+
 export default function DailySearch({
   data,
   refresh,
@@ -19,10 +23,7 @@ export default function DailySearch({
   onJob: (id: string) => void;
   onAdd: () => void;
 }) {
-  const market = useMarket();
-  const [g, setG] = useState<any>(null);
   const [runs, setRuns] = useState<any[]>([]);
-  const [busy, setBusy] = useState(false);
   const [all, setAll] = useState(false);
   const [info, setInfo] = useState<PipelineInfo | null>(null);
   const [choice, setChoice] = useState<PipelineChoice | null>(null);
@@ -84,7 +85,7 @@ export default function DailySearch({
       return;
     }
     const timer = setTimeout(
-      () => api("/v2/pipeline/preferences", "PUT", choice).catch((e) => notify((e as Error).message, true)),
+      () => api("/v2/pipeline/preferences", "PUT", searchOnly(choice)).catch((e) => notify((e as Error).message, true)),
       600,
     );
     return () => clearTimeout(timer);
@@ -93,7 +94,7 @@ export default function DailySearch({
     if (!choice) return;
     setStarting(true);
     try {
-      const run = await api<PipelineRun>("/v2/pipeline/run", "POST", choice);
+      const run = await api<PipelineRun>("/v2/pipeline/run", "POST", searchOnly(choice));
       setInfo((was) => (was ? { ...was, current: run } : was));
       notify("Search started. It keeps running if you leave this page.");
       await refresh();
@@ -108,15 +109,6 @@ export default function DailySearch({
       const stopped = await api<PipelineRun>(`/v2/pipeline/${run.id}/stop`, "POST");
       setInfo((was) => (was ? { ...was, current: stopped } : was));
       notify("Stopping after the current step. Finished work is kept.");
-    } catch (e) {
-      notify((e as Error).message, true);
-    }
-  };
-  const raiseBudget = async (limit: number) => {
-    try {
-      await api("/v2/agent-control/budget", "PUT", { daily_call_limit: limit });
-      await refreshStatus();
-      notify(`Your daily AI-call limit is now ${limit}.`);
     } catch (e) {
       notify((e as Error).message, true);
     }
@@ -136,8 +128,6 @@ export default function DailySearch({
         running={active}
         starting={starting}
         onStart={start}
-        onEditPlan={() => setG({ ...data.goals.settings })}
-        onRaiseBudget={raiseBudget}
       />
     ) : (
       <section className="card" role="status" aria-label="Loading search options">
@@ -168,35 +158,18 @@ export default function DailySearch({
               { label: "Run a search from the chat", text: "Run the daily search for 2 jobs with research, a tailored resume, the study plan and the PDF", send: false },
             ]}
           />
-          <button
-            className="secondary"
-            onClick={() => setG({ ...data.goals.settings })}
-          >
-            <Settings2 size={17} />
-            Edit plan
-          </button>
         </div>
       </div>
-      <section className="focus-card">
-        <div>
-          <Badge tone="lime">{data.goals.date} · {market.time.toUpperCase()}</Badge>
-          <h2>{data.goals.remaining_today} left on today’s plan</h2>
-          <p>
-            {data.goals.daily_base} scheduled + {data.goals.carryover} carried
-            forward − {data.goals.ahead} advance credit.
-            <br />
-            {data.goals.today_completed} confirmed today. Saving a job or
-            preparing a resume does not count as applying.
-          </p>
-        </div>
-        <div className="progress-dial">
-          <strong>
-            {data.goals.week_completed}
-            <small>/{data.goals.current_week_target}</small>
-          </strong>
-          <span>this week</span>
-        </div>
-      </section>
+      {/* The day's plan in one line; the week and the plan editor live on the Dashboard. */}
+      <p className="search-status" role="status">
+        <b>
+          {data.goals.remaining_today ? `${data.goals.remaining_today} left today` : "Today's plan is done"}
+        </b>
+        <span>
+          {data.goals.week_completed}/{data.goals.current_week_target} applied this week
+        </span>
+        <a href="#dashboard">Your week and plan on the Dashboard →</a>
+      </p>
       {active ? (
         <>
           {progress}
@@ -209,31 +182,6 @@ export default function DailySearch({
         </>
       )}
       {running && !active && <Running run={running} />}
-      <section className="card week-card">
-        <div className="section-title">
-          <h2>Your week</h2>
-          <Badge>{data.goals.weekly_target} per full week</Badge>
-        </div>
-        <div className="week-grid">
-          {data.goals.schedule.map((d) => (
-            <div key={d.date} className={d.today ? "today" : ""}>
-              <span>{d.label}</span>
-              <small>{d.date.slice(5)}</small>
-              <strong>
-                {d.completed}
-                <small>/{d.planned}</small>
-              </strong>
-              <progress max={Math.max(1, d.planned)} value={d.completed} />
-            </div>
-          ))}
-        </div>
-        <p className="small">
-          Tracking starts {data.goals.settings.start_date}. Partial weeks are
-          prorated. Unfinished targets carry across days and weeks. Email
-          receipt dates are used only when an explicit submission date is
-          unavailable.
-        </p>
-      </section>
       {latestDiscovery?.result?.summary && (
         <details className="search-notes">
           <summary>What the last job search tried, and why it stopped</summary>
@@ -334,79 +282,6 @@ export default function DailySearch({
           </Empty>
         )}
       </section>
-      {g && (
-        <Modal title="Set your application plan" onClose={() => setG(null)}>
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              setBusy(true);
-              try {
-                await api("/v2/goals", "PUT", g);
-                await refresh();
-                setG(null);
-                notify("Plan saved. Your carryover has been recalculated.");
-              } catch (e) {
-                notify((e as Error).message, true);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            <Field label="Applications per week">
-              <input
-                type="number"
-                min="1"
-                max="200"
-                required
-                value={g.weekly_target}
-                onChange={(e) =>
-                  setG({ ...g, weekly_target: Number(e.target.value) })
-                }
-              />
-            </Field>
-            <Field label="Start tracking from">
-              <input
-                type="date"
-                max={data.goals.date}
-                required
-                value={g.start_date}
-                onChange={(e) => setG({ ...g, start_date: e.target.value })}
-              />
-            </Field>
-            <fieldset>
-              <legend>Application days</legend>
-              <div className="day-choices">
-                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
-                  (d, i) => (
-                    <label key={d}>
-                      <input
-                        type="checkbox"
-                        checked={g.workdays.includes(i)}
-                        onChange={(e) =>
-                          setG({
-                            ...g,
-                            workdays: e.target.checked
-                              ? [...g.workdays, i]
-                              : g.workdays.filter((n: number) => n !== i),
-                          })
-                        }
-                      />
-                      {d}
-                    </label>
-                  ),
-                )}
-              </div>
-            </fieldset>
-            <p className="small">
-              Changing this plan recalculates unfinished work from the start
-              date. Choose a new start date if you want a fresh target.
-            </p>
-            <button className="primary" disabled={busy || !g.workdays.length}>
-              Save plan
-            </button>
-          </form>
-        </Modal>
-      )}
     </>
   );
 }

@@ -37,9 +37,13 @@ _STATES = (
 )
 _ABBR = "AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC"
 _HUBS = r"new york city|nyc|san francisco|bay area|silicon valley|seattle|austin|boston|chicago|raleigh|durham|minneapolis|los angeles|san diego|san jose|denver|atlanta|dallas|houston|phoenix|portland|pittsburgh|philadelphia|washington,? d\.?c\.?"
+# How a feed may end a location after the state: "Alameda, CA — on-site", "Austin, TX (Hybrid)". Only
+# work-arrangement words, so a trailing country ("Munich, DE, Germany") still decides for itself.
+_ARRANGEMENT = (r"(?:\s*[-–—|/;:(,]?\s*(?:on[- ]?site|in[- ]office|in[- ]person|hybrid|remote|"
+                r"full[- ]time|part[- ]time)\s*\)?)*")
 US_LOCATION = re.compile(
     r"(?i)\b(?:united states|u\.?s\.?a?\.?|usa|us[- ]remote|remote[- ,(]*(?:us|usa|united states)|" + _STATES + "|" + _HUBS + r")\b"
-    r"|,\s*(?:" + _ABBR + r")\b(?:\s+\d{5})?\s*(?:,\s*(?:usa?|united states))?$"
+    r"|,\s*(?:" + _ABBR + r")\b(?:\s+\d{5})?\s*(?:,\s*(?:usa?|united states))?" + _ARRANGEMENT + r"\s*$"
     r"|\b(?:" + _ABBR + r")\s+\d{5}\b"
 )
 # Countries, regions and cities with no US namesake: only a strong US marker outweighs them.

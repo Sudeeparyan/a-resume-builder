@@ -44,8 +44,10 @@ def activity(services, runner, limit: int = 60) -> dict:
         calls = [dict(r) for r in db.execute(
             "SELECT provider,state,COUNT(*) AS n FROM ai_calls WHERE day=? GROUP BY provider,state",
             (services.today(),))]
+        # Only a suggestion (origin 'predicted') waits for her keep/remove; registry items never do.
         review_counts = {r["decision"]: r["n"] for r in db.execute(
-            "SELECT decision, COUNT(*) AS n FROM resume_items GROUP BY decision")}
+            "SELECT decision, COUNT(*) AS n FROM resume_items WHERE decision != 'pending' OR origin = 'predicted' "
+            "GROUP BY decision")}
         tailored_jobs = db.execute("SELECT COUNT(DISTINCT job_id) AS n FROM resume_items").fetchone()["n"]
     listed = []
     for r in runs:

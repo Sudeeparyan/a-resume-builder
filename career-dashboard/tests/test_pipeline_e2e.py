@@ -91,7 +91,8 @@ def test_the_whole_pipeline_twice(service, client, monkeypatch, persona):
     for j in jobs:
         report = client.get("/api/v2/assurance/" + j["id"]).json()
         assert report["note"] is None and report["summary"]["predicted"] >= 2
-        assert report["summary"]["pending"] == item_counts[j["id"]]
+        # Only the two suggestions wait for her; the registry items never need a decision.
+        assert report["summary"]["pending"] == 2 < item_counts[j["id"]]
     keep_job, drop_job = jobs[0], jobs[1]
     outcomes = {}
     for j, decision in ((keep_job, "kept"), (drop_job, "removed")):

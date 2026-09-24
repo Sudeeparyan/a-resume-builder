@@ -61,7 +61,7 @@ def reimported(service, tmp_path):
     fresh = tmp_path / "fresh"
     for name in ("data/config", "data/context", "data/templates", "backend/scripts", "backend/workflows"):
         shutil.copytree(service.w.root / name, fresh / name)
-    for module in ("resume_contract.py", "pdf_compiler.py"):
+    for module in ("resume_contract.py", "pdf_compiler.py", "ai_marks.py"):
         shutil.copy2(service.w.root / "backend" / module, fresh / "backend" / module)
     (fresh / "backend/__init__.py").write_text("")
     (fresh / "data/historical-packs.json").write_text("[]")

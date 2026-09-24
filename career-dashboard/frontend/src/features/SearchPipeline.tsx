@@ -1,4 +1,4 @@
-// The Daily Search pipeline: a four-step setup card and a live progress card.
+// The Daily Search pipeline: a three-step setup card and a live progress card.
 // Written for a student, not a developer: one question per step, plain words,
 // and the time, tokens and AI calls update the moment anything changes.
 import { useEffect, useState } from "react";
@@ -107,8 +107,6 @@ export function PipelineBuilder({
   running,
   starting,
   onStart,
-  onEditPlan,
-  onRaiseBudget,
 }: {
   info: PipelineInfo;
   choice: PipelineChoice;
@@ -116,8 +114,6 @@ export function PipelineBuilder({
   running: boolean;
   starting: boolean;
   onStart: () => void;
-  onEditPlan: () => void;
-  onRaiseBudget: (limit: number) => void;
 }) {
   // "visa sponsorship" is the backup profile's (US) wording; elsewhere it is a work permit.
   const gate = useMarket().us ? "visa-sponsorship" : "work-permit";
@@ -129,7 +125,6 @@ export function PipelineBuilder({
   const needsAI = !!source?.ai || info.steps.some((s) => s.ai && choice.steps[s.id]);
   // The daily limit is on paid calls: it can only stop a search run on a paid AI by name.
   const paidChoice = provider?.kind === "api";
-  const raiseTo = Math.min(200, info.budget.used + estimate.calls);
   const overBudget = paidChoice && needsAI && estimate.calls > info.budget.remaining;
   // How much of each plan's 5-hour limit this search takes (Auto: across the route in order).
   const route = info.providers.find((p) => p.kind === "auto")?.route;
@@ -141,9 +136,9 @@ export function PipelineBuilder({
   const blocked = running
     ? "A search is running. You can start the next one when it finishes."
     : remaining <= 0
-      ? "Today's plan is done, so there is nothing left to search for. Edit your plan to search for more."
+      ? "Today's plan is done, so there is nothing left to search for. Edit your plan on the Dashboard to search for more."
       : needsAI && !provider?.ready
-        ? `${provider?.label ?? "The chosen AI"} is not ready on this PC. Pick another AI in step 3.`
+        ? `${provider?.label ?? "The chosen AI"} is not ready on this PC. Choose another AI in Settings.`
         : null;
   const limitWord = !needsAI
     ? "Nothing from your AI limits"
@@ -163,6 +158,25 @@ export function PipelineBuilder({
         <h2 id="pipe-title">Set up today's search</h2>
         <span className="small muted">Your choices are saved for next time.</span>
       </div>
+      {/* The AI is chosen in one place, Settings; the search follows it. */}
+      <p className="pipe-ai" role="status">
+        <span className="option-icon" aria-hidden="true">
+          {provider?.kind === "auto" ? <Route size={18} /> : provider?.kind === "local" ? <Laptop size={18} /> : <KeyRound size={18} />}
+        </span>
+        <span className="pipe-ai-text">
+          <b>
+            AI: {provider?.label ?? "none ready"}
+            {model && provider && provider.models.length > 1 ? ` · ${model.label}` : ""}
+          </b>
+          <small>
+            {provider && !provider.ready ? "Not ready on this PC. " : provider?.cost ? provider.cost + " " : ""}
+            {needsAI ? "" : "This search needs no AI."}
+          </small>
+        </span>
+        <a className="text-button" href="#settings">
+          Change in Settings
+        </a>
+      </p>
       <fieldset className="pipe-fieldset" disabled={running}>
         <ol className="pipe-steps">
           <Step n={1} title="How many jobs do you want?">
@@ -195,9 +209,9 @@ export function PipelineBuilder({
                 <>Only jobs that pass the {gate} and never-re-apply checks are saved, so you may get fewer. </>
               )}
               {(remaining <= 0 || choice.count > remaining) && (
-                <button type="button" className="text-button inline" onClick={onEditPlan}>
-                  Edit plan
-                </button>
+                <a className="text-button inline" href="#dashboard">
+                  Edit plan on the Dashboard
+                </a>
               )}
             </p>
           </Step>
@@ -215,44 +229,7 @@ export function PipelineBuilder({
             </div>
           </Step>
 
-          <Step n={3} title="Which AI should do the work?">
-            <div className="option-grid" role="radiogroup" aria-label="Which AI">
-              {info.providers.map((p) => (
-                <button
-                  type="button"
-                  role="radio"
-                  key={p.id}
-                  aria-checked={p.id === choice.provider}
-                  disabled={!p.ready}
-                  className={"option-card" + (p.id === choice.provider ? " selected" : "") + (p.ready ? "" : " unavailable")}
-                  onClick={() => set({ provider: p.id, model: p.models[0]?.id ?? "" })}
-                >
-                  <span className="option-icon">
-                    {p.kind === "auto" ? <Route size={20} /> : p.kind === "local" ? <Laptop size={20} /> : <KeyRound size={20} />}
-                  </span>
-                  <b>{p.label}</b>
-                  <small>{p.cost}</small>
-                  <span className={"badge " + (p.ready ? "green" : "amber")}>{p.ready ? "Ready" : "Not found"}</span>
-                  {p.note && <small className="option-note">{p.note}</small>}
-                </button>
-              ))}
-            </div>
-            {provider && provider.models.length > 1 && (
-              <div className="model-row">
-                <span className="model-label">Model</span>
-                <div className="segmented" role="radiogroup" aria-label={`${provider.label} model`}>
-                  {provider.models.map((m) => (
-                    <button type="button" role="radio" key={m.id} aria-checked={m.id === choice.model} className={m.id === choice.model ? "selected" : ""} onClick={() => set({ model: m.id })}>
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {model?.hint && <p className="step-hint">{model.hint}</p>}
-          </Step>
-
-          <Step n={4} title="What should run for each job?">
+          <Step n={3} title="What should run for each job?">
             <div className="quick-picks" role="group" aria-label="Quick picks">
               <span>Quick picks:</span>
               {QUICK_PICKS.map((p) => (
@@ -390,14 +367,12 @@ export function PipelineBuilder({
               It uses {callBreakdown(estimate.rows)}. Steps past the limit will stop.
             </p>
             <p className="small">
-              {CALLS_EXPLAINED} To fit, choose Auto or a free plan in step 3, allow more paid calls a day, or switch off Company research (3 calls per job) or pick fewer jobs.
+              {CALLS_EXPLAINED} To fit, choose Auto in Settings (or allow more paid calls a day there), switch off Company research (3 calls per job) or pick fewer jobs.
             </p>
           </div>
-          {raiseTo > info.budget.limit && (
-            <button type="button" className="secondary" onClick={() => onRaiseBudget(raiseTo)}>
-              Allow {raiseTo} a day
-            </button>
-          )}
+          <a className="secondary" href="#settings">
+            Open Settings
+          </a>
         </div>
       )}
       <details className="pipe-breakdown">
@@ -434,7 +409,7 @@ export function PipelineBuilder({
           rough, because the local AI apps do not report exact usage. Steps run one after another.
         </p>
         <p className="small muted">
-          {CALLS_EXPLAINED} You can change the limit here or in Agents → Advanced.
+          {CALLS_EXPLAINED} The AI and the paid limit are set in Settings.
         </p>
       </details>
     </section>

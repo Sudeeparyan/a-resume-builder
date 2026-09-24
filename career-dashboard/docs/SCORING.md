@@ -18,6 +18,10 @@ Grounded JD requirements are persisted by JD hash. Every requirement retains an 
 
 Each requirement is labeled `found_in_pdf`, `supported_missing_from_pdf`, `partially_supported`, or `unsupported_or_unknown`. Only the second category is a safe tailoring candidate; unsupported requirements must not be keyword-stuffed.
 
+## Job fit (0–100, before a job is saved)
+
+Each job's verified requirement matrix (`services/fit.py`): requirement coverage 75 (required 55, preferred 10, responsibilities 10; met 1, partial 0.5, with two imaginary half-met items per category so a thin reading counts as less certain), role family and seniority 15, location 10. A job is saved only with no hard blocker, a score of at least 65 and at least half its must-haves met. Every requirement quotes the posting and every "met" names a registered evidence id; the AI proposes, the code verifies. Coverage below uses the same matrix when a job has one. Details in `docs/AI-AGENTS.md`.
+
 ## Opportunity fit
 
 `Strong`, `Partial`, `Weak`, or `Blocked`, with evidence IDs and hard blockers. It is never averaged into either document score. Evidence/claim review, one-page layout checks, and visual release approval remain separate gates.

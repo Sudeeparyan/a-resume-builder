@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { clock, dayLabel, elapsed, exportMarkdown, flowFor, matches, quickReplies, unfinished, Exchange, HistoryDrawer } from "./Assistant";
+import { clock, dayLabel, elapsed, exportMarkdown, matches, quickReplies, unfinished, EngineChip, Exchange, HistoryDrawer, MoreMenu, Welcome } from "./Assistant";
 import { RichText } from "../components/UI";
-import type { AssistantConversation, AssistantMessage, Run } from "../types";
+import type { AssistantConversation, AssistantEngine, AssistantMessage } from "../types";
 
 const message = (steps: AssistantMessage["steps"], state: AssistantMessage["state"] = "done"): AssistantMessage => ({
   id: "m1", message: "x", response: "y", state, steps, data: {}, created_at: "", updated_at: "",
@@ -11,33 +11,38 @@ const step = (agent: string, state: "running" | "done" | "failed", detail = "", 
   at: "", label: agent, state, detail, agent, run_id,
 });
 
-describe("Agent rail flow", () => {
-  it("shows the posting pipeline before the first message", () => {
-    const { nodes, live } = flowFor(undefined, []);
-    expect(nodes.map((n) => n.id)).toEqual(["assistant", "sponsorship", "resume", "resume_match"]);
-    expect(live).toBe(false);
-    expect(nodes.every((n) => n.state === "idle")).toBe(true);
+describe("An empty chat and the chat bar", () => {
+  it("greets by the time of day and offers four starters, one of which only focuses the box", () => {
+    const picked: string[] = [];
+    const html = renderToStaticMarkup(<Welcome now={new Date(2026, 8, 24, 8)} onPick={(s) => picked.push(s.label)} />);
+    expect(html).toContain("Good morning");
+    expect(html.match(/class="chat-starter"/g)).toHaveLength(4);
+    for (const label of ["Paste a posting", "Find jobs for me", "Build missing resumes", "What&#x27;s waiting on me?"]) expect(html).toContain(label);
+    expect(renderToStaticMarkup(<Welcome now={new Date(2026, 8, 24, 20)} onPick={() => {}} />)).toContain("Good evening");
   });
-  it("collapses the real steps into one node per agent, in order, and keeps a running one lit", () => {
-    const { nodes, live } = flowFor(
-      message([step("assistant", "done", "Read"), step("sponsorship", "done", "Tier B"), step("resume", "done", "v1"), step("resume", "running", "Fitting")], "processing"),
-      [],
-    );
-    expect(nodes.map((n) => [n.id, n.state])).toEqual([["assistant", "done"], ["sponsorship", "done"], ["resume", "running"]]);
-    expect(nodes[2].detail).toBe("Fitting");
-    expect(live).toBe(true);
+  it("keeps search, download and auto-apply in the ⋯ menu, auto-apply explained there", () => {
+    const props = { onOpen() {}, empty: false, searchLabel: "Search (Ctrl+K)", onSearch() {}, onExport() {}, onAutoApply() {} };
+    const closed = renderToStaticMarkup(<MoreMenu {...props} open={false} autoApply={false} />);
+    expect(closed).toContain('aria-expanded="false"');
+    expect(closed).not.toContain("Auto-apply changes");
+    const open = renderToStaticMarkup(<MoreMenu {...props} open autoApply />);
+    expect(open).toContain("Search this chat");
+    expect(open).toContain("Download as a file");
+    expect(open).toContain("Auto-apply changes");
+    expect(open).toContain('aria-checked="true"');
+    expect(open).toContain("run without asking first");
+    const empty = renderToStaticMarkup(<MoreMenu {...props} open empty autoApply={false} />);
+    expect(empty.match(/role="menuitem" disabled=""/g)).toHaveLength(2);
   });
-  it("follows a background run the chat started until it finishes", () => {
-    const runs: Run[] = [{ id: "r1", kind: "study_plan", job_id: "j", state: "running", result: { stage: "Drafting the plan" }, error: null, created_at: "", updated_at: "" }];
-    const started = flowFor(message([step("study_plan", "done", "queued", "r1")]), runs);
-    expect(started.nodes[0].state).toBe("running");
-    expect(started.nodes[0].detail).toBe("Study plan · Drafting the plan");
-    expect(started.live).toBe(true);
-    const finished = flowFor(message([step("study_plan", "done", "queued", "r1")]), [{ ...runs[0], state: "completed" }]);
-    expect(finished.nodes[0].state).toBe("done");
-    expect(finished.live).toBe(false);
-    const failed = flowFor(message([step("study_plan", "done", "queued", "r1")]), [{ ...runs[0], state: "failed", error: "No provider" }]);
-    expect(failed.nodes[0]).toMatchObject({ state: "failed", detail: "No provider" });
+  it("names the AI in one chip that opens Settings, and warns when nothing is ready", () => {
+    const engine = { provider: "auto", model: "auto", label: "Auto · free plans first", ready: true, last_fallback: null } as unknown as AssistantEngine;
+    const ready = renderToStaticMarkup(<EngineChip engine={engine} />);
+    expect(ready).toContain('href="#settings"');
+    expect(ready).toContain("Auto · free plans first");
+    expect(ready).not.toContain(" warn");
+    const down = renderToStaticMarkup(<EngineChip engine={{ ...engine, provider: "codex", label: "Codex · gpt", ready: false }} />);
+    expect(down).toContain("No AI ready");
+    expect(down).toContain("chat-chip engine warn");
   });
 });
 
@@ -117,6 +122,19 @@ describe("Rendering", () => {
     expect(html).toContain("<pre><code>raw block</code></pre>");
     expect(html).toContain("<code>code</code>");
     expect(html).toContain("1 step in 30 s");
+  });
+  it("marks a failed action and opens the list of what it did", () => {
+    const trace = [
+      { tool: "save_posting", summary: "Saved Acme" },
+      { tool: "build_resume", summary: "No AI could take this step.", error: true },
+    ];
+    const html = renderToStaticMarkup(<Exchange {...base} message={{ ...message([]), data: { trace } }} />);
+    expect(html).toContain("What I did · 2 actions");
+    expect(html).toContain("1 failed");
+    expect(html).toMatch(/<details class="chat-trace" open=""/);
+    const fine = renderToStaticMarkup(<Exchange {...base} message={{ ...message([]), data: { trace: trace.slice(0, 1) } }} />);
+    expect(fine).not.toContain("failed</em>");
+    expect(fine).not.toMatch(/<details class="chat-trace" open/);
   });
   it("shows typing dots while working and a stop note when stopping", () => {
     const working = renderToStaticMarkup(<Exchange {...base} message={message([step("assistant", "running", "")], "processing")} stopping />);

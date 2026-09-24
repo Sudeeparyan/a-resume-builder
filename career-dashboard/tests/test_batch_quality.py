@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -15,7 +16,11 @@ ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR = ROOT / "backend/scripts/validate_batch.py"
 RESUME_VALIDATOR = ROOT / "backend/scripts/validate_resume.py"
 RUNNER = ROOT / "backend/scripts/run_resume_batch.py"
-CANDIDATE_REVISION = "2026-09-18.1"
+# The batch gates compare against the live registry, so the fixtures follow it.
+CANDIDATE_REVISION = re.search(
+    r"(?m)^candidate_revision:\s*\"?([^\"\s]+)",
+    (ROOT / "data/context/evidence.yml").read_text(encoding="utf-8"),
+).group(1)
 REQUIRED_ARTIFACTS = [
     "job-description.md",
     "evaluation.md",
@@ -51,8 +56,8 @@ class BatchQualityTests(unittest.TestCase):
 
     def test_batch_requires_at_least_two_jobs(self) -> None:
         result = self.run_manifest(
-            """
-            candidate_revision: "2026-09-18.1"
+            f"""
+            candidate_revision: "{CANDIDATE_REVISION}"
             jobs:
               - job_id: "one"
                 status: "rejected"
@@ -64,8 +69,8 @@ class BatchQualityTests(unittest.TestCase):
 
     def test_terminal_policy_rejections_are_valid_batch_outcomes(self) -> None:
         result = self.run_manifest(
-            """
-            candidate_revision: "2026-09-18.1"
+            f"""
+            candidate_revision: "{CANDIDATE_REVISION}"
             jobs:
               - job_id: "one"
                 status: "rejected"
@@ -80,8 +85,8 @@ class BatchQualityTests(unittest.TestCase):
 
     def test_duplicate_job_ids_fail_cross_batch_gate(self) -> None:
         result = self.run_manifest(
-            """
-            candidate_revision: "2026-09-18.1"
+            f"""
+            candidate_revision: "{CANDIDATE_REVISION}"
             jobs:
               - job_id: "duplicate"
                 status: "rejected"

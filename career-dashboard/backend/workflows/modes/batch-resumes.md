@@ -1,6 +1,6 @@
 # Mode: Batch Resumes — Up to Ten Isolated One-Page Applications
 
-Use when Annie supplies several verified JDs or URLs, asks for the top eligible jobs in the pipeline, or says "give me 10 companies" (or `/hunt`). Maximum released batch size: 10.
+Use when Annie supplies several verified JDs or URLs, asks for the top eligible jobs in the pipeline, or says "give me 10 companies" (the `hunt` skill in `.agents/skills/hunt/`). Maximum released batch size: 10.
 
 ## Ten-company trigger
 

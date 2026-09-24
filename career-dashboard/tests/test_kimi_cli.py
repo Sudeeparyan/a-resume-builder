@@ -110,7 +110,7 @@ def test_short_prompt_goes_on_the_command_line_and_stdout_is_a_file(tmp_path, mo
     seen = {}
 
     def before(cmd, **options):
-        seen.update(cmd=cmd, timeout=options["timeout"])
+        seen.update(cmd=cmd, timeout=options["timeout"], encoding=options.get("encoding"))
         # The provider captures the stream through a file, never a pipe.
         assert hasattr(options["stdout"], "write"), "stdout must be a writable file"
 
@@ -122,6 +122,8 @@ def test_short_prompt_goes_on_the_command_line_and_stdout_is_a_file(tmp_path, mo
     assert "the prompt" in argv_prompt and "Be brief." in argv_prompt
     assert "JSON Schema" in argv_prompt
     assert seen["timeout"] == kimi_cli.TIMEOUT["text"]
+    # Its error output is read as UTF-8, never the Windows ANSI code page.
+    assert seen["encoding"] == "utf-8"
 
 
 def test_long_prompt_is_handed_off_as_a_file(tmp_path, monkeypatch):
@@ -314,26 +316,26 @@ def test_specialists_run_through_the_cli_and_are_schema_checked(tmp_path, monkey
 
     def run(prompt, schema, **options):
         seen.update(prompt=prompt, schema=schema, **options)
-        return {"role_family_matches": True, "seniority_suitable": True, "location_matches": True,
-                "hard_blockers": [], "reasons": ["analyst role"]}, {"input_tokens": 5, "output_tokens": 2}
+        return {"company": "Acme", "title": "Data Analyst", "location": "Austin, TX",
+                "url": ""}, {"input_tokens": 5, "output_tokens": 2}
 
     monkeypatch.setattr(kimi_cli, "run", run)
     team = AgentTeam(tmp_path, {"strong": ("kimi_cli", "kimi-runtime"), "cheap": ("kimi_cli", "kimi-runtime")},
                      on_usage=recorded.append)
-    verdict = team.run("relevance_judge", {"posting": {"title": "Data Analyst"}, "candidate_summary": "BI"})
-    assert isinstance(verdict, schemas.RelevanceVerdict) and verdict.reasons == ["analyst role"]
+    verdict = team.run("posting_parser", {"posting_text": "Data Analyst at Acme, Austin, TX"})
+    assert isinstance(verdict, schemas.PostingFields) and verdict.company == "Acme"
     assert seen["model"] == "kimi-runtime" and seen["web"] is False
     assert "Data Analyst" in seen["prompt"] and "Data Analyst" not in seen["system"]
-    assert seen["schema"]["required"] and "role_family_matches" in seen["schema"]["properties"]
+    assert "company" in seen["schema"]["properties"]
     assert recorded[0]["provider"] == "kimi_cli"
 
-    monkeypatch.setattr(kimi_cli, "run", lambda *a, **k: ({"reasons": "not a list"}, {}))
+    monkeypatch.setattr(kimi_cli, "run", lambda *a, **k: ({"company": ["not", "text"]}, {}))
     with pytest.raises(AgentError, match="did not match its schema"):
-        team.run("relevance_judge", {})
+        team.run("posting_parser", {})
 
     def down(*a, **k):
         raise ValueError("Your Kimi membership's usage limit is reached.")
 
     monkeypatch.setattr(kimi_cli, "run", down)
     with pytest.raises(AgentError, match="usage limit"):
-        team.run("relevance_judge", {})
+        team.run("posting_parser", {})

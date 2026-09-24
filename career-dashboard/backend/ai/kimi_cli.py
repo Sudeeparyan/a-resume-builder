@@ -18,23 +18,29 @@ six-minute research turn, zero bytes on stdout).
 
 from __future__ import annotations
 
+import glob
 import json
 import os
 import re
 import shutil
 import subprocess
 import tempfile
+import tomllib
 from pathlib import Path
+
+from backend.ai import limits
 
 ID = "kimi_cli"
 LABEL = "Kimi Code (local, membership)"
-# The CLI's own configured model is used (``default_model`` in its config), so
-# the list does not go stale when Kimi ships a new one. "kimi-runtime" is the
-# same convention as Codex's "codex-runtime".
+# "kimi-runtime" means no ``--model`` flag: the CLI's own ``default_model`` is
+# used. The other models her membership offers are read from the CLI's
+# config.toml (``models()``), so the list does not go stale when Kimi ships a
+# new one. Same convention as Codex's "codex-runtime".
 MODELS = ("kimi-runtime",)
 DEFAULTS = {"strong": "kimi-runtime", "cheap": "kimi-runtime"}
 NOTE = ("Runs through the Kimi Code CLI on this machine, signed in to your Kimi "
         "membership. No API key; calls count against the membership's usage limits.")
+LIMIT_MESSAGE = "Your Kimi membership's usage limit is reached. Wait for the window to reset, then retry."
 
 # Where the CLI lives when it is not on PATH.
 BUNDLED = (
@@ -42,6 +48,9 @@ BUNDLED = (
     "~/.kimi-code/bin/kimi.cmd",
     "~/.kimi-code/bin/kimi",
 )
+# The VS Code extension runs Kimi inside the editor and installs no CLI.
+EXTENSION = "~/.vscode/extensions/moonshot-ai.kimi-code-*"
+INSTALL_COMMAND = "irm https://code.kimi.com/kimi-code/install.ps1 | iex"
 
 # Seconds before a call is abandoned. Web research takes longer than a rewrite.
 TIMEOUT = {"web": 900, "text": 600}
@@ -81,10 +90,45 @@ def available() -> bool:
     return find_cli() is not None
 
 
+def extension_only() -> bool:
+    """True when Kimi Code for VS Code is installed but the terminal CLI this app runs is not."""
+    return not available() and bool(glob.glob(os.path.expanduser(EXTENSION)))
+
+
+def _home() -> str:
+    return os.environ.get("KIMI_CODE_HOME") or os.path.join(os.path.expanduser("~"), ".kimi-code")
+
+
 def signed_in() -> bool:
     """Whether the CLI holds a Kimi membership sign-in (OAuth credentials file)."""
-    home = os.environ.get("KIMI_CODE_HOME") or os.path.join(os.path.expanduser("~"), ".kimi-code")
-    return os.path.exists(os.path.join(home, "credentials", "kimi-code.json"))
+    return os.path.exists(os.path.join(_home(), "credentials", "kimi-code.json"))
+
+
+def _config() -> dict:
+    """The CLI's config.toml (shared with the VS Code extension), or {} when unreadable."""
+    try:
+        return tomllib.loads(Path(_home(), "config.toml").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def listed_models() -> list[dict]:
+    """The models her membership offers, from config.toml, the CLI's default first.
+
+    Each entry's ``id`` is the alias ``--model`` takes (e.g. ``kimi-code/k3``);
+    ``default`` marks the one the CLI uses when no model is named.
+    """
+    config = _config()
+    default = config.get("default_model")
+    rows = [{"id": alias, "label": spec.get("display_name") or spec.get("model") or alias,
+             "default": alias == default, "context": spec.get("max_context_size")}
+            for alias, spec in (config.get("models") or {}).items() if isinstance(spec, dict)]
+    return sorted(rows, key=lambda row: not row["default"])
+
+
+def models() -> tuple:
+    """Every model a call may name: the default plus the membership's listed models."""
+    return MODELS + tuple(row["id"] for row in listed_models() if row["id"] not in MODELS)
 
 
 def launcher(cli: Path) -> list[str]:
@@ -94,14 +138,16 @@ def launcher(cli: Path) -> list[str]:
     return [str(cli)]
 
 
-def command(cli: Path, prompt: str) -> list:
+def command(cli: Path, prompt: str, model: str | None = None) -> list:
     """The exact argument list, kept separate so tests can check it.
 
     Print mode runs non-interactively and answers permission prompts on its
     own, so no approval flag is needed; ``--yolo``/``--auto`` are rejected in
-    combination with ``-p`` and are never passed.
+    combination with ``-p`` and are never passed. A named model goes in as
+    ``--model <alias>``; the default needs no flag.
     """
-    return launcher(cli) + ["-p", prompt, "--output-format", "stream-json"]
+    chosen = ["--model", model] if model and model not in MODELS else []
+    return launcher(cli) + [*chosen, "-p", prompt, "--output-format", "stream-json"]
 
 
 def payload(prompt: str, schema: dict, system: str | None) -> str:
@@ -151,9 +197,10 @@ def _wire_error(folder_name: str) -> str:
 def describe_failure(stderr: str, stdout: str, returncode: int, folder_name: str = "") -> str:
     """Why a failed call failed, in words the user can act on."""
     text = ((stderr or "") + "\n" + (stdout or "")).strip()
-    folded = (text + "\n" + _wire_error(folder_name) if folder_name else text).casefold()
+    full = text + "\n" + _wire_error(folder_name) if folder_name else text
+    folded = full.casefold()
     if re.search(r"usage limit|quota|rate limit|\b429\b|out of (extra )?usage", folded):
-        return "Your Kimi membership's usage limit is reached. Wait for the window to reset, then retry."
+        return limits.with_hint(LIMIT_MESSAGE, full)
     if re.search(r"(?i)\b401\b|\b403\b|unauthori[sz]ed|not logged in|sign[ -]?in|\blog ?in\b|authentication", folded):
         return "Kimi Code is not signed in on this machine: run `kimi login`, then retry."
     lines = [line.strip() for line in text.splitlines() if line.strip()]
@@ -189,7 +236,7 @@ def _no_answer_error(stdout: str, stderr: str, folder_name: str = "") -> str:
     wire = _wire_error(folder_name) if folder_name else ""
     if wire:
         if re.search(r"usage limit|quota|rate limit|\b429\b", wire.casefold()):
-            return "Your Kimi membership's usage limit is reached. Wait for the window to reset, then retry."
+            return limits.with_hint(LIMIT_MESSAGE, wire)
         return "Kimi Code finished without a final answer: " + wire
     events = 0
     last = "none"
@@ -241,10 +288,11 @@ def run(prompt: str, schema: dict, *, model: str = "kimi-runtime", web: bool = F
     cli = find_cli()
     if cli is None:
         raise ValueError(
-            "Kimi Code is not installed on this machine. Install it from "
-            "https://www.kimi.com/code, sign in with `kimi login`, then retry."
+            "The Kimi Code terminal app is not installed on this machine (the VS Code "
+            f"extension alone is not enough). In PowerShell run: {INSTALL_COMMAND} "
+            "— it uses the same sign-in — then retry."
         )
-    if model not in MODELS:
+    if model not in models():
         raise ValueError("Unsupported Kimi Code model")
     full = payload(prompt, schema, system)
     limit = timeout or TIMEOUT["web" if web else "text"]
@@ -259,9 +307,11 @@ def run(prompt: str, schema: dict, *, model: str = "kimi-runtime", web: bool = F
         out_file = Path(folder, "result.jsonl")
         try:
             with out_file.open("w", encoding="utf-8") as stream:
+                # Kimi writes UTF-8; left to the default, Windows would decode its error
+                # output with the ANSI code page and garble (or fail on) the reason.
                 done = subprocess.run(
-                    command(cli, argv_prompt),
-                    text=True, stdout=stream, stderr=subprocess.PIPE,
+                    command(cli, argv_prompt, model),
+                    text=True, encoding="utf-8", errors="replace", stdout=stream, stderr=subprocess.PIPE,
                     timeout=limit, cwd=folder,
                 )
         except subprocess.TimeoutExpired:

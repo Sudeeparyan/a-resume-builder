@@ -94,6 +94,9 @@ def build_assurance(service, studio, job_id: str) -> dict[str, Any]:
         section = "Projects" if row["section"] == "projects" else "Technical Skills"
         text = row["content"].get("title", "") if row["section"] == "projects" else row["content"]
         status = "predicted" if row["origin"] == "predicted" else "verified"
+        # Same shape as a printed claim: the page reads `items` on every claim (it crashed on
+        # 23 Sep when a tailoring proposed more projects than the page holds), and the row's
+        # own id lets her keep or remove it here too.
         claims.append(
             {
                 "text": text,
@@ -102,6 +105,10 @@ def build_assurance(service, studio, job_id: str) -> dict[str, Any]:
                 "evidence_status": status,
                 "confidence": {"verified": 100, "predicted": 60}[status],
                 "decision": row["decision"],
+                "items": [row["id"]],
+                "evidence_ids": [row["evidence_id"]] if row["evidence_id"] else [],
+                "line": None,
+                "note": "Suggested by tailoring; not printed on the current page.",
             }
         )
 

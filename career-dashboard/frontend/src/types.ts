@@ -146,7 +146,7 @@ export type AssuranceClaim = {
   decision: "kept" | "removed" | "pending" | null;
   items: string[];
   evidence_ids: string[];
-  line?: number;
+  line?: number | null;
   note?: string;
 };
 export type AssuranceReport = {
@@ -185,6 +185,9 @@ export type Summary = {
       last_error?: string;
     };
     messages: Mail[];
+    /** False on every profile but the backup: this PC's Gmail is its owner's mailbox. */
+    available?: boolean;
+    note?: string;
   };
   runs: Run[];
   agents: Agent[];
@@ -210,15 +213,50 @@ export type Knowledge = {
   review_state: string;
   deleted: boolean;
 };
+/** One form field, as defined by backend/services/profile_fields.py. */
+export type ProfileFieldSpec = {
+  key: string;
+  label: string;
+  type: "text" | "textarea" | "list" | "number";
+  required?: boolean;
+  placeholder?: string;
+  hint?: string;
+};
+export type ProfileFieldValue = string | number | null | string[];
+/** A knowledge row plus the readable view the Profile page renders. */
+export type ProfileEntry = Knowledge & {
+  label: string;
+  group: string | null;
+  status: string | null;
+  usage: string;
+  sources: string[];
+  fields: Record<string, ProfileFieldValue>;
+  form: ProfileFieldSpec[];
+  extra: { key: string; label: string; value: unknown }[];
+  /** False when a summary-only save changed wording the form keeps elsewhere. */
+  in_sync: boolean;
+  /** Why the entry can't be removed (every resume or the job search needs it), or null. */
+  locked?: string | null;
+  /** For a project: why it is kept off resumes for now, or null. */
+  off_resumes?: string | null;
+};
+/** Where a Profile save was written: the YAML files, the base resume and open drafts. */
+export type ProfileSync = {
+  updated: string[];
+  drafts: { job_id: string; company: string; title: string }[];
+  notes?: string[];
+  revision: string;
+} | null;
 export type ProfileData = {
-  items: Knowledge[];
+  items: ProfileEntry[];
+  schema: Record<string, ProfileFieldSpec[]>;
   removed: number;
   registry: Record<string, any>;
   configuration: Record<string, any>;
   sources: Record<string, string>;
   agents: Agent[];
   profile_dirty: boolean;
-  pending: { id: string; kind: string; title: string; deleted: boolean; source: string }[];
+  pending: { id: string; kind: string; title: string; label: string; deleted: boolean; source: string }[];
   revision: number;
   skills: { name: string; purpose: string; path: string }[];
 };
@@ -255,6 +293,18 @@ export type AssistantMessage = {
     run_id?: string;
     /** Field-level before/after shown on a confirmation card. */
     diff?: { field: string; before: string; after: string }[];
+    /** A reply that read several jobs' resumes: one compact row per job instead of one card. */
+    cards?: {
+      job_id: string;
+      company: string;
+      title: string;
+      tier?: string | null;
+      revision?: number | null;
+      pdf?: string | null;
+      coverage?: number | null;
+      ats?: number | null;
+      posting_url?: string | null;
+    }[];
     /** Plan→calls→results record of an agent run ("what I did"). */
     trace?: { tool: string; summary: string; error?: boolean; auto_applied?: boolean }[];
     [key: string]: unknown;
@@ -318,4 +368,129 @@ export type AssistantOverview = {
   engine: AssistantEngine;
   agents: AssistantAgent[];
   capabilities: { group: string; labels: string[] }[];
+};
+
+// Daily Search pipeline (backend/services/pipeline.py).
+export type PipelineSource = { id: string; label: string; what: string; ai: boolean };
+export type PipelineFindCost = {
+  minutes: number;
+  minutes_per_job: number;
+  tokens: number;
+  tokens_per_job: number;
+  budget_calls: number;
+};
+export type PipelineStepInfo = {
+  id: string;
+  label: string;
+  what: string;
+  ai: boolean;
+  web: boolean;
+  minutes: number;
+  tokens: number;
+  budget_calls: number;
+};
+export type PipelineModel = { id: string; label: string; hint: string };
+// Auto: the route across her AI plans (backend/ai/router.py).
+export type RouteEndpoint = {
+  provider: string;
+  label: string;
+  position: number;
+  enabled: boolean;
+  ready: boolean;
+  paid: boolean;
+  models: { strong: string; cheap: string };
+  capabilities: string[];
+  resting: { until: string; until_text: string; reason: string; kind: string } | null;
+  last_ok: string | null;
+  last_error: string | null;
+  served_today: number;
+  paid_block: string | null;
+  /** The plan's current 5-hour window (free plans only; tokens are metered estimates). */
+  usage: {
+    tokens: number;
+    calls: number;
+    capacity: number | null;
+    capacity_source: "you" | "learned" | "guess";
+    learned_at: string | null;
+    percent: number | null;
+    window_resets: string | null;
+    resets_text: string;
+  } | null;
+};
+export type RoutePolicy = {
+  order: string[];
+  enabled: Record<string, boolean>;
+  allow_fallbacks: boolean;
+  /** Tokens per 5-hour window she typed per free plan. */
+  capacity?: Record<string, number | null>;
+};
+
+export type PipelineProvider = {
+  id: string;
+  label: string;
+  kind: "local" | "api" | "auto";
+  ready: boolean;
+  web: boolean;
+  cost: string;
+  note: string | null;
+  models: PipelineModel[];
+  route?: RouteEndpoint[];
+};
+// tokens: measured tokens per job for this AI (the tailor reports usage), when known.
+export type PipelineSpeed = { factor: number; learned: boolean; runs: number; tokens?: number };
+export type PipelineChoice = {
+  count: number;
+  source: string;
+  provider: string;
+  model: string;
+  steps: Record<string, boolean>;
+};
+export type PipelineStepState = {
+  state: "waiting" | "running" | "done" | "failed" | "skipped";
+  seconds?: number;
+  note?: string;
+  error?: string;
+  started_epoch?: number;
+  quick?: boolean;
+  found?: number;
+};
+export type PipelineJobProgress = {
+  id: string;
+  company: string;
+  title: string;
+  steps: Record<string, PipelineStepState>;
+};
+export type PipelineRun = {
+  id: string;
+  state: "queued" | "running" | "completed" | "failed" | "stopped";
+  config: PipelineChoice;
+  progress: {
+    stage: string;
+    jobs_target: number;
+    started_epoch: number;
+    finished_epoch?: number;
+    find: PipelineStepState;
+    jobs: PipelineJobProgress[];
+  };
+  error: string | null;
+  stop_requested: boolean;
+  created_at: string;
+  finished_at: string | null;
+};
+export type PipelineStatus = {
+  tools: { pdf: boolean };
+  // The daily limit counts paid calls only (Azure, API keys); free plan calls are free_used.
+  budget: { limit: number; used: number; remaining: number; paid_only?: boolean; free_used?: number };
+  plan: { remaining_today: number };
+  current: PipelineRun | null;
+  last: PipelineRun | null;
+};
+export type PipelineInfo = PipelineStatus & {
+  sources: PipelineSource[];
+  find: Record<"find_ai" | "find_pages", PipelineFindCost>;
+  steps: PipelineStepInfo[];
+  max_jobs: number;
+  providers: PipelineProvider[];
+  speeds: Record<string, Record<string, PipelineSpeed>>;
+  preferences: PipelineChoice;
 };

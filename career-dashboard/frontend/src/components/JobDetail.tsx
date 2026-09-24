@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ExternalLink, Search, FileText } from "lucide-react";
 import { api, fileUrl, safeUrl } from "../api";
-import { Badge, Field, Modal, ReportView, Running } from "./UI";
+import { AskAssistant, Badge, Field, Modal, ReportView, Running } from "./UI";
 import { statuses, statusLabel, TierBadge, FitBadge } from "./JobList";
 import type { Summary, Job } from "../types";
 export default function JobDetail({
@@ -73,6 +73,13 @@ export default function JobDetail({
         <a href={safeUrl(job.url)} target="_blank" rel="noreferrer">
           Open posting <ExternalLink size={14} />
         </a>
+        <AskAssistant
+          prompts={[
+            { label: "What is left before I apply?", text: `What is left to do for ${job.company} — ${job.title} before I apply? Check the resume, the research, the study plan and the Assurance claims.` },
+            { label: "Research and study plan", text: `Research ${job.company} and then write the study plan for ${job.company} — ${job.title}`, send: false },
+            { label: "I applied to this job", text: `I applied to ${job.company} today`, send: false },
+          ]}
+        />
         {job.record_source !== "gmail" && (
           <button
             className="secondary"

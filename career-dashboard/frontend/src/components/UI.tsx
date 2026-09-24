@@ -1,12 +1,68 @@
 import { useEffect, useRef, useContext, createContext } from "react";
 import type { ReactNode } from "react";
-import { X, LoaderCircle, ExternalLink, CheckCircle2 } from "lucide-react";
+import { X, LoaderCircle, ExternalLink, CheckCircle2, Sparkles } from "lucide-react";
 import { safeUrl } from "../api";
 import type { Report, Run } from "../types";
 export const NoticeContext = createContext<{
   text: string;
   error: boolean;
 } | null>(null);
+/** Opens the Assistant tab with a question about what is on screen. `send` false puts the
+ *  text in the chat box for her to finish or confirm with Enter. */
+export type AskAssistantFn = (text: string, send?: boolean) => void;
+export const AskContext = createContext<AskAssistantFn | null>(null);
+export type AskPrompt = { label: string; text: string; send?: boolean };
+
+/** "Ask the assistant" with a few questions about this page. A question that only reads is
+ *  sent at once; one that would start work or change something waits in the chat box. */
+export function AskAssistant({
+  prompts,
+  label = "Ask the assistant",
+}: {
+  prompts: AskPrompt[];
+  label?: string;
+}) {
+  const ask = useContext(AskContext);
+  const box = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const close = (e: Event) => {
+      const menu = box.current;
+      if (!menu?.open) return;
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !menu.contains(e.target as Node))
+        menu.open = false;
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, []);
+  if (!ask || !prompts.length) return null;
+  return (
+    <details className="ask-menu" ref={box}>
+      <summary className="secondary">
+        <Sparkles size={16} aria-hidden="true" /> {label}
+      </summary>
+      <ul>
+        {prompts.map((p) => (
+          <li key={p.label}>
+            <button
+              type="button"
+              onClick={() => {
+                if (box.current) box.current.open = false;
+                ask(p.text, p.send ?? true);
+              }}
+            >
+              <span>{p.label}</span>
+              <small>{p.send === false ? "Opens the chat with this ready to send" : "Asks now in the chat"}</small>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
 export function Badge({
   children,
   tone = "neutral",
@@ -91,6 +147,35 @@ export function Modal({
         )}
       </div>
     </dialog>
+  );
+}
+/** An on/off switch that reads its state aloud and shows "On"/"Off" beside the knob. */
+export function Switch({
+  checked,
+  onChange,
+  label,
+  disabled = false,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  label: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      className={"switch" + (checked ? " on" : "")}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+    >
+      <span className="switch-track">
+        <span className="switch-knob" />
+      </span>
+      <span className="switch-text">{checked ? "On" : "Off"}</span>
+    </button>
   );
 }
 export function Field({

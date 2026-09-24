@@ -23,7 +23,7 @@ from test_assistant_agent import ScriptedTeam, call, reply  # noqa: E402
 from test_assistant import use_team  # noqa: E402
 from backend.services.agents import AgentRunner  # noqa: E402
 from backend.services.assistant import Assistant  # noqa: E402
-from backend.services.resume_studio import ResumeStudio  # noqa: E402
+from backend.services.resume_studio import TOP_UP_SKILLS, ResumeStudio  # noqa: E402
 from backend.ai.providers import AIGateway  # noqa: E402
 from backend.ai.settings import choose_main  # noqa: E402
 from backend.dashboard.app import create_app  # noqa: E402
@@ -75,11 +75,15 @@ def test_the_whole_pipeline_twice(service, client, monkeypatch, persona):
 
     # 3. Tailor each resume: registry content plus per-company predicted items.
     studio = ResumeStudio(service)
+    item_counts = {}
     for index, j in enumerate(jobs):
         draft = studio.tailor(j["id"], StubTeam(tailoring_for(service, persona, index)))
-        assert draft["tailored"] is True and draft["items"] == {"verified": 3, "predicted": 2}
+        item_counts[j["id"]] = sum(draft["items"].values())
+        # The plan's 3 verified + 2 predicted, plus up to TOP_UP_SKILLS registered skills the role requires.
+        assert draft["tailored"] is True and draft["items"]["predicted"] == 2
+        assert 3 <= draft["items"]["verified"] <= 3 + TOP_UP_SKILLS
         rows = studio.items(j["id"])
-        assert len(rows) == 5 and {row["decision"] for row in rows} == {"pending"}
+        assert len(rows) == sum(draft["items"].values()) and {row["decision"] for row in rows} == {"pending"}
         assert draft["file_root"]
         assert (service.w.root / "data/output" / draft["file_root"] / "resume.tex").is_file()
 
@@ -87,7 +91,7 @@ def test_the_whole_pipeline_twice(service, client, monkeypatch, persona):
     for j in jobs:
         report = client.get("/api/v2/assurance/" + j["id"]).json()
         assert report["note"] is None and report["summary"]["predicted"] >= 2
-        assert report["summary"]["pending"] == 5
+        assert report["summary"]["pending"] == item_counts[j["id"]]
     keep_job, drop_job = jobs[0], jobs[1]
     outcomes = {}
     for j, decision in ((keep_job, "kept"), (drop_job, "removed")):

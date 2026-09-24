@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
-import { Search, Settings2, ArrowUpRight } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Settings2, ArrowUpRight } from "lucide-react";
 import { api } from "../api";
-import { Badge, Field, Modal, Running, Empty } from "../components/UI";
+import { useMarket } from "../profiles";
+import { AskAssistant, Badge, Field, Modal, Running, Empty } from "../components/UI";
 import { JobList } from "../components/JobList";
-import type { Summary } from "../types";
+import { PipelineBuilder, PipelineProgress } from "./SearchPipeline";
+import type { PipelineChoice, PipelineInfo, PipelineRun, PipelineStatus, Summary } from "../types";
 export default function DailySearch({
   data,
   refresh,
@@ -17,26 +19,135 @@ export default function DailySearch({
   onJob: (id: string) => void;
   onAdd: () => void;
 }) {
+  const market = useMarket();
   const [g, setG] = useState<any>(null);
   const [runs, setRuns] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
   const [all, setAll] = useState(false);
-  const [preset, setPreset] = useState("default");
+  const [info, setInfo] = useState<PipelineInfo | null>(null);
+  const [choice, setChoice] = useState<PipelineChoice | null>(null);
+  const [starting, setStarting] = useState(false);
   useEffect(() => {
     api("/search-runs")
       .then((r) => setRuns(r.runs))
       .catch((e) => notify(e.message, true));
   }, [data]);
+  const loadPipeline = useCallback(
+    () =>
+      api<PipelineInfo>("/v2/pipeline")
+        .then((loaded) => {
+          setInfo(loaded);
+          setChoice((was) => was ?? loaded.preferences);
+        })
+        .catch((e) => notify((e as Error).message, true)),
+    [notify],
+  );
+  const refreshStatus = useCallback(
+    () =>
+      api<PipelineStatus>("/v2/pipeline/status", "GET", undefined, { timeout: 15000 })
+        .then((status) => setInfo((was) => (was ? { ...was, ...status } : was)))
+        .catch(() => {}),
+    [],
+  );
   useEffect(() => {
-    api<{ preset: string }>("/v2/discovery/preferences")
-      .then((p) => setPreset(p.preset || "default"))
-      .catch(() => {});
-  }, []);
+    loadPipeline();
+  }, [loadPipeline]);
+  useEffect(() => {
+    refreshStatus();
+  }, [data, refreshStatus]);
+  const active = !!info?.current;
+  useEffect(() => {
+    if (active) return;
+    const timer = setInterval(refreshStatus, 15000);
+    return () => clearInterval(timer);
+  }, [active, refreshStatus]);
+  useEffect(() => {
+    if (!active) return;
+    const timer = setInterval(refreshStatus, 3000);
+    return () => clearInterval(timer);
+  }, [active, refreshStatus]);
+  // When a search ends: reload the job list and the estimates it just taught.
+  const wasActive = useRef(false);
+  useEffect(() => {
+    if (wasActive.current && !active) {
+      refresh().catch(() => {});
+      loadPipeline();
+    }
+    wasActive.current = active;
+  }, [active, refresh, loadPipeline]);
+  // Remember her choices (not on the first load), a moment after she stops changing them.
+  const firstChoice = useRef(true);
+  useEffect(() => {
+    if (!choice?.provider) return;
+    if (firstChoice.current) {
+      firstChoice.current = false;
+      return;
+    }
+    const timer = setTimeout(
+      () => api("/v2/pipeline/preferences", "PUT", choice).catch((e) => notify((e as Error).message, true)),
+      600,
+    );
+    return () => clearTimeout(timer);
+  }, [choice, notify]);
+  const start = async () => {
+    if (!choice) return;
+    setStarting(true);
+    try {
+      const run = await api<PipelineRun>("/v2/pipeline/run", "POST", choice);
+      setInfo((was) => (was ? { ...was, current: run } : was));
+      notify("Search started. It keeps running if you leave this page.");
+      await refresh();
+    } catch (e) {
+      notify((e as Error).message, true);
+    } finally {
+      setStarting(false);
+    }
+  };
+  const stop = async (run: PipelineRun) => {
+    try {
+      const stopped = await api<PipelineRun>(`/v2/pipeline/${run.id}/stop`, "POST");
+      setInfo((was) => (was ? { ...was, current: stopped } : was));
+      notify("Stopping after the current step. Finished work is kept.");
+    } catch (e) {
+      notify((e as Error).message, true);
+    }
+  };
+  const raiseBudget = async (limit: number) => {
+    try {
+      await api("/v2/agent-control/budget", "PUT", { daily_call_limit: limit });
+      await refreshStatus();
+      notify(`Your daily AI-call limit is now ${limit}.`);
+    } catch (e) {
+      notify((e as Error).message, true);
+    }
+  };
   const current = runs.find((r) => r.date === data.goals.date);
   const ids = new Set((current?.jobs || []).map((j: any) => j.id));
   const latestDiscovery = data.runs.find((r) => r.kind === "discovery");
   const running = data.runs.find(
     (r) => r.kind === "discovery" && ["queued", "running"].includes(r.state),
+  );
+  const builder =
+    info && choice ? (
+      <PipelineBuilder
+        info={info}
+        choice={choice}
+        onChoice={setChoice}
+        running={active}
+        starting={starting}
+        onStart={start}
+        onEditPlan={() => setG({ ...data.goals.settings })}
+        onRaiseBudget={raiseBudget}
+      />
+    ) : (
+      <section className="card" role="status" aria-label="Loading search options">
+        <div className="skeleton skeleton-title" />
+        <div className="skeleton skeleton-card" />
+      </section>
+    );
+  const shown = info?.current ?? info?.last;
+  const progress = info && shown && (
+    <PipelineProgress run={shown} info={info} onStop={() => stop(shown)} onJob={onJob} />
   );
   return (
     <>
@@ -45,20 +156,30 @@ export default function DailySearch({
           <div className="eyebrow">CONSISTENCY OVER PERFECTION</div>
           <h1>Daily Search</h1>
           <p>
-            A lasting job list with relevance, freshness and company-evidence gates.
+            Choose how many jobs you want and which helpers should run. You will
+            see how long it takes before you start.
           </p>
         </div>
-        <button
-          className="secondary"
-          onClick={() => setG({ ...data.goals.settings })}
-        >
-          <Settings2 size={17} />
-          Edit target
-        </button>
+        <div className="actions">
+          <AskAssistant
+            prompts={[
+              { label: "How is the search going?", text: "How is the Daily Search going right now?" },
+              { label: "Why were jobs turned away?", text: "Why did the last search save only the jobs it did? Show me what it turned away and why." },
+              { label: "Run a search from the chat", text: "Run the daily search for 2 jobs with research, a tailored resume, the study plan and the PDF", send: false },
+            ]}
+          />
+          <button
+            className="secondary"
+            onClick={() => setG({ ...data.goals.settings })}
+          >
+            <Settings2 size={17} />
+            Edit plan
+          </button>
+        </div>
       </div>
       <section className="focus-card">
         <div>
-          <Badge tone="lime">{data.goals.date} · US CENTRAL TIME</Badge>
+          <Badge tone="lime">{data.goals.date} · {market.time.toUpperCase()}</Badge>
           <h2>{data.goals.remaining_today} left on today’s plan</h2>
           <p>
             {data.goals.daily_base} scheduled + {data.goals.carryover} carried
@@ -67,41 +188,6 @@ export default function DailySearch({
             {data.goals.today_completed} confirmed today. Saving a job or
             preparing a resume does not count as applying.
           </p>
-          <button
-            disabled={busy || !!running}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                await api("/v2/agents/run", "POST", { kind: "discovery", preset });
-                await refresh();
-                notify(
-                  "Searching current postings against your active profile.",
-                );
-              } catch (e) {
-                notify((e as Error).message, true);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            <Search size={17} />
-            {running ? "Discovery running…" : "Find suitable jobs"}
-          </button>
-          <Field label="Search mix">
-            <select
-              value={preset}
-              onChange={(e) => {
-                setPreset(e.target.value);
-                api("/v2/discovery/preferences", "PUT", {
-                  preset: e.target.value,
-                }).catch((err) => notify((err as Error).message, true));
-              }}
-            >
-              <option value="default">Default discovery · exactly 5 jobs, ranked by fit · AI web search, US only</option>
-              <option value="balanced_five">Balanced five · 2 startup, 1 mid, 2 large (mid/large need tier S, A or B)</option>
-              <option value="portals">Tracked career pages · Greenhouse/Lever/Ashby feeds, no AI</option>
-            </select>
-          </Field>
         </div>
         <div className="progress-dial">
           <strong>
@@ -111,6 +197,18 @@ export default function DailySearch({
           <span>this week</span>
         </div>
       </section>
+      {active ? (
+        <>
+          {progress}
+          {builder}
+        </>
+      ) : (
+        <>
+          {builder}
+          {progress}
+        </>
+      )}
+      {running && !active && <Running run={running} />}
       <section className="card week-card">
         <div className="section-title">
           <h2>Your week</h2>
@@ -136,7 +234,6 @@ export default function DailySearch({
           unavailable.
         </p>
       </section>
-      {latestDiscovery && <Running run={latestDiscovery} />}
       {latestDiscovery?.result?.summary && (
         <details className="search-notes">
           <summary>What the last job search tried, and why it stopped</summary>

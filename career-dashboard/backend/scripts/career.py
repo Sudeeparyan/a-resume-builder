@@ -13,12 +13,14 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
+from zoneinfo import ZoneInfo
 import yaml
-from tracking import Tracking
+from tracking import Tracking, today
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(ROOT))
 from backend.migrations import migrate
+from backend.paths import TIMEZONE, app_root_for
 from backend.services.postings import canonical_url, posting_key
 
 STATUSES = {
@@ -31,6 +33,9 @@ STATUSES = {
     "withdrawn",
     "ghosted",   # applied, then 21 days of silence (reapply.age flips it)
 }
+
+
+PROJECT_DOMAINS = ("medical", "healthcare", "clinical", "device", "streaming", "real-time", "vision", "insurance", "research", "embedded")
 
 
 def company_key(name):
@@ -80,6 +85,29 @@ def job_url(value):
     return canonical_url(value)
 
 
+# Tectonic is XeTeX with the template's T1 fonts: a non-ASCII character is dropped from the
+# page ("0–255" printed as "0255"), so punctuation and accented letters become LaTeX.
+TEX_UNICODE = {
+    "–": "--", "—": "---", "‒": "-", "‐": "-", "‑": "-", "−": "-",
+    "‘": "`", "’": "'", "“": "``", "”": "''", "…": "...", " ": " ",
+    "•": r"\textbullet{}", "·": r"\textperiodcentered{}", "°": r"\textdegree{}",
+    "×": r"$\times$", "→": r"$\rightarrow$", "≤": r"$\le$", "≥": r"$\ge$",
+    "€": r"\texteuro{}", "£": r"\pounds{}",
+}
+TEX_ACCENTS = {"́": "'", "̀": "`", "̂": "^", "̈": '"', "̃": "~", "̧": "c", "̌": "v"}
+
+
+def _tex_unicode(c):
+    if c in TEX_UNICODE:
+        return TEX_UNICODE[c]
+    import unicodedata
+
+    decomposed = unicodedata.normalize("NFD", c)
+    if len(decomposed) == 2 and decomposed[0].isascii() and decomposed[1] in TEX_ACCENTS:
+        return "\\" + TEX_ACCENTS[decomposed[1]] + "{" + decomposed[0] + "}"
+    return c
+
+
 def tex_escape(text):
     return "".join(
         {
@@ -94,7 +122,10 @@ def tex_escape(text):
             "~": r"\textasciitilde{}",
             "^": r"\textasciicircum{}",
             "|": r"\textbar{}",
-        }.get(c, c)
+            # R² and m³: the T1 fonts have no superscript digits (they print as "Rš").
+            "²": r"\textsuperscript{2}",
+            "³": r"\textsuperscript{3}",
+        }.get(c) or _tex_unicode(c)
         for c in text
     )
 
@@ -128,6 +159,13 @@ def tokens(text):
 class Workspace(Tracking):
     def __init__(self, root=ROOT):
         self.root = Path(root).resolve()
+        # Annie's workspace (and a test copy) is the app itself; a profile folder holds
+        # only data, so its code and secrets are the app's (backend/paths.py).
+        self.app_root = app_root_for(self.root)
+        # Dated run projections: the repo's daily-job-search/ beside the app for Annie,
+        # the profile's own folder for everyone else, so runs never mix.
+        self.daily_dir = (self.root.parent if self.app_root == self.root else self.root) / "daily-job-search"
+        self._timezone = (None, None)
         self.db_path = self.root / "data/career.db"
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as db:
@@ -173,6 +211,32 @@ class Workspace(Tracking):
 
     def evidence(self):
         return read_yaml(self.root / "data/context/evidence.yml")
+
+    @property
+    def timezone(self):
+        """The candidate's own time zone (profile.yml candidate.timezone), else the default."""
+        path = self.root / "data/config/profile.yml"
+        try:
+            stamp = path.stat().st_mtime_ns
+        except OSError:
+            return TIMEZONE
+        if self._timezone[0] != stamp:
+            try:
+                value = str((self.profile().get("candidate") or {}).get("timezone") or "")
+                ZoneInfo(value)
+            except Exception:  # noqa: BLE001 - a missing or unknown zone falls back
+                value = TIMEZONE
+            self._timezone = (stamp, value)
+        return self._timezone[1]
+
+    def today(self):
+        return today(self.timezone)
+
+    def candidate_name(self):
+        try:
+            return str(self.profile()["candidate"]["full_name"]).strip() or "the candidate"
+        except Exception:  # noqa: BLE001 - a blank profile has no name yet
+            return "the candidate"
 
     # Employer verification lives in `companies`; the UI needs it beside each job.
     JOB_SELECT = (
@@ -395,7 +459,7 @@ class Workspace(Tracking):
             )
         applied = [j for j in jobs if j["application_date"] or j["id"] in confirmed]
         lines = [
-            "# Application tracker — Annie Prasanna Manoharan",
+            "# Application tracker — " + self.candidate_name(),
             "",
             "Generated from data/career.db; user-confirmed submissions and linked email evidence establish submission. Blank dates are unknown, not inferred.",
             "",
@@ -415,7 +479,7 @@ class Workspace(Tracking):
         companies = sorted({j["company"] for j in applied}, key=str.lower)
         atomic_write(
             self.root / "data/applied-companies.md",
-            "# Applied companies — Annie Prasanna Manoharan\n\nGenerated from recorded dates and confirmed email evidence in data/career.db. No preparation implies an application.\n\n"
+            "# Applied companies — " + self.candidate_name() + "\n\nGenerated from recorded dates and confirmed email evidence in data/career.db. No preparation implies an application.\n\n"
             + "\n".join("- " + cell(c) for c in companies)
             + "\n",
         )
@@ -470,9 +534,9 @@ class Workspace(Tracking):
         atomic_write(self.root / "data/signature-projects.md", "\n".join(lines) + "\n")
 
     def export_summary(self, jobs=None):
-        """data/output/SUMMARY.md: the one page Annie reads. Generated; never hand-edited."""
+        """data/output/SUMMARY.md: the one page the candidate reads. Generated; never hand-edited."""
         jobs = jobs if jobs is not None else self.jobs()
-        sys.path.insert(0, str(self.root))
+        sys.path.insert(0, str(self.app_root))
         from backend.services import reapply
         from backend.services.sponsorship import TIER_RANK
 
@@ -490,7 +554,7 @@ class Workspace(Tracking):
             last = db.execute("SELECT action AS kind, occurred_at AS created_at FROM activity ORDER BY occurred_at DESC LIMIT 1").fetchone()
         open_states = {"saved", "prepared", "applied", "interview", "offer"}
         ranked = sorted(jobs, key=lambda j: (TIER_RANK.get(j.get("sponsor_tier") or "C", 4), j["created_at"]))
-        lines = ["# Annie's job search — front page", "",
+        lines = [f"# {self.candidate_name()}'s job search — front page", "",
                  f"Last run: {cell(last['kind']) if last else 'nothing yet'} at {cell(last['created_at']) if last else ''}. Generated from data/career.db; open the dashboard to act on anything here.", ""]
         lines += ["## Your resumes", "", "| # | Company | Role | Folder | Tier | Status | Apply link |", "|---|---|---|---|---|---|---|"]
         prepared = [j for j in ranked if j.get("folder")]
@@ -500,7 +564,7 @@ class Workspace(Tracking):
         lines += [f"| {cell(j['company'])} | {cell(j['title'])} | {cell(j['status'])} | {cell(j.get('application_date'))} | {reapply.quiet_days(j) if j['status'] == 'applied' else ''} |" for j in pipeline] or ["| – | nothing out yet | | | |"]
         lines += ["", "## Companies found, no resume yet", "", "| Company | Role | Location | Tier | Why this tier | Link |", "|---|---|---|---|---|---|"]
         found = [j for j in ranked if not j.get("folder") and j["status"] in open_states]
-        lines += [f"| {cell(j['company'])} | {cell(j['title'])} | {cell(j['location'])} | {cell(j.get('sponsor_tier') or 'C')} | {cell((j.get('sponsor_evidence') or {}).get('label'))} | {cell(j['url'])} |" for j in found] or ["| – | run Find suitable jobs | | | | |"]
+        lines += [f"| {cell(j['company'])} | {cell(j['title'])} | {cell(j['location'])} | {cell(j.get('sponsor_tier') or 'C')} | {cell((j.get('sponsor_evidence') or {}).get('label'))} | {cell(j['url'])} |" for j in found] or ["| – | press Start search on Daily Search | | | | |"]
         lines += ["", "## Excluded", "", "Cut by the sponsorship gate. The sentence that triggered each one is shown so a wrong call can be restored from the dashboard.", "",
                   "| Company | Role | Why | The sentence | Found by |", "|---|---|---|---|---|"]
         lines += [f"| {cell(e['company'])} | {cell(e['title'])} | {cell(e['reason_label'])} | \"{cell(e['sentence'])}\" | {cell(e['source'])} |" for e in excluded] or ["| – | nothing excluded | | | |"]
@@ -526,6 +590,8 @@ class Workspace(Tracking):
     def rank_projects(self, description):
         target = tokens(description)
         target_text = description.casefold()
+        # Domains worth a bonus when the JD and a project share them; a profile may name its own.
+        domains = tuple((self.profile().get("scoring") or {}).get("project_domains") or PROJECT_DOMAINS)
         out = []
         for p in self.evidence()["projects"]:
             if not p.get("resume_content") or p.get("status") in {"hold", "missing"}:
@@ -547,7 +613,7 @@ class Workspace(Tracking):
             evidence_score = 20 if p.get("status") == "confirmed" else 15 if p.get("status") == "user_reported" else 8
             domain_score = 10 if any(
                 term in target_text and term in evidence_text.casefold()
-                for term in ("medical", "healthcare", "clinical", "device", "streaming", "real-time", "vision", "insurance", "research", "embedded")
+                for term in domains
             ) else 5 if target & tokens(roles) else 0
             recent_score = 5 if re.search(r"202[4-6]|current|recent", str(p.get("date_context", "")), re.I) else 3
             weighted = problem_score + skill_score + evidence_score + domain_score + recent_score
@@ -575,17 +641,20 @@ class Workspace(Tracking):
 
     def screen(self, job):
         """Title/location screen. Not an eligibility decision; the sponsorship gate owns that."""
-        sys.path.insert(0, str(self.root))
-        from backend.job_quality import SENIORITY_BLOCK, is_us_location, years_required
+        sys.path.insert(0, str(self.app_root))
+        from backend.countries import pack_for
+        from backend.job_quality import SENIORITY_BLOCK, ProfileRules, years_required
         title = job["title"]
         issues = []
         if SENIORITY_BLOCK.search(title):
             issues.append("Seniority in the title is outside the entry-level target (Senior/Staff/Lead/Principal/Manager).")
         years = years_required(job.get("description", ""))
-        if years and years > 4:
-            issues.append(f"The posting asks for {years}+ years; the profile caps at 4.")
-        if not is_us_location(job.get("location", "")):
-            issues.append("US location is not established by this posting; only United States roles are pursued.")
+        cap = ProfileRules.of(self.root).max_years
+        if years and years > cap:
+            issues.append(f"The posting asks for {years}+ years; the profile caps at {cap}.")
+        pack = pack_for(self.root)
+        if not pack.location_ok(job.get("location", "")):
+            issues.append(pack.text("location_screen"))
         return {
             "decision": "review_required",
             "concerns": issues,
@@ -636,7 +705,7 @@ class Workspace(Tracking):
         out = self.root / "data/output/applications"
         out.mkdir(parents=True, exist_ok=True)
         folder = self.new_application_folder(job)
-        source = (self.root / "data/templates/resume-base.tex").read_text()
+        source = (self.root / "data/templates/resume-base.tex").read_text(encoding="utf-8")
         content = project["resume_content"]
         values = {
             "SelectedProjectID": pid,
@@ -717,19 +786,22 @@ class Workspace(Tracking):
             "held_claims_used": [],
         }
         (folder / "evidence-map.yml").write_text(
-            yaml.safe_dump(mapping, sort_keys=False, allow_unicode=True)
+            yaml.safe_dump(mapping, sort_keys=False, allow_unicode=True), encoding="utf-8"
         )
         (folder / "evaluation.md").write_text(
             "# Review required\n\n"
             + json.dumps(self.screen(job), indent=2)
             + "\n\nThis draft leads Projects with the signature project chosen for this company and adds one supporting project. It has not received a recruiter review or complete JD tailoring. Review and complete evidence-map.yml before validation.\n"
-            + ("".join("\n> " + w for w in warnings) + "\n" if warnings else "")
+            + ("".join("\n> " + w for w in warnings) + "\n" if warnings else ""),
+            encoding="utf-8",
         )
         (folder / "company-research.md").write_text(
-            "# Research pending\n\nThe saved JD is user supplied. Verify the original posting, record employer sources and explain the signature project’s relevance. No employer research or live-job claim has been generated.\n"
+            "# Research pending\n\nThe saved JD is user supplied. Verify the original posting, record employer sources and explain the signature project’s relevance. No employer research or live-job claim has been generated.\n",
+            encoding="utf-8",
         )
         (folder / "study-plan.md").write_text(
-            "# Study plan pending\n\nRun the study-plan agent for this job after the match check. Everything listed there is a skill Annie does not have yet: it never appears on the resume in any form until it is learned and written into data/context/.\n"
+            "# Study plan pending\n\nRun the study-plan agent for this job after the match check. Everything listed there is a skill the candidate does not have yet: it never appears on the resume in any form until it is learned and written into data/context/.\n",
+            encoding="utf-8",
         )
         relative = str(folder.relative_to(self.root))
         with self.connect() as db:
@@ -777,7 +849,7 @@ class Workspace(Tracking):
         return next((p["id"] for p in ranked if p["id"] not in barred), ranked[0]["id"])
 
     def new_application_folder(self, job):
-        """data/output/applications/Annie_Manoharan_<Company>_<NN>, NN counting per company."""
+        """data/output/applications/<First>_<Last>_<Company>_<NN>, NN counting per company."""
         out = self.root / "data/output/applications"
         out.mkdir(parents=True, exist_ok=True)
         first = self.profile()["candidate"]["full_name"].split()[0]
@@ -801,7 +873,7 @@ class Workspace(Tracking):
     def compile_preview(self, job_id):
         # Compile in a temporary directory; only publish a preview with the contract's page count.
         folder = self.current_folder(job_id)
-        sys.path.insert(0, str(self.root / "backend/scripts"))
+        sys.path.insert(0, str(self.app_root / "backend/scripts"))
         from validate_resume import compile_latex, inspect_pdf
 
         with tempfile.TemporaryDirectory(prefix="annie-compile-") as temp:
@@ -809,8 +881,8 @@ class Workspace(Tracking):
             if pdf is None:
                 raise ValueError((error or log)[-5000:])
             report = inspect_pdf(pdf, folder / "resume-preview")
-            from backend.resume_contract import load_contract
-            expected_pages = load_contract().pages
+            from backend.resume_contract import contract_for
+            expected_pages = contract_for(self.root).pages
             if report["page_count"] != expected_pages:
                 raise ValueError(
                     f"Expected {expected_pages} page(s); found {report['page_count']}. Cut content before release; never shrink fonts or margins."
@@ -842,7 +914,9 @@ class Workspace(Tracking):
         result = subprocess.run(
             [
                 sys.executable,
-                str(self.root / "backend/scripts/validate_resume.py"),
+                str(self.app_root / "backend/scripts/validate_resume.py"),
+                "--workspace",
+                str(self.root),
                 str(folder / "resume.tex"),
                 "--compile",
                 "--output",
@@ -857,7 +931,7 @@ class Workspace(Tracking):
             timeout=180,
         )
         qa = (
-            json.loads((folder / "qa.json").read_text())
+            json.loads((folder / "qa.json").read_text(encoding="utf-8"))
             if (folder / "qa.json").exists()
             else {"status": "FAIL", "failures": [result.stderr or result.stdout]}
         )
@@ -870,7 +944,7 @@ class Workspace(Tracking):
             qa = {}
             if qa_path.exists():
                 try:
-                    qa = json.loads(qa_path.read_text())
+                    qa = json.loads(qa_path.read_text(encoding="utf-8"))
                 except ValueError:
                     pass
             source = (
@@ -935,6 +1009,8 @@ class Workspace(Tracking):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--profile", default="annie",
+                        help="which profile's workspace (default: annie, the backup profile)")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("status")
     sub.add_parser("projects")
@@ -956,7 +1032,8 @@ def main():
     for name in ("preview", "validate"):
         sub.add_parser(name).add_argument("job_id")
     args = parser.parse_args()
-    w = Workspace()
+    from backend.profiles import store
+    w = Workspace(store().root_for(args.profile))
     if args.command == "status":
         result = {
             "candidate": w.profile()["candidate"]["full_name"],
@@ -971,11 +1048,11 @@ def main():
         w.export_tracking()
         result = {"exported": True}
     elif args.command == "notes":
-        result = w.save_profile_notes(args.file.read_text())
+        result = w.save_profile_notes(args.file.read_text(encoding="utf-8"))
     elif args.command == "add":
         # Same path as the dashboard: sponsorship gate, then never-re-apply, then save.
         from backend.services.workspace_v2 import CareerServices
-        result = CareerServices(w).add_posting(json.loads(args.file.read_text()), source="cli")
+        result = CareerServices(w).add_posting(json.loads(args.file.read_text(encoding="utf-8")), source="cli")
     elif args.command == "update":
         result = w.update_job(
             args.job_id, args.status, args.notes, args.application_date

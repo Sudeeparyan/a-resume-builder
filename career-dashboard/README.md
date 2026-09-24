@@ -6,6 +6,8 @@ Annie Prasanna Manoharan's US job-search and resume workspace. It finds entry-le
 
 Policy lives in [AGENTS.md](AGENTS.md). Her own facts live in [data/context/](data/context/); open questions are in [QUESTIONS-FOR-YOU.md](data/context/QUESTIONS-FOR-YOU.md).
 
+The same dashboard also holds other people's profiles. Annie is profile `annie`, the locked backup (it cannot be reset or deleted). Every other profile lives in `profiles/<id>/` (kept out of git) and is built from that person's uploaded Word or PDF documents on the onboarding page. Each profile has its own country pack (`backend/countries/`), its own jobs, gates, resumes, chats and daily search, and is served at `/p/<id>/`. See "Profiles" in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## Start the dashboard
 
 On this Mac, double-click **Start Dashboard.command** (in this folder or the repo root). It creates the Python environment in `backend/.venv` on first use, builds the React client, then opens http://127.0.0.1:8010. Port 8000 on this Mac belongs to a different dashboard; the launcher checks who answers on its port and never opens someone else's app. Stop the server with Ctrl+C in its Terminal window.
@@ -20,7 +22,7 @@ pip install -r requirements-dev.txt
 python run.py            # http://127.0.0.1:8010; --port 8011 if taken, --no-browser to skip opening a tab
 ```
 
-Needs Python 3.12, Node.js + npm (for the React client) and Tectonic (PDF builds; the launcher wires the bundle through `../daily-job-search/with_resume_runtime.py`). Research and discovery run on a signed-in Claude Code or Codex runtime, chosen in Settings; API keys for OpenAI, the Claude API, OpenRouter, Gemini or Kimi can be pasted in Settings → API keys instead. Gmail sync is optional and needs Codex signed in. The Agents tab shows every agent step by step.
+Needs Python 3.12, Node.js + npm (for the React client) and Tectonic (PDF builds; the launcher wires the bundle through `../daily-job-search/with_resume_runtime.py`). Research and discovery run on **Auto** by default: the signed-in Kimi Code, Codex and Claude Code runtimes in that order, each resting when its plan reaches its usage limit, and Azure OpenAI (paid) last (`backend/ai/router.py`, `limits.py`; Settings shows and edits the route). One runtime can also be chosen by name; API keys for OpenAI, the Claude API, OpenRouter, Gemini or Kimi can be pasted in Settings → API keys. The daily limit counts paid calls only. Gmail sync is optional and needs Codex signed in. The Agents tab shows every agent step by step.
 
 ## Seven tabs
 
@@ -49,7 +51,7 @@ The short version: open **Assistant**, paste the posting, download the PDF, appl
 ```text
 frontend/         React + TypeScript screens and component tests (npm run dev)
 backend/          all Python, self-contained: .venv, run.py, requirements
-  dashboard/        HTTP routes (legacy /api and /api/v2)
+  dashboard/        HTTP routes: shell.py (profiles, /p/<id>/...) and each profile's app (app.py, api_v2.py)
   services/         sponsorship gate, never-re-apply rules, portals, goals, profile, Gmail evidence, Resume Studio
   scripts/          career.py and workspace.py CLIs, resume/batch/workspace validators, fresh_start
   workflows/        discovery, tailoring, study-plan, review and interview playbooks
@@ -66,8 +68,8 @@ data/             everything that is Annie's or generated
   signature-projects.md  generated: which company owns which signature project
 tests/            Python and API regression tests
 docs/             architecture, agents, API, scoring, operations, sources
-.agents/          URL-verification skill adapter
-.github/agents/   agent adapters (US job hunter, resume builder, reviewers, interview coach)
+../AGENTS.md      the one set of rules every AI app reads (this folder's AGENTS.md is Annie's policy)
+../.agents/skills/ the skills every AI app uses: hunt, job-hunter, resume-tailor, profile-intake, interview-prep, verify-job-url
 ```
 
 ## Build and release commands
@@ -94,8 +96,11 @@ backend/.venv/bin/python backend/scripts/career.py prepare JOB_ID
 backend/.venv/bin/python backend/scripts/career.py preview JOB_ID
 backend/.venv/bin/python backend/scripts/validate_workspace.py
 backend/.venv/bin/python -m pytest tests -q
-backend/.venv/bin/python .agents/skills/verify-job-url/scripts/verify_job_url.py --url 'https://careers.company.com/specific-posting'
+backend/.venv/bin/python ../.agents/skills/verify-job-url/scripts/verify_job_url.py --url 'https://careers.company.com/specific-posting'
+backend/.venv/bin/python backend/scripts/workspace.py ai-status   # Auto's route, resting plans, paid calls left
 ```
+
+From the repo root, the same commands are shorter and identical on Windows and Mac: `.\career.cmd help` or `./career help` (e.g. `career ws summary`, `career jobs`, `career check`).
 
 `backend/scripts/fresh_start.py --yes` empties the job list for a new search after snapshotting everything into `../backup/<date>-fresh-start/`. It keeps the never-re-apply memory, the excluded log and the signature assignments.
 

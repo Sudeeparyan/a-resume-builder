@@ -17,6 +17,10 @@ These files change only when Annie supplies evidence or explicitly approves a co
 
 Agents may identify gaps but must not promote target-JD terms, company technologies, study-plan skills, proposed work or inferred results into this layer.
 
+### The Profile page is Annie's editor for this layer
+
+Saving an entry on the dashboard's Profile page is Annie supplying or correcting her own evidence, so the save is written through at once (`backend/services/profile_sync.py`): `profile.yml` (personal details, target roles, location preferences) and `evidence.yml` (every other kind) change only in that entry's lines, with a `Profile page (dashboard) > added|edited|removed <date>` source ref, and `candidate_revision` moves in both files. The base resume template and the drafts of jobs not yet applied to follow. A removal keeps the entry on `hold` with `profile_removed: <date>`. Changes suggested by the chat, the assistant, Resume Studio or the CLI wait until Annie confirms them on the page, then go through the same path. The numbered `01`–`09` files are her original words and are not rewritten; where a Profile edit is newer than them, the dated source ref shows it.
+
 ### Evidence registry schema
 
 Every entry under `claims` and `projects` in `data/context/evidence.yml` needs a non-empty `source_refs` list, a `status` (`confirmed`, `user_reported`, `conditional`, `hold`, `missing`) and an `approved_external_use`. `hold` and `missing` entries never reach a resume; the validator rejects a held evidence ID anywhere in a resume source.
@@ -42,8 +46,8 @@ resume_content:
 
 Reusable behavior; may be improved without changing candidate facts:
 
-- `AGENTS.md`, `CLAUDE.md`
-- `.github/agents/*.agent.md`
+- `AGENTS.md` here and at the repo root (the one rulebook every AI app reads; there is no `CLAUDE.md`)
+- `../.agents/skills/*/SKILL.md` (the skills: hunt, job-hunter, resume-tailor, profile-intake, interview-prep, verify-job-url)
 - `backend/workflows/*.md`, `backend/workflows/modes/*.md`, `backend/workflows/agents/*.md`
 - `backend/**/*.py`
 - `data/templates/*`

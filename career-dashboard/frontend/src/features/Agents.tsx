@@ -22,6 +22,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { api } from "../api";
+import { useMarket } from "../profiles";
 import { Badge, Loading } from "../components/UI";
 import type { Summary } from "../types";
 
@@ -39,6 +40,8 @@ type TraceEvent = {
   ok?: boolean;
   seconds?: number;
   error?: string;
+  /** Auto picked this plan for the call. */
+  routed?: boolean;
 };
 export type ActivityRun = {
   id: string;
@@ -59,10 +62,14 @@ export type ActivityRun = {
 };
 type Activity = {
   runs: ActivityRun[];
+  // daily_call_limit caps paid calls only; free plan calls never count against it.
   budget: {
     daily_call_limit: number;
     calls_today: number;
     remaining_calls: number;
+    paid_calls_today?: number;
+    free_calls_today?: number;
+    can_start?: boolean;
     cache_hits: number;
     cached_results: number;
   };
@@ -79,6 +86,8 @@ type Activity = {
 // --- words shown on the page -----------------------------------------------------
 
 export const PROVIDER_LABEL: Record<string, string> = {
+  auto: "Auto",
+  azure_openai: "Azure OpenAI",
   claude_code: "Claude Code",
   codex: "Codex",
   kimi_cli: "Kimi Code",
@@ -210,8 +219,13 @@ const clock = (iso: string) =>
     minute: "2-digit",
     second: "2-digit",
   });
-const providerText = (p?: string | null, m?: string | null) =>
-  p ? `${PROVIDER_LABEL[p] || p}${m && !["codex-runtime", "kimi-runtime"].includes(m) ? " · " + m : ""}` : "";
+// "Auto → Codex · gpt-6-astra" when Auto picked the plan for this call.
+const providerText = (p?: string | null, m?: string | null, routed = false) =>
+  p
+    ? `${routed ? "Auto → " : ""}${PROVIDER_LABEL[p] || p}${
+        m && !["codex-runtime", "kimi-runtime", "auto"].includes(m) ? " · " + m : ""
+      }`
+    : "";
 
 function StateIcon({ state, size = 16 }: { state: StepState | string; size?: number }) {
   if (state === "active" || active(state))
@@ -312,6 +326,7 @@ export function pipelineStages(
   reviews: Activity["reviews"],
   builtCount: number,
   discovery?: ActivityRun,
+  postings = "US postings",
 ): PipelineStage[] {
   const total = jobs.length;
   const scored = jobs.filter((j) => typeof j.fit_score === "number").length;
@@ -326,7 +341,7 @@ export function pipelineStages(
         : "failed";
   return [
     {
-      label: "Discover", icon: Radar, does: "5 latest US postings, every day",
+      label: "Discover", icon: Radar, does: `5 latest ${postings}, every day`,
       state: discoveryState,
       note: discovery ? `Last search ${ago(discovery.created_at)} · ${discovery.state}` : "No search yet",
     },
@@ -368,6 +383,7 @@ export default function Agents({
   onSettings: () => void;
   onAssurance: () => void;
 }) {
+  const market = useMarket();
   const [activity, setActivity] = useState<Activity>();
   const [error, setError] = useState("");
   const [open, setOpen] = useState<string | null>(null);
@@ -421,7 +437,10 @@ export default function Agents({
   const running = activity.runs.filter((r) => active(r.state));
   const failedToday = activity.calls_today.failed;
   const budget = activity.budget;
-  const used = Math.min(100, (budget.calls_today / Math.max(1, budget.daily_call_limit)) * 100);
+  const paidToday = budget.paid_calls_today ?? budget.calls_today;
+  const used = Math.min(100, (paidToday / Math.max(1, budget.daily_call_limit)) * 100);
+  // Runs stop only when the main AI is a paid one and today's paid calls are used up.
+  const cannotStart = budget.can_start === false;
   const discovery = latest("discovery", null);
   // A failure a later run of the same agent on the same job has already fixed.
   const fixed = new Set(
@@ -459,7 +478,7 @@ export default function Agents({
   // The simple view: where the whole pipeline stands, in five plain stages.
   const total = data.jobs.length;
   const reviews = activity.reviews;
-  const stages = pipelineStages(data.jobs, reviews, built.size, discovery);
+  const stages = pipelineStages(data.jobs, reviews, built.size, discovery, market.postings);
 
   return (
     <>
@@ -544,9 +563,9 @@ export default function Agents({
           </small>
         </div>
         <div className="card obs-stat">
-          <span className="eyebrow">AI CALLS TODAY</span>
+          <span className="eyebrow">PAID AI CALLS TODAY</span>
           <strong>
-            {budget.calls_today}
+            {paidToday}
             <small> / {budget.daily_call_limit}</small>
           </strong>
           <div className={"meter" + (used >= 100 ? " full" : used >= 80 ? " high" : "")}>
@@ -554,8 +573,9 @@ export default function Agents({
           </div>
           <small>
             {budget.remaining_calls
-              ? `${budget.remaining_calls} left today`
-              : "Limit reached — raise it in Settings or wait until tomorrow"}
+              ? `${budget.remaining_calls} paid left today`
+              : "Paid limit reached: Azure is skipped until tomorrow"}
+            {budget.free_calls_today !== undefined && ` · ${budget.free_calls_today} free on your plans`}
           </small>
         </div>
         <div className="card obs-stat">
@@ -689,10 +709,10 @@ export default function Agents({
                           {canRun && (
                             <button
                               className="obs-run"
-                              disabled={!!starting || budget.remaining_calls === 0}
+                              disabled={!!starting || cannotStart}
                               title={
-                                budget.remaining_calls === 0
-                                  ? "Daily AI limit reached"
+                                cannotStart
+                                  ? "Today's paid AI limit is used up and your main AI is a paid one"
                                   : `Start ${AGENT_LABEL[s.run!]} for ${job.company}`
                               }
                               onClick={() => start(s.run!, job.id)}
@@ -745,7 +765,7 @@ export default function Agents({
                     ? () => start(r.kind, r.job_id!)
                     : undefined
                 }
-                retryDisabled={!!starting || budget.remaining_calls === 0}
+                retryDisabled={!!starting || cannotStart}
               />
             ))}
           </div>
@@ -825,7 +845,7 @@ function RunRow({
                           <>
                             <span>
                               {e.fresh ? "AI call" : "Reused a saved result"} ·{" "}
-                              {providerText(e.provider, e.model)}
+                              {providerText(e.provider, e.model, e.routed)}
                               {e.web && e.fresh ? " · with web search" : ""}
                               {" · "}
                               {duration(e.seconds)}

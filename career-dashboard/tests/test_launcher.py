@@ -111,3 +111,36 @@ def test_browser_opens_only_once_the_port_answers_as_this_app(fake_dashboard, mo
     ours = fake_dashboard({"app": APP_ID, "root": str(APP_ROOT)})
     assert run.open_when_ready(f"http://127.0.0.1:{ours}", deadline_seconds=5.0) is True
     assert opened == [f"http://127.0.0.1:{ours}"]
+
+
+def test_a_copy_running_older_code_is_restarted(fake_dashboard, monkeypatch, capsys):
+    """Starting again must load new code; a copy started before the last change is replaced."""
+    stopped, served = [], []
+    monkeypatch.setattr(run.webbrowser, "open", lambda url: None)
+    ours = fake_dashboard({"app": APP_ID, "root": str(APP_ROOT), "pid": 424242, "started_at": 1.0, "busy": False})
+    monkeypatch.setattr(run, "stop_server", lambda document, port: stopped.append(document["pid"]) or True)
+    monkeypatch.setattr("build_frontend.build", lambda: None)
+    monkeypatch.setattr("uvicorn.run", lambda *a, **k: served.append(k["port"]))
+    run.main(["--port", str(ours), "--no-browser"])
+    assert stopped == [424242] and served == [ours]
+    output = capsys.readouterr().out
+    assert "Restarting the dashboard" in output and "AI apps on this PC" in output
+
+
+def test_a_busy_copy_is_never_restarted(fake_dashboard, monkeypatch, capsys):
+    monkeypatch.setattr(run.webbrowser, "open", lambda url: None)
+    ours = fake_dashboard({"app": APP_ID, "root": str(APP_ROOT), "pid": 424242, "started_at": 1.0, "busy": True})
+    monkeypatch.setattr(run, "stop_server", lambda document, port: pytest.fail("a busy dashboard was stopped"))
+    run.main(["--port", str(ours), "--restart", "--no-browser"])
+    output = capsys.readouterr().out
+    assert "busy with a search" in output and "Dashboard already running" in output
+
+
+def test_a_current_copy_is_reused_unless_restart_is_asked(fake_dashboard, monkeypatch, capsys):
+    import time
+
+    monkeypatch.setattr(run.webbrowser, "open", lambda url: None)
+    ours = fake_dashboard({"app": APP_ID, "root": str(APP_ROOT), "pid": 424242, "started_at": time.time() + 3600, "busy": False})
+    monkeypatch.setattr(run, "stop_server", lambda document, port: pytest.fail("a current dashboard was stopped"))
+    run.main(["--port", str(ours), "--no-browser"])
+    assert "Dashboard already running" in capsys.readouterr().out

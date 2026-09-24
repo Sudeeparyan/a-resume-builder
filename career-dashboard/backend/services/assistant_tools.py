@@ -12,7 +12,9 @@ loop in ``assistant.py`` pauses on those; the handler itself never asks.
 Every result is a plain dict with a one-line ``summary`` (the step detail) and
 may carry a ``card`` (a document to show: PDF, page image, scores). The Gmail
 sync is deliberately absent: it runs through a signed-in mail connector and is
-started from the Agents tab only.
+started from the Agents tab only. The Daily Search pipeline, the search report
+and the Assurance check are the same calls the Daily Search and Assurance tabs
+make.
 """
 
 from __future__ import annotations
@@ -26,7 +28,6 @@ from typing import Callable
 
 RUNNABLE_AGENTS = {
     "research": "Company research and the independent hiring review (never sees her profile)",
-    "resume_advisor": "Resume advice for one job from the evidence registry",
     "resume_build": "Compile the current draft and score it (no AI)",
     "resume_match": "Independent review of the built PDF against the posting",
     "study_plan": "Interview study plan from the honest gaps; never touches the resume",
@@ -118,11 +119,12 @@ def resume_card(job, draft, fitted=None) -> dict:
 
 
 class Toolbox:
-    def __init__(self, service, studio, runner, quality, chats=None):
+    def __init__(self, service, studio, runner, quality, chats=None, pipeline=None):
         from backend.chat_changes import ChatChangeService
 
         self.s, self.w, self.studio, self.runner, self.quality = service, service.w, studio, runner, quality
         self.chats = chats or ChatChangeService(service, studio)
+        self.pipeline = pipeline  # the Daily Search pipeline (services/pipeline.py), when the app has one
         self.tools: dict[str, Tool] = {}
         self._register()
 
@@ -136,11 +138,21 @@ class Toolbox:
             raise ValueError(f"Unknown tool: {name}. Use one of: " + ", ".join(sorted(self.tools)))
         return tool
 
+    def _default_location(self) -> str:
+        """Where a posting that names no place is assumed to be: the profile's country."""
+        from backend.countries import pack_for
+
+        return pack_for(self.w.root).text("default_location") or "United States"
+
     def catalogue(self) -> list:
         """What the model reads each turn: one line per tool, grouped by feature."""
+        from backend.ai.persona import persona_for
+
+        # The backup profile keeps its original wording; any other candidate is not gendered.
+        marker = " Needs the candidate's yes: the loop pauses for it." if persona_for(self.w.root) else " Needs her yes: the loop pauses for it."
         return [{
             "name": tool.name, "signature": tool.signature(), "group": tool.group,
-            "description": tool.description + (" Needs her yes: the loop pauses for it." if tool.confirm else ""),
+            "description": tool.description + (marker if tool.confirm else ""),
             "parameters": tool.parameters,
         } for tool in self.tools.values()]
 
@@ -311,8 +323,19 @@ class Toolbox:
         return "\n".join(i["title"] + " " + i["summary"] for i in self.s.profile_context())
 
     def _register(self) -> None:
+        from backend.countries import pack_for
+
         add = self._add
         S = lambda description, **extra: {"type": "string", "description": description, **extra}  # noqa: E731
+        # The backup profile (its root holds the code) keeps its wording; another profile's
+        # tools speak of its own country, page size and permit.
+        pack = pack_for(self.w.root)
+        legacy = (self.w.root / "backend").is_dir()
+        where = ("City, state or Remote (US); 'United States' if unstated" if legacy else
+                 f"City or Remote ({pack.name}); '{self._default_location()}' if unstated")
+        recheck = ("Re-evaluate a job's sponsorship tier and evidence (H-1B records, cap-exempt status)." if legacy else
+                   "Re-evaluate a job's work-permit tier and the sentence behind it.")
+        page = "US Letter" if legacy else pack.paper_label
 
         # -- Postings and the gates ---------------------------------------------
         add("list_jobs", "Listing saved jobs",
@@ -324,11 +347,18 @@ class Toolbox:
         add("get_job", "Reading a job",
             "Everything about one saved job: the posting text, sponsorship evidence, documents, verification and its agent runs.",
             self.get_job, {"job_id": S("The job ID from list_jobs", required=True)}, group="Jobs", agent="resume_tracker")
+        add("job_fit", "Checking the job's requirements",
+            "What one saved job asks for and whether her registered evidence meets each item: met, partial or missing, "
+            "with the posting's own sentence and the evidence ids. Checked by AI on a free plan and verified against "
+            "the registry; use it to answer why a job fits or what is missing. refresh=true checks again.",
+            self.job_fit, {"job_id": S("The job ID from list_jobs", required=True),
+                           "refresh": {"type": "boolean", "description": "Check again even when a current check exists"}},
+            group="Jobs", agent="match")
         add("save_posting", "Saving the posting through the gates",
             "Save a job posting. Runs the sponsorship gate and never-re-apply first; a refusal is excluded with its sentence, a repeat is blocked. Then call build_resume.",
             self.save_posting, {"company": S("Employer exactly as the posting names it", required=True),
                                 "title": S("Job title as posted", required=True),
-                                "location": S("City, state or Remote (US); 'United States' if unstated"),
+                                "location": S(where),
                                 "url": S("The posting link; it becomes the job's identity", required=True),
                                 "description": S("The full posting text", required=True)},
             writes=True, group="Jobs", agent="sponsorship")
@@ -356,7 +386,7 @@ class Toolbox:
             self.restore_excluded, {"excluded_id": S("From excluded_postings", required=True)},
             confirm=True, writes=True, group="Jobs", agent="sponsorship")
         add("recheck_sponsorship", "Re-running the sponsorship check",
-            "Re-evaluate a job's sponsorship tier and evidence (H-1B records, cap-exempt status).",
+            recheck,
             self.recheck_sponsorship, {"job_id": S("The job ID", required=True)}, writes=True, group="Jobs", agent="sponsorship")
         add("verify_posting", "Checking the posting is still open",
             "Fetch the posting page and record whether it is still live or expired.",
@@ -364,10 +394,35 @@ class Toolbox:
         add("find_jobs", "Starting job discovery",
             "Queue today's job search through the tracked career pages and portals. Every lead passes the gates before it is saved. Returns a run_id; results take minutes.",
             self.find_jobs, {"preset": S("Search mix", enum=list(DISCOVERY_PRESETS))}, writes=True, group="Jobs", agent="discovery")
+        add("search_report", "Reading the last search's report",
+            "The latest job search: its summary, the leads it turned away and why (legitimacy, relevance, never re-apply), "
+            "and the postings the sponsorship gate excluded with the sentence that excluded them.",
+            self.search_report, group="Jobs", agent="discovery")
+
+        # -- Daily Search pipeline ------------------------------------------------
+        add("run_search_pipeline", "Starting the Daily Search pipeline",
+            "Run the Daily Search pipeline: find count new jobs, then for each saved job run the helpers "
+            "(research, tailor, study_plan, pdf) on one AI. Anything left out uses the Daily Search page's saved "
+            "choice; search_pipeline_status lists the AIs and models that are ready. Takes minutes; returns at once. "
+            "Nothing is ever submitted.",
+            self.run_search_pipeline, {
+                "count": {"type": "integer", "description": "How many new jobs to find, 1-15"},
+                "provider": S("AI id, e.g. azure_openai, codex, claude_code, kimi_cli"),
+                "model": S("A model that AI offers; its first one when omitted"),
+                "steps": {"type": "array", "description": "Helpers to run for each job: any of research, tailor, study_plan, pdf"},
+                "source": S("Where to look", enum=list(DISCOVERY_PRESETS))},
+            writes=True, group="Search", agent="discovery")
+        add("search_pipeline_status", "Reading the Daily Search progress",
+            "The Daily Search pipeline now: the running (or last) run with each job's steps, the page's saved choices, "
+            "the AIs ready to run it with their models (Auto first: her free plans, then Azure), how much of each plan's 5-hour limit is used, and today's paid-call allowance.",
+            self.search_pipeline_status, group="Search", agent="discovery")
+        add("stop_search_pipeline", "Stopping the Daily Search pipeline",
+            "Stop the running Daily Search pipeline after its current step. Jobs and files already saved stay.",
+            self.stop_search_pipeline, writes=True, group="Search", agent="discovery")
 
         # -- Resume ----------------------------------------------------------------
         add("build_resume", "Building the one-page resume",
-            "Open (or reuse) the job's Resume Studio draft, fit it to one US Letter page and score it against the posting. Returns the PDF path and scores. Blocked while the Profile has unreviewed edits.",
+            f"Open (or reuse) the job's Resume Studio draft, fit it to one {page} page and score it against the posting. Returns the PDF path and scores. Blocked while the Profile has unreviewed edits.",
             self.build_resume, {"job_id": S("The job ID", required=True)}, writes=True, group="Resume", agent="resume")
         add("resume_status", "Reading the resume draft",
             "The job's draft: revision, current PDF if built, scores, summary, skills, selected projects and the eligible project list.",
@@ -388,6 +443,10 @@ class Toolbox:
         add("cover_letter", "Writing the cover letter",
             "Generate the cover letter for a job from registered evidence. It is saved for her review, never sent.",
             self.cover_letter, {"job_id": S("The job ID", required=True)}, writes=True, group="Resume", agent="resume")
+        add("resume_assurance", "Checking the resume's claims",
+            "The Assurance check for one job's resume: every claim line with its evidence status (verified, predicted, "
+            "missing) and her keep or remove decision on each predicted item. Use it before she applies.",
+            self.resume_assurance, {"job_id": S("The job ID", required=True)}, group="Resume", agent="resume")
         add("application_documents", "Listing the application documents",
             "The files ready for one job: resume PDFs and the latest cover letter, with paths.",
             self.application_documents, {"job_id": S("The job ID", required=True)}, group="Resume", agent="resume")
@@ -461,7 +520,7 @@ class Toolbox:
                                 "create_application": {"type": "boolean", "description": "Record the application from this receipt"}},
             confirm=True, writes=True, group="Search", agent="email")
         add("ai_settings", "Reading the AI settings",
-            "Which AI runtimes are ready on this Mac (Claude Code, Codex, keyed providers), what runs the assistant, and today's AI call budget.",
+            "Which AI runtimes are ready on this machine (Auto's route: Kimi Code, Codex, Claude Code, then Azure), which plans are resting after a usage limit, what runs the assistant, and today's paid-call allowance (free plan calls never count).",
             self.ai_settings, group="Settings", agent="orchestrator")
         add("set_discovery_preset", "Changing the search mix",
             "Choose the discovery mix: default, balanced_five (five sectors) or portals.",
@@ -500,8 +559,19 @@ class Toolbox:
             "legitimacy_state": job.get("legitimacy_state"), "size_category": job.get("size_category"),
         }
 
+    def job_fit(self, job_id, refresh=False) -> dict:
+        from backend.services import fit
+
+        self._job(job_id)
+        analysis = fit.for_job(self.s, job_id, refresh=bool(refresh))
+        return {"summary": fit.brief(analysis) or f"fit {analysis['score']}/100", "score": analysis["score"],
+                "checked_by": analysis["provider_label"] or "rules",
+                "requirements": [{k: r[k] for k in ("text", "category", "status", "evidence_ids", "excerpt")}
+                                 for r in analysis["matrix"]["requirements"] if r["status"] != "unknown"][:25],
+                "hard_blockers": analysis["matrix"]["hard_blockers"], "rationale": analysis["rationale"]}
+
     def save_posting(self, company, title, url, description, location=None) -> dict:
-        posting = {"company": company, "title": title, "location": location or "United States", "url": url,
+        posting = {"company": company, "title": title, "location": location or self._default_location(), "url": url,
                    "description": description, "requisition_id": ""}
         if len(description) < 80:
             raise ValueError("The description is too short to be a posting; paste the whole text")
@@ -522,8 +592,11 @@ class Toolbox:
         warnings = []
         try:
             relevance = self.quality.relevance(posting, self._profile_text())
+            if not result.get("duplicate"):
+                from backend.services import fit
+                fit.save(self.s, job["id"], relevance["fit"])
             if relevance.get("eligible") is False:
-                warnings.append(f"Fit {relevance['score']}/100 — " + " ".join(relevance.get("blockers") or []))
+                warnings.append(f"Fit {relevance['score']}/100 — {relevance['why']}")
         except Exception:  # noqa: BLE001 - the relevance note is advice, never a gate here
             pass
         evidence = evidence_dict(job)
@@ -591,7 +664,117 @@ class Toolbox:
                 "run_id": run["id"], "preset": preset, "existing": bool(run.get("existing")),
                 "note": "Takes minutes; every lead passes the sponsorship gate and never-re-apply before it is saved."}
 
+    def search_report(self) -> dict:
+        run = next((r for r in self.s.runs() if r["kind"] == "discovery" and r["state"] in {"completed", "failed"}), None)
+        if run is None:
+            return {"summary": "No search has run yet", "found": False}
+        result = run.get("result") if isinstance(run.get("result"), dict) else {}
+        excluded = [{"company": e.get("company"), "title": e.get("title"), "sentence": e.get("sentence"), "reason": e.get("reason")}
+                    for e in result.get("excluded") or []]
+        rejected = [str(line)[:300] for line in result.get("rejected_leads") or []]
+        saved = [brief_job(self.w.get_job(job_id)) for job_id in result.get("added_job_ids") or [] if self._exists(job_id)]
+        return {"summary": f"{run['state']} · {len(saved)} saved · {len(rejected)} turned away · {len(excluded)} excluded",
+                "state": run["state"], "error": run.get("error"), "finished_at": run["updated_at"],
+                "provider": run.get("provider"), "model": run.get("model"),
+                "report": (result.get("summary") or "")[:2000], "saved_jobs": saved,
+                "turned_away": rejected[:20], "excluded_by_sponsorship_gate": excluded[:20]}
+
+    def _exists(self, job_id) -> bool:
+        try:
+            self.w.get_job(job_id)
+            return True
+        except ValueError:
+            return False
+
+    # ---- Daily Search pipeline -----------------------------------------------
+    def _pipeline(self):
+        if self.pipeline is None:
+            raise ValueError("The Daily Search pipeline is not available here; use find_jobs")
+        return self.pipeline
+
+    def pipeline_brief(self) -> dict | None:
+        """The running or last Daily Search run in a few fields, for the agent's snapshot."""
+        if self.pipeline is None:
+            return None
+        try:
+            status = self.pipeline.status()
+        except Exception:  # noqa: BLE001 - the snapshot must never fail on a side panel
+            return None
+        run = status.get("current") or status.get("last")
+        if not run:
+            return {"state": "never_run"}
+        progress = run.get("progress") or {}
+        config = run.get("config") or {}
+        return {"run_id": run["id"], "state": run["state"], "stage": progress.get("stage"),
+                "ai": f"{config.get('provider')} · {config.get('model')}",
+                "jobs_target": progress.get("jobs_target"), "find": (progress.get("find") or {}).get("note"),
+                "jobs": [{"company": j.get("company"), "title": j.get("title"),
+                          "steps": {k: (v or {}).get("state") for k, v in (j.get("steps") or {}).items()}}
+                         for j in progress.get("jobs") or []],
+                "error": run.get("error"), "finished_at": run.get("finished_at")}
+
+    def run_search_pipeline(self, count=None, provider=None, model=None, steps=None, source=None) -> dict:
+        from backend.services.pipeline import STEP_IDS
+
+        pipeline = self._pipeline()
+        saved = pipeline.preferences()
+        ai = {p["id"]: p for p in pipeline.providers()}
+        provider = provider or saved["provider"]
+        if provider not in ai:
+            ready = [p["id"] for p in ai.values() if p.get("ready")]
+            raise ValueError(f"Unknown AI {provider!r}; ready here: " + ", ".join(ready))
+        listed = [m["id"] for m in ai[provider]["models"]]
+        if not model:
+            model = saved["model"] if provider == saved["provider"] and saved["model"] in listed else (listed[0] if listed else "")
+        if steps:
+            unknown = [step for step in steps if step not in STEP_IDS]
+            if unknown:
+                raise ValueError("Unknown helper(s): " + ", ".join(unknown) + "; choose from " + ", ".join(STEP_IDS))
+            chosen = {step: step in steps for step in STEP_IDS}
+        else:
+            chosen = saved["steps"]
+        run = pipeline.start({"count": int(count or saved["count"]), "source": source or saved["source"],
+                              "provider": provider, "model": model, "steps": chosen})
+        helpers = [step for step in STEP_IDS if chosen.get(step)]
+        return {"summary": f"Started: {run['progress'].get('jobs_target')} job(s) on {ai[provider]['label']} · {model}"
+                           + (" · " + ", ".join(helpers) if helpers else " · find only"),
+                "pipeline_run_id": run["id"], "provider": provider, "model": model, "steps": helpers,
+                "jobs_target": run["progress"].get("jobs_target"),
+                "note": "Takes minutes. Tell her it is running and that she can watch it on Daily Search or ask for the progress."}
+
+    def search_pipeline_status(self) -> dict:
+        pipeline = self._pipeline()
+        status = pipeline.status()
+        brief = self.pipeline_brief() or {}
+        ready = [{"provider": p["id"], "label": p["label"], "models": [m["id"] for m in p["models"]][:6]}
+                 for p in pipeline.providers() if p.get("ready")]
+        return {"summary": (str(brief.get("state")) + (f" · {brief['stage']}" if brief.get("stage") else "")) if brief else "unknown",
+                "run": brief, "saved_choices": pipeline.preferences(), "ready_ais": ready,
+                "budget": status.get("budget"), "remaining_today": (status.get("plan") or {}).get("remaining_today")}
+
+    def stop_search_pipeline(self) -> dict:
+        pipeline = self._pipeline()
+        current = pipeline.status().get("current")
+        if not current:
+            return {"summary": "Nothing is running", "stopped": False}
+        pipeline.stop(current["id"])
+        return {"summary": "Stopping after the current step", "stopped": True, "pipeline_run_id": current["id"]}
+
     # ---- Resume ----------------------------------------------------------------
+    def resume_assurance(self, job_id) -> dict:
+        from backend.services.assurance import build_assurance
+
+        job = self._job(job_id)
+        report = build_assurance(self.s, self.studio, job_id)
+        counts = report["summary"]
+        flagged = [{"text": c["text"][:200], "section": c["section"], "status": c["evidence_status"],
+                    "decision": c.get("decision")} for c in report["claims"] if c["evidence_status"] != "verified"]
+        return {"summary": f"{counts['verified']} verified · {counts['predicted']} predicted · {counts['missing']} missing"
+                           f" · {counts['pending']} awaiting her decision",
+                "job": brief_job(job), "counts": counts, "ats_readiness": report.get("score"),
+                "needs_attention": flagged[:25], "note": report.get("note") or
+                "Predicted items are suggestions she keeps or removes in Assurance before applying; missing means no evidence."}
+
     def build_resume(self, job_id) -> dict:
         job = self._job(job_id)
         draft = self.studio.open(job_id)
@@ -852,11 +1035,16 @@ class Toolbox:
         return {"summary": f"{action}: {result.get('state', 'done')}", "result": result}
 
     def ai_settings(self) -> dict:
-        from backend.ai import engine, ready_providers
+        from backend.ai import engine, paid_gate, ready_providers, router
 
         chosen = engine(self.s)
+        ready = ready_providers(self.w.root)
+        # Auto's route as the Settings page shows it: order, resting plans, each plan's 5-hour window.
+        route = [{k: row[k] for k in ("label", "enabled", "ready", "paid", "models", "resting", "usage")}
+                 for row in router.status(self.w.root, router.policy_from(self.s.pref("ai_preferences", {}) or {}),
+                                          ready_map=ready, paid={"block": paid_gate(self.s)("azure_openai")})]
         return {"summary": "Assistant runs on " + chosen["label"], "assistant_engine": chosen,
-                "ready_providers": [name for name, ok in ready_providers(self.w.root).items() if ok],
+                "ready_providers": [name for name, ok in ready.items() if ok], "auto_route": route,
                 "budget": self.runner.cache.stats(), "discovery_preset": (self.s.pref("discovery_preferences", {}) or {}).get("preset", "default")}
 
     def set_discovery_preset(self, preset) -> dict:

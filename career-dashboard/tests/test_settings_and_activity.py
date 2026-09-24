@@ -176,7 +176,7 @@ def test_a_failed_call_is_traced_with_its_reason(service):
     def refuse(prompt, schema, **k):
         raise ValueError("Your Claude subscription's usage limit is reached.")
     runner = AgentRunner(service, refuse)
-    runner.enqueue("resume_advisor", job["id"])
+    runner.enqueue("research", job["id"])
     runner.pool.shutdown(wait=True)
     run = activity(service, runner)["runs"][0]
     assert run["state"] == "failed"

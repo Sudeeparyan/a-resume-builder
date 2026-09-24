@@ -74,7 +74,7 @@ def track_for(job, profile=None) -> str:
     return best
 
 
-def ranked_source(source, job, evidence, active, profile=None):
+def ranked_source(source, job, evidence, active, profile=None, contract=None):
     """Preserve user wording; reorder registered content toward the JD.
 
     Returns (source, report). Reorders: skill items inside each category macro,
@@ -83,7 +83,7 @@ def ranked_source(source, job, evidence, active, profile=None):
     """
     registered = {i['id'] for i in active if not i.get('deleted') and i['review_state'] == 'registered'}
     registry = {i['id']: i for i in evidence['claims'] + evidence['projects']}
-    contract = load_contract()
+    contract = contract or load_contract()
     changes = []
 
     def facts(id):
@@ -156,9 +156,9 @@ def ranked_source(source, job, evidence, active, profile=None):
     return source, {'track': track, 'section_order': order, 'changes': changes, 'method': 'Deterministic JD relevance ordering of registered evidence; not an ATS score.'}
 
 
-def set_density(source, body_pt=10.0, item_sep=2.0):
+def set_density(source, body_pt=10.0, item_sep=2.0, contract=None):
     """Fixed margins and a readable font between the contract's bounds. No stretch-to-fill."""
-    contract = load_contract()
+    contract = contract or load_contract()
     body_pt = min(max(float(body_pt), contract.min_body_pt), contract.max_body_pt)
     source = re.sub(r'% STUDIO_DENSITY_START[\s\S]*?% STUDIO_DENSITY_END\n?', '', source)
     source = re.sub(r'\\documentclass\[[^\]]*\]\{article\}', r'\\documentclass[' + contract.documentclass_option + r',10pt]{article}', source, count=1)
@@ -172,16 +172,16 @@ def set_density(source, body_pt=10.0, item_sep=2.0):
     return source.replace(r'\begin{document}', config + '\\begin{document}\n\\normalsize', 1).replace('\\normalsize\n\\normalsize', '\\normalsize')
 
 
-def validate_density(source):
+def validate_density(source, contract=None):
     """Allow exactly the generated readable font block; reject extra overrides."""
-    contract = load_contract()
+    contract = contract or load_contract()
     blocks = re.findall(r'% STUDIO_DENSITY_START[\s\S]*?% STUDIO_DENSITY_END\n?', source)
     errors = []
     point = re.search(r'\\fontsize\{([\d.]+)pt\}', blocks[0]) if len(blocks) == 1 else None
     if not point or not contract.min_body_pt <= float(point[1]) <= contract.max_body_pt:
         errors.append(f'Studio requires one generated density block with {contract.min_body_pt:g}-{contract.max_body_pt:g}pt body text')
     else:
-        expected = re.search(r'% STUDIO_DENSITY_START[\s\S]*?% STUDIO_DENSITY_END\n?', set_density(r'\begin{document}', float(point[1])))[0]
+        expected = re.search(r'% STUDIO_DENSITY_START[\s\S]*?% STUDIO_DENSITY_END\n?', set_density(r'\begin{document}', float(point[1]), contract=contract))[0]
         if blocks[0] != expected:
             errors.append('Studio density block differs from the supported readable layout')
     remaining = source.replace(blocks[0], '') if len(blocks) == 1 else source
@@ -191,9 +191,9 @@ def validate_density(source):
 TARGET_FILL_PERCENT = 80
 
 
-def measure_pages(pdf, pages_dir):
+def measure_pages(pdf, pages_dir, contract=None):
     """Measure ink extent and internal whitespace in the actual rendered pages."""
-    contract = load_contract()
+    contract = contract or load_contract()
     reader = PdfReader(str(pdf))
     pages = []
     for index, page in enumerate(reader.pages, 1):

@@ -188,6 +188,27 @@ MIGRATIONS: tuple[tuple[int, str, str], ...] = (
         CREATE INDEX IF NOT EXISTS idx_ai_calls_day ON ai_calls(day)
         """,
     ),
+    (
+        8,
+        "job_fit_matrix",
+        # One verified requirement matrix per job (backend/services/fit.py): what the posting
+        # asks for and which registered evidence shows it. Reused by the fit score, the tailor,
+        # resume coverage and the study plan; recomputed when the posting or evidence changes.
+        """
+        CREATE TABLE IF NOT EXISTS job_fit(
+            job_id TEXT PRIMARY KEY REFERENCES jobs(id),
+            jd_hash TEXT NOT NULL,
+            evidence_hash TEXT NOT NULL,
+            fit_version TEXT NOT NULL,
+            method TEXT NOT NULL CHECK(method IN ('ai','rules')),
+            provider TEXT NOT NULL DEFAULT '',
+            model TEXT NOT NULL DEFAULT '',
+            matrix TEXT NOT NULL,
+            score INTEGER,
+            created_at TEXT NOT NULL
+        )
+        """,
+    ),
 )
 
 

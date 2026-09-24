@@ -1,0 +1,190 @@
+% Evidence-grounded one-page US Letter base resume for Annie Prasanna Manoharan.
+% Candidate claims are governed by data/context/evidence.yml. Every content line is
+% preceded by a "% EVIDENCE:" tag naming the registry entries that support it.
+% Track A layout (Data / Analytics Engineering): Education, Skills, Experience, Projects.
+
+\documentclass[letterpaper,10pt]{article}
+
+\usepackage[top=0.5in,bottom=0.5in,left=0.6in,right=0.6in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{titlesec}
+\usepackage{lmodern}
+
+\hypersetup{
+  pdfauthor={Annie Prasanna Manoharan},
+  pdftitle={Annie Prasanna Manoharan - Resume},
+  pdfsubject={Evidence-grounded resume},
+  pdfkeywords={Data Engineer, Machine Learning, Python, SQL, Kafka, Flink, AWS, PyTorch}
+}
+
+\renewcommand{\baselinestretch}{1.0}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+\setlist[itemize]{leftmargin=1.15em,itemsep=2.0pt,topsep=2pt,parsep=0pt,partopsep=0pt}
+\pagestyle{empty}
+\raggedright
+\urlstyle{same}
+
+\titleformat{\section}{\large\scshape}{}{0pt}{}[\vspace{-2pt}\titlerule]
+\titlespacing*{\section}{0pt}{7pt}{4pt}
+
+\newlength{\roleheadingright}
+\newcommand{\roleheading}[4]{%
+  \textbf{#1} \hfill #2\\
+  \settowidth{\roleheadingright}{\textit{#4}}%
+  \parbox[t]{\dimexpr\linewidth-\roleheadingright-1em\relax}{\raggedright\textit{#3}}%
+  \hfill\parbox[t]{\roleheadingright}{\raggedleft\textit{#4}}\vspace{1pt}
+}
+\newcommand{\clientheading}[1]{\textbf{#1}\vspace{1pt}}
+\newenvironment{resumeitems}{\begin{itemize}}{\end{itemize}}
+
+% ---- Header -------------------------------------------------------------
+% EVIDENCE: IDENTITY-001
+\newcommand{\ResumeName}{Annie Prasanna Manoharan}
+% EVIDENCE: CONTACT-PHONE-001 CONTACT-EMAIL-001 CONTACT-PORTFOLIO-001 CONTACT-GITHUB-001
+\newcommand{\ResumeContact}{+1 (479) 301-1366 \textbar{} \href{mailto:annieprm0501@gmail.com}{annieprm0501@gmail.com} \textbar{} \href{https://annie0159.github.io/Portfolio/}{https://annie0159.github.io/Portfolio/} \textbar{} \href{https://github.com/Annie0159}{https://github.com/Annie0159}}
+
+% ---- Skills (one macro per bold category; items ranked per JD by Resume Studio) --
+% EVIDENCE: SKILL-LANGUAGES-001 SKILL-TOUCHED-001
+\newcommand{\SkillsLanguages}{SQL, Python}
+% EVIDENCE: SKILL-STREAMING-001 SKILL-CLOUD-001 SKILL-DATA-TOOLS-001 SKILL-LAKEHOUSE-001
+\newcommand{\SkillsData}{}
+% EVIDENCE: SKILL-ML-001 SKILL-CV-TOOLS-001 SKILL-GENAI-001 SKILL-DATA-TOOLS-001
+\newcommand{\SkillsML}{LangChain, RAG, Flask}
+% EVIDENCE: SKILL-CLOUD-001 SKILL-TOUCHED-001 SKILL-DESKTOP-001 SKILL-TEST-001 resume_items:12c5734f50a4460c9c11dbc77496fe0d resume_items:90c2f67ad8694b0cb86a82bfea10ab03
+\newcommand{\SkillsCloud}{REST API design for patient onboarding and screening workflows, Automated testing and observability for Python web services}
+
+% ---- Coursework -----------------------------------------------------------
+% EVIDENCE: COURSEWORK-MS-001
+\newcommand{\Coursework}{Algorithms, Database Management Systems, Advanced DBMS, Data Mining, Artificial Intelligence, Machine Learning, Image Processing, Privacy Enhancing Techniques}
+
+% ---- Signature project (first in Projects; unique per company) ------------
+% EVIDENCE: PROJ-P04-NEWS-RAG
+\newcommand{\SelectedProjectID}{PROJ-P04-NEWS-RAG}
+% EVIDENCE: PROJ-P04-NEWS-RAG
+\newcommand{\SelectedProjectTitle}{Local LLM-Powered News Research Platform}
+% EVIDENCE: PROJ-P04-NEWS-RAG
+\newcommand{\SelectedProjectContext}{Python, LangChain, Streamlit, FAISS, Ollama, Llama 3.2}
+% EVIDENCE: PROJ-P04-NEWS-RAG
+\newcommand{\SelectedProjectBulletOne}{Built an end-to-end local ETL pipeline using Streamlit and WebBaseLoader to ingest, clean, chunk, and preprocess unstructured web content on demand}
+% EVIDENCE: PROJ-P04-NEWS-RAG
+\newcommand{\SelectedProjectBulletTwo}{Designed a local vector store with FAISS and nomic-embed-text to serialize high-dimensional embeddings, bypassing redundant ingestion and reducing processing latency}
+% EVIDENCE: PROJ-P04-NEWS-RAG
+\newcommand{\SelectedProjectBulletThree}{Implemented a RAG pipeline via LangChain orchestrating semantic queries against vectorized data using local Llama 3.2 instances}
+
+% ---- Supporting project (may repeat across companies) ----------------------
+% EVIDENCE: PROJ-P01-IOT
+\newcommand{\SecondProjectID}{PROJ-P01-IOT}
+% EVIDENCE: PROJ-P01-IOT
+\newcommand{\SecondProjectTitle}{Real-Time Medical IoT Analytics Platform}
+% EVIDENCE: PROJ-P01-IOT
+\newcommand{\SecondProjectContext}{Apache Kafka, Apache Flink, Flink SQL, Python, ClickHouse, Grafana}
+% EVIDENCE: PROJ-P01-IOT
+\newcommand{\SecondProjectBulletOne}{Developed an end-to-end, sub-second latency streaming platform using Apache Flink SQL and Apache Kafka to ingest, process, and score high-frequency medical IoT device data}
+% EVIDENCE: PROJ-P01-IOT
+\newcommand{\SecondProjectBulletTwo}{Implemented temporal Flink OVER windows partitioned by device ID to compute rolling Z-scores over 5-second sliding intervals, applying custom watermark delay strategies to handle out-of-order streams}
+
+% EVIDENCE: PROJ-P01-IOT
+\newcommand{\SecondProjectBulletThree}{Designed ClickHouse MergeTree schemas sorted by composite keys to align disk layout with clinical query patterns, with an optimized Python multi-topic batch consumer isolating ingestion}
+% STUDIO_DENSITY_START
+\clubpenalty=10000
+\widowpenalty=10000
+\renewcommand{\normalsize}{\fontsize{10.0pt}{11.8pt}\selectfont}
+% STUDIO_DENSITY_END
+\begin{document}
+\normalsize
+
+\begin{center}
+  % EVIDENCE: IDENTITY-001
+  {\LARGE\bfseries \ResumeName}\\[3pt]
+  % EVIDENCE: CONTACT-PHONE-001 CONTACT-EMAIL-001 CONTACT-PORTFOLIO-001 CONTACT-GITHUB-001
+  \ResumeContact
+\end{center}
+
+\section{Education}
+
+% EVIDENCE: EDU-MS-001
+\roleheading{University of Arkansas}{Aug 2024 -- May 2026}{Master of Science in Computer Engineering}{Fayetteville, AR}
+% EVIDENCE: COURSEWORK-MS-001
+\textbf{Coursework:} \Coursework
+
+% EVIDENCE: EDU-BE-001
+\roleheading{Sri Ramakrishna Engineering College}{Aug 2019 -- May 2023}{Bachelor of Engineering in Electronics and Communication}{India}
+
+\section{Technical Skills}
+% EVIDENCE: SKILL-CLOUD-001 SKILL-TOUCHED-001 SKILL-DESKTOP-001 SKILL-TEST-001
+\textbf{Cloud and Tools:} \SkillsCloud\\[1pt]
+% EVIDENCE: SKILL-ML-001 SKILL-CV-TOOLS-001 SKILL-GENAI-001 SKILL-DATA-TOOLS-001
+\textbf{Machine Learning and AI:} \SkillsML\\[1pt]
+% EVIDENCE: SKILL-STREAMING-001 SKILL-CLOUD-001 SKILL-DATA-TOOLS-001 SKILL-LAKEHOUSE-001
+\textbf{Data Engineering:} \SkillsData\\[1pt]
+% EVIDENCE: SKILL-LANGUAGES-001 SKILL-TOUCHED-001
+\textbf{Languages:} \SkillsLanguages
+
+\section{Professional Experience}
+
+% EVIDENCE: EXP-INSOPS-001
+\roleheading{Data Engineering Intern}{Jul 2024 -- Present}{InsOps Inc.}{Chicago, Illinois}
+\begin{resumeitems}
+  % EVIDENCE: EXP-INSOPS-001
+  \item Developed data pipelines in AWS using AWS Glue, Lambda, EMR, SQL, and Apache Airflow for orchestration, with S3 cloud storage, for scalable data ingestion, transformation, validation, and analytics
+  % EVIDENCE: EXP-INSOPS-001
+  \item Built data workflows integrating SQL Server, Azure SQL, AWS S3, and cloud databases, preparing structured datasets for downstream data science and analytics
+\end{resumeitems}
+
+% EVIDENCE: EXP-TA-001
+\roleheading{Teaching Assistant}{Sep 2024 -- May 2026}{University of Arkansas, Dept. of Computer Science and Engineering}{Fayetteville, AR}
+\begin{resumeitems}
+  % EVIDENCE: EXP-TA-001
+  \item Supported 100+ students in Programming Foundations through laboratory instruction, debugging assistance, and mentorship in C++ programming fundamentals
+\end{resumeitems}
+
+% EVIDENCE: EXP-RA-001
+\roleheading{Research Assistant}{Sep 2024 -- Jan 2026}{AICV Lab, University of Arkansas}{Fayetteville, AR}
+\begin{resumeitems}
+  % EVIDENCE: EXP-RA-001
+  \item Built reusable preprocessing workflows to segment, organize, and transform raw image/video data into structured inputs for downstream processing and evaluation
+  % EVIDENCE: EXP-RA-001
+  \item Evaluated results using mAP, MOTA, IDF1, PSNR, SSIM, and FID
+\end{resumeitems}
+
+% EVIDENCE: EXP-SOLITON-PE-001
+\roleheading{Project Engineer}{Jun 2023 -- Jun 2024}{Soliton Technologies}{India}
+\begin{resumeitems}
+  % EVIDENCE: EXP-SOLITON-PE-001
+  \item Designed and developed a C\# WPF desktop application integrating C\#, Python, and LabVIEW-based test workflows to streamline application usage and improve test automation
+  % EVIDENCE: EXP-SOLITON-PE-001 METRIC-DRAEGER-94
+  \item Developed customized software solutions for Dr\"ager as the sole developer, automating approximately 94\% of manual test cases while meeting medical-device quality and validation requirements
+\end{resumeitems}
+
+\section{Projects}
+% SELECTED_PROJECT_BLOCK_START
+\textbf{\SelectedProjectTitle} \hfill \textit{\SelectedProjectContext}
+\begin{resumeitems}
+% EVIDENCE: PROJ-P04-NEWS-RAG
+\item \SelectedProjectBulletOne
+% EVIDENCE: PROJ-P04-NEWS-RAG
+\item \SelectedProjectBulletTwo
+% EVIDENCE: PROJ-P04-NEWS-RAG
+\item \SelectedProjectBulletThree
+\end{resumeitems}
+% SELECTED_PROJECT_BLOCK_END
+
+% SECOND_PROJECT_BLOCK_START
+\textbf{\SecondProjectTitle} \hfill \textit{\SecondProjectContext}
+\begin{resumeitems}
+% EVIDENCE: PROJ-P01-IOT
+\item \SecondProjectBulletOne
+% EVIDENCE: PROJ-P01-IOT
+\item \SecondProjectBulletTwo
+% EVIDENCE: PROJ-P01-IOT
+\item \SecondProjectBulletThree
+\end{resumeitems}
+% SECOND_PROJECT_BLOCK_END
+
+\end{document}

@@ -87,6 +87,11 @@ STEP_ORDER = ("Reading the posting", "Sponsorship gate and never-re-apply", "Ope
               "Fitting one US Letter page", "Scoring against the posting")
 STEP_AGENTS = ("assistant", "sponsorship", "resume", "resume", "resume_match")
 
+# The fields of one job's document card; a reply about several jobs shows a row each instead.
+CARD_FIELDS = ("pdf", "preview_png", "job_id", "company", "title", "tier", "revision", "coverage", "ats",
+               "gaps", "posting_url", "page", "signature_project", "warnings")
+CARD_ROW_FIELDS = ("job_id", "company", "title", "tier", "revision", "pdf", "coverage", "ats", "posting_url")
+
 # A conversation is named after its first message, cut to this many characters.
 TITLE_CHARS = 60
 STOPPED_REPLY = "Stopped. Anything a finished step already saved stays; nothing after it was changed."
@@ -101,6 +106,9 @@ class Stopped(Exception):
 MAX_TURNS = 14
 RESULT_CHARS = 3500
 FULL_RESULTS_KEPT = 8
+# Read-only tools one decision may add beside its main call ("get_job for these three"),
+# so a question that needs several lookups costs one model round trip, not one each.
+MAX_EXTRA_CALLS = 5
 
 
 def looks_like_posting(text: str) -> bool:
@@ -323,7 +331,7 @@ class Assistant:
 
     def agents(self) -> list:
         """The agent registry with what the chat can reach: every tool names the agent it runs on."""
-        from backend.services.workspace_v2 import AGENTS
+        from backend.services.workspace_v2 import agents_for
 
         reach: dict[str, list] = {}
         for tool in self.tools.tools.values():
@@ -335,7 +343,7 @@ class Assistant:
         for agent in STEP_AGENTS + ("reapply", "hiring", "match") + tuple(RUNNABLE_AGENTS):
             reach.setdefault("resume" if agent == "resume_build" else agent, [])
         return [{"id": a["id"], "name": a["name"], "does": a["does"], "implementation": a["implementation"],
-                 "linked": a["id"] in reach, "tools": reach.get(a["id"], [])} for a in AGENTS]
+                 "linked": a["id"] in reach, "tools": reach.get(a["id"], [])} for a in agents_for(self.w.root)]
 
     def overview(self) -> dict:
         from backend.ai import any_provider_configured, engine
@@ -423,6 +431,19 @@ class Assistant:
     def _check_stop(self, id: str) -> None:
         if id in self.stopping:
             raise Stopped()
+
+    def _default_location(self) -> str:
+        """Where a pasted posting is assumed to be when it names no place: the profile's country."""
+        from backend.countries import pack_for
+
+        return pack_for(self.w.root).text("default_location") or "United States"
+
+    def _resume_shape(self) -> str:
+        """'one US Letter page' / 'one A4 page', from the profile's contract and country."""
+        from backend.ai.persona import persona_for
+
+        persona = persona_for(self.w.root)
+        return persona["resume_shape"] if persona else "one US Letter page"
 
     def _step(self, id: str, label: str, state: str = "running", detail: str = "", agent: str = "assistant", **extra) -> None:
         self._check_stop(id)
@@ -527,7 +548,7 @@ class Assistant:
                     fields[key] = value
             if all(fields.get(k) for k in ("company", "title")):
                 self.s.set_pref("assistant_pending", None)
-                fields.setdefault("location", "United States")
+                fields.setdefault("location", self._default_location())
                 return self._prepare_posting(id, pending["description"], url=pending.get("url"), fields=fields)
             if looks_like_posting(text):
                 return None
@@ -636,7 +657,7 @@ class Assistant:
             return "needs_input", ("I could not find the employer or the job title in the text" + (f" (I have {known})" if known else "") +
                                    ". Reply with **Company | Job title | Location**." + (" " + note if note else "")), \
                 {"intent": "posting_fields", "fields": found}
-        found.setdefault("location", "United States")
+        found.setdefault("location", self._default_location())
         self._finish_step(id, "done", f"{found['company']} — {found['title']} · {found['location']}")
 
         self._step(id, STEP_ORDER[1], agent=STEP_AGENTS[1])
@@ -666,7 +687,7 @@ class Assistant:
         draft = self.studio.open(job["id"])
         self._finish_step(id, "done", f"Draft version {draft['revision']} · signature project: {draft['fields'].get('SelectedProjectTitle') or '—'}")
 
-        self._step(id, STEP_ORDER[3], agent=STEP_AGENTS[3])
+        self._step(id, "Fitting " + self._resume_shape(), agent=STEP_AGENTS[3])
         fitted = self.studio.fit(job["id"], draft["revision"])
         card = resume_card(job, draft, fitted)
         page = card["page"]
@@ -680,7 +701,7 @@ class Assistant:
 
         lines = [f"**{job['company']} — {job['title']}** is saved (sponsorship tier {tier}" + (f": {tier_label}" if tier_label else "") + ")."]
         signature = card["signature_project"] or "the signature project"
-        lines.append(f"The resume is fitted to one US Letter page at {page['font_pt']}pt ({fill}% filled), "
+        lines.append(f"The resume is fitted to {self._resume_shape()} at {page['font_pt']}pt ({fill}% filled), "
                      f"leading with **{signature}**" + (f", after cutting the {' and the '.join(page['cuts'])}." if page["cuts"] else "."))
         if match:
             lines.append(f"JD term coverage {card['coverage']} · ATS readiness {card['ats']}." + (f" Requirements the evidence does not cover: {', '.join(card['gaps'])}." if card["gaps"] else ""))
@@ -829,12 +850,39 @@ class Assistant:
     def _snapshot(self) -> dict:
         summary = self.s.summary()
         goals = summary["goals"]
+        # What each job already has, so "which jobs still need a resume / a study plan?"
+        # is answered from the snapshot instead of one lookup per job.
+        documents = {d["job_id"]: d for d in self.s.documents()}
+        finished = {(r["job_id"], r["kind"]) for r in self.s.runs() if r["state"] == "completed" and r.get("job_id")}
+        # Each job's verified requirement check (services/fit.py), read from the cache only:
+        # "why is this a fit?" is answered from checked data, and a snapshot never calls an AI.
+        from backend.services import fit
+        try:
+            evidence = fit.catalogue(self.s)
+        except Exception:  # noqa: BLE001 - the snapshot must never fail on the fit line
+            evidence = None
+
+        def fit_line(job_id):
+            try:
+                return fit.brief(fit.cached(self.s, job_id, cat=evidence)) if evidence else ""
+            except Exception:  # noqa: BLE001
+                return ""
+
+        def job_row(j):
+            row = {k: v for k, v in brief_job(j).items() if k in {"id", "company", "title", "status", "sponsor_tier", "application_date"}}
+            row.update({"resume_pdf": bool((documents.get(j["id"]) or {}).get("resumes")),
+                        "research_done": (j["id"], "research") in finished,
+                        "study_plan_done": (j["id"], "study_plan") in finished,
+                        "fit_score": j.get("fit_score"),
+                        "fit": fit_line(j["id"])})
+            return row
+
         return {
             "today": self.s.today(),
             "goals": {k: goals[k] for k in ("weekly_target", "current_week_target", "week_completed", "today_target", "today_completed", "remaining_today")},
             "counts": summary["counts"],
-            "jobs": [{k: v for k, v in brief_job(j).items() if k in {"id", "company", "title", "status", "sponsor_tier", "application_date", "has_resume_folder"}}
-                     for j in summary["jobs"][:40]],
+            "jobs": [job_row(j) for j in summary["jobs"][:40]],
+            "daily_search": self.tools.pipeline_brief(),
             "active_runs": [{"run_id": r["id"], "kind": r["kind"], "job_id": r["job_id"], "stage": (r.get("result") or {}).get("stage")}
                             for r in summary["runs"] if r["state"] in {"queued", "running"}],
             "profile_has_unreviewed_edits": summary["profile_dirty"],
@@ -882,6 +930,24 @@ class Assistant:
         return entry
 
     @staticmethod
+    def _with_cards(data: dict, transcript) -> dict:
+        """One job's document is the full card; a reply that read several (a comparison) shows
+        one compact row per job instead of whichever card came last."""
+        cards: dict = {}
+        for entry in transcript:
+            card = entry.get("card")
+            if card and card.get("job_id"):
+                cards.pop(card["job_id"], None)
+                cards[card["job_id"]] = card
+        if len(cards) <= 1:
+            return data
+        out = {k: v for k, v in data.items() if k not in CARD_FIELDS}
+        if out.get("intent") in {"open", "resume_ready"}:
+            out["intent"] = "agent"
+        out["cards"] = [{k: card.get(k) for k in CARD_ROW_FIELDS} for card in cards.values()]
+        return out
+
+    @staticmethod
     def _trace(transcript) -> list:
         """The plan→calls→results record of an agent run, kept with the message
         so the "what I did" view survives a reload."""
@@ -896,6 +962,44 @@ class Assistant:
                 row["auto_applied"] = True
             out.append(row)
         return out
+
+    def _note_fallback(self, id, team, noted: set) -> None:
+        """The chosen AI failed and the backup Settings names answered: say so once per message."""
+        from backend.ai import provider_label
+
+        switched = getattr(team, "fell_back", None)
+        if not switched or (switched["from_provider"], switched["to_provider"]) in noted:
+            return
+        noted.add((switched["from_provider"], switched["to_provider"]))
+        detail = (f"{provider_label(switched['from_provider'])} could not answer ({switched['reason'].rstrip('.')}), "
+                  f"so the backup, {provider_label(switched['to_provider'])} · {switched['to_model']}, did.")
+        self._step(id, "Switched to the backup AI", state="done", detail=detail[:400], agent="orchestrator")
+        if switched.get("recorded"):
+            return  # Auto's router already wrote this switch to the activity log
+        with self.w.connect() as db:
+            self.w.record_event(db, "provider_fallback", None, ai_action="assistant_chat",
+                                from_provider=switched["from_provider"], to_provider=switched["to_provider"],
+                                reason=switched["reason"][:300])
+
+    def _extra_calls(self, id, turn, transcript, data) -> None:
+        """Run the read-only tools a decision listed beside its main call, each as its own step."""
+        for extra in list(getattr(turn, "more_calls", None) or [])[:MAX_EXTRA_CALLS]:
+            self._check_stop(id)
+            try:
+                tool = self.tools.get(extra.tool)
+                arguments = self.tools.coerce(tool, json.loads(extra.arguments or "{}"))
+            except (ValueError, json.JSONDecodeError) as error:
+                transcript.append({"role": "tool", "tool": extra.tool, "error": str(error)[:400]})
+                continue
+            if tool.writes or tool.confirm:
+                transcript.append({"role": "tool", "tool": tool.name, "error": "Not run: more_calls only takes tools that read. "
+                                   "Call a tool that changes something as the main call of its own turn."})
+                continue
+            self._step(id, tool.label, agent=tool.agent)
+            entry = self._run_tool(id, tool, arguments)
+            transcript.append(entry)
+            if entry.get("card"):
+                data.update(entry["card"])
 
     def _agent(self, id, text, transcript=None):
         from backend.ai import any_provider_configured, team_for
@@ -913,26 +1017,35 @@ class Assistant:
             if entry.get("card"):
                 data.update(entry["card"])
         used = sum(1 for e in transcript if e.get("role") == "tool")
+        noted: set = set()
         for turn_no in range(used, used + MAX_TURNS):
             self._step(id, "Thinking", agent="assistant")
             try:
                 turn = team.run("workspace_agent", self._payload(id, transcript, turn_no))
             except (AgentError, ValueError) as error:
                 self._finish_step(id, "failed", str(error)[:300])
-                return "failed", ("I could not reach the AI runtime, so nothing more was changed. " + str(error).rstrip(".")
-                                  + ". The exact commands (say *help*) still work without it."), {**data, "intent": "agent_failed", "trace": self._trace(transcript)}
+                advice = ("Choose another AI in the menu above the chat" + ("" if getattr(team, "fallback", None) else
+                          ", or choose a Backup provider in Settings so the chat switches by itself next time") + ".")
+                response = ("I could not reach the AI runtime, so nothing more was changed. " + str(error).rstrip(".")
+                            + ". " + advice + " The exact commands (say *help*) still work without it.")
+                return "failed", response, {**self._with_cards(data, transcript), "intent": "agent_failed",
+                                            "trace": self._trace(transcript), "suggestions": ["status", "help"]}
             # A decision that arrives after she pressed Stop is dropped: no tool runs, no reply shows.
             self._check_stop(id)
+            if getattr(team, "fell_back", None):
+                self._finish_step(id, "done")
+                self._note_fallback(id, team, noted)
+                self._step(id, "Thinking", agent="assistant")
             thought = " ".join(turn.thought.split())[:200]
             suggestions = [s.strip() for s in turn.suggestions if isinstance(s, str) and 0 < len(s.strip()) <= 80][:4]
             if turn.action == "reply":
                 self._finish_step(id, "done", thought)
-                return "done", turn.reply.strip() or "Done.", {**data, "trace": self._trace(transcript), "suggestions": suggestions}
+                return "done", turn.reply.strip() or "Done.", {**self._with_cards(data, transcript), "trace": self._trace(transcript), "suggestions": suggestions}
             if turn.action == "ask":
                 self._finish_step(id, "done", thought)
                 question = turn.reply.strip() or "What would you like me to do?"
                 self.s.set_pref("assistant_pending", {"kind": "agent", "transcript": transcript + [{"role": "assistant", "asked": question}], "asked_at": self.s.now()})
-                return "needs_input", question, {**data, "intent": "agent_question", "trace": self._trace(transcript), "suggestions": suggestions}
+                return "needs_input", question, {**self._with_cards(data, transcript), "intent": "agent_question", "trace": self._trace(transcript), "suggestions": suggestions}
             try:
                 tool = self.tools.get(turn.tool)
                 arguments = self.tools.coerce(tool, json.loads(turn.arguments or "{}"))
@@ -947,7 +1060,7 @@ class Assistant:
                                                       "diff": diff, "transcript": transcript, "asked_at": self.s.now()})
                 lead = turn.reply.strip()
                 question = (lead + "\n\n" if lead else "") + f"Ready to: {self.tools.describe(tool.name, arguments)}. Reply *yes* to go ahead or *no* to skip it."
-                return "needs_input", question, {**data, "intent": "confirm_tool", "tool": tool.name, "arguments": arguments,
+                return "needs_input", question, {**self._with_cards(data, transcript), "intent": "confirm_tool", "tool": tool.name, "arguments": arguments,
                                                  "diff": diff, "trace": self._trace(transcript), "suggestions": ["yes", "no"]}
             self._relabel_step(id, tool.label, thought, agent=tool.agent)
             entry = self._run_tool(id, tool, arguments)
@@ -961,5 +1074,6 @@ class Assistant:
             transcript.append(entry)
             if entry.get("card"):
                 data.update(entry["card"])
+            self._extra_calls(id, turn, transcript, data)
         return "failed", (f"I stopped after {MAX_TURNS} steps without finishing. What was done is listed above; "
-                          "tell me how to continue, or split the request."), {**data, "intent": "agent_exhausted", "trace": self._trace(transcript)}
+                          "tell me how to continue, or split the request."), {**self._with_cards(data, transcript), "intent": "agent_exhausted", "trace": self._trace(transcript)}

@@ -1,4 +1,4 @@
-"""Free orchestration, spending limits, durable instructions and document isolation."""
+"""Free orchestration, spending limits and document isolation."""
 import json
 import shutil
 from concurrent.futures import ThreadPoolExecutor
@@ -8,25 +8,27 @@ from test_workspace_v2 import service
 from backend.services.agents import AgentRunner, REPORT_SCHEMA
 from backend.services.agent_cache import AgentCache
 from backend.services.resume_studio import ResumeStudio
-from backend.services.instruction_tracker import InstructionTracker
 from backend.services.resume_match import evaluate
 
 
 def test_cache_reuses_stages_and_limits_even_failed_calls(service):
+    # The daily limit is on paid calls (Azure, API keys); a free plan's calls never count.
     cache = AgentCache(service)
     calls = []
     def invoke(*args, **kwargs):
         calls.append(args)
         return {'summary': 'ok', 'report': 'Saved result', 'sources': [], 'limitations': []}
+    paid = {'provider': 'azure_openai', 'model': 'gpt-6-luna'}
     cache.configure(1)
-    one = cache.execute(invoke, 'public role', REPORT_SCHEMA, web=False)
-    assert cache.execute(invoke, 'public role', REPORT_SCHEMA, web=False) == one
+    one = cache.execute(invoke, 'public role', REPORT_SCHEMA, web=False, **paid)
+    assert cache.execute(invoke, 'public role', REPORT_SCHEMA, web=False, **paid) == one
     assert len(calls) == 1 and cache.stats()['cache_hits'] == 1
-    with pytest.raises(ValueError, match='budget'):
-        cache.execute(invoke, 'changed role', REPORT_SCHEMA, web=False)
+    with pytest.raises(ValueError, match='paid AI limit'):
+        cache.execute(invoke, 'changed role', REPORT_SCHEMA, web=False, **paid)
+    assert cache.execute(invoke, 'changed role', REPORT_SCHEMA, web=False)['report'] == 'Saved result'  # Codex: free
     cache.configure(0)
-    assert cache.execute(invoke, 'public role', REPORT_SCHEMA, web=False) == one
-    assert AgentCache(service).stats()['cached_results'] == 1
+    assert cache.execute(invoke, 'public role', REPORT_SCHEMA, web=False, **paid) == one
+    assert AgentCache(service).stats()['cached_results'] == 2
 
 
 def test_concurrent_cache_misses_make_one_call(service):
@@ -54,21 +56,6 @@ def test_cache_expiry_failure_and_schema_change(service):
     with pytest.raises(ValueError, match='incomplete'):
         cache.execute(lambda *a,**k: {}, 'bad', REPORT_SCHEMA)
     assert cache.stats()['cached_results']==1 and cache.stats()['calls_today']==3
-
-
-def test_chat_applies_and_retains_unknown_conflicts_and_duplicate_requests(service):
-    j=add(service.w); studio=ResumeStudio(service); d=studio.open(j['id']); chat=InstructionTracker(service, studio)
-    r=chat.send('skills: Python, SQL, C#, 50% & SQL wording',j['id'],d['revision'],'message-1')
-    assert r['state']=='applied'
-    assert chat.send('skills: Python, SQL, C#, 50% & SQL wording',j['id'],d['revision'],'message-1')==r
-    assert len(studio.get(j['id'])['versions'])==2
-    assert chat.send('skills data: Apache Kafka, Apache Flink',j['id'],2)['state']=='applied'
-    assert chat.send('skills: Stale edit',j['id'],1)['state']=='needs_attention'
-    assert chat.send('listen to this unusual contextual request',j['id'],3)['state']=='needs_clarification'
-    assert chat.send('font: 8',j['id'],3)['state']=='needs_attention'
-    assert chat.send('font: 12',j['id'],3)['state']=='needs_attention'
-    assert len(InstructionTracker(service,studio).history(j['id']))==6
-    assert service.w.get_job(j['id'])['application_date'] is None
 
 
 def test_two_project_slots_and_second_capture(service):
@@ -117,35 +104,16 @@ def test_build_scores_actual_pdf_and_ai_review_has_only_document(service):
         studio.match_input(j['id'])
 
 
-def test_interpreter_applies_safe_resume_edits_and_rejects_profile_commands(service):
+def test_a_rescore_under_new_scoring_rules_replaces_the_old_score(service, monkeypatch):
+    """23 Sep: after SCORING_VERSION changed, re-scoring an existing revision hit the
+    resume_scores key (job, revision, JD, PDF) and the dashboard answered 500."""
+    if not shutil.which('tectonic'): pytest.skip('PDF runtime unavailable')
+    from backend import assessment
     studio = ResumeStudio(service); j = add(service.w); d = studio.open(j['id'])
-    tracker = InstructionTracker(service, studio)
-    tracker.send('Put the streaming skills first without changing the facts', j['id'], d['revision'])
-    calls = []
-    def invoke(prompt, schema, **kwargs):
-        calls.append(prompt)
-        return {'summary': 'Suggested edit', 'commands': ['skills: Apache Kafka, Suggested wording', 'experience: Invented claim'], 'clarifications': []}
-    runner = AgentRunner(service, invoke); runner.studio = studio
-    runner.enqueue('instruction_interpret', j['id']); runner.pool.shutdown(wait=True)
-    assert service.runs()[0]['state'] == 'completed'
-    result = service.runs()[0]['result']
-    assert result['applied'] is True
-    assert result['applied_commands'] == ['skills: Apache Kafka, Suggested wording']
-    assert 'Suggested wording' in studio.get(j['id'])['source']
-    assert 'Invented claim' not in studio.get(j['id'])['source']
-    assert result['clarifications'] and len(calls) == 1
-    assert 'Put the streaming skills first' in calls[0]
-
-
-def test_font_auto_and_restart_recovery(service):
-    studio = ResumeStudio(service); j = add(service.w); d = studio.open(j['id'])
-    tracker = InstructionTracker(service, studio)
-    assert tracker.send('font: 10.5', j['id'], d['revision'])['state'] == 'applied'
-    assert service.pref('resume_font:' + j['id']) == 10.5
-    d = studio.get(j['id'])
-    assert tracker.send('font: auto', j['id'], d['revision'])['state'] == 'applied'
-    assert service.pref('resume_font:' + j['id']) is None
+    studio.fit(j['id'], d['revision'])
+    studio.score(j['id'])
+    monkeypatch.setattr(assessment, 'SCORING_VERSION', 'career-assessment-next')
+    again = studio.score(j['id'])
+    assert again['cached'] is False and again['scoring_version'] == 'career-assessment-next'
     with service.w.connect() as db:
-        db.execute("INSERT INTO instruction_messages VALUES('interrupted',?,?,?,'processing',?)", (j['id'], 'pending instruction', 'Processing', service.now()))
-    runner = AgentRunner(service); runner.recover(); runner.pool.shutdown()
-    assert tracker.history(j['id'])[-1]['state'] == 'needs_attention'
+        assert db.execute('SELECT COUNT(*) FROM resume_scores WHERE job_id=?', (j['id'],)).fetchone()[0] == 1

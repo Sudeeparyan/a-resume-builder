@@ -19,7 +19,14 @@ NAMES = (
     "ANTHROPIC_API_KEY",
     "GEMINI_API_KEY",
     "MOONSHOT_API_KEY",
+    "AZURE_OPENAI_API_KEY",
 )
+# Not secrets, but read the same way: where the Azure resource is and which deployments to use.
+SETTINGS = ("AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_DEPLOYMENT")
+# Azure AI Foundry / Azure OpenAI keys: 84 characters with the JQQJ99 signature at a
+# fixed place. One pasted as OPENAI_API_KEY would only fail against api.openai.com,
+# so it is filed as the Azure key wherever it is found.
+AZURE_KEY = re.compile(r"[A-Za-z0-9]{52}JQQJ99[A-Za-z0-9]{26}")
 
 # Bare tokens are identified by the prefix each provider issues.
 PREFIXES = (
@@ -33,9 +40,16 @@ PREFIXES = (
 ASSIGNMENT = re.compile(r"^([A-Za-z][A-Za-z0-9_]*)\s*=\s*(.*)$")
 
 
+def _base(root: Path) -> Path:
+    """Keys belong to the machine: a profile folder uses the app's (career-dashboard/)."""
+    from backend.paths import secrets_root_for
+
+    return secrets_root_for(root)
+
+
 def _files(root: Path):
-    """The key files to scan, nearest first. ``root`` is career-dashboard/."""
-    root = Path(root).resolve()
+    """The key files to scan, nearest first. ``root`` is career-dashboard/ (or a profile in it)."""
+    root = _base(root)
     return (root / ".env", root.parent / ".env", root.parent / "keys.txt")
 
 
@@ -48,11 +62,16 @@ def _parse(text: str) -> dict:
         match = ASSIGNMENT.match(line)
         if match:
             name, value = match.group(1).strip(), match.group(2).strip().strip('"').strip("'")
+            if name == "OPENAI_API_KEY" and AZURE_KEY.fullmatch(value):
+                name = "AZURE_OPENAI_API_KEY"
             if value:
                 found.setdefault(name, value)
             continue
         # A line holding only a token, as pasted from a provider's console.
         token = line.split()[0].strip('"').strip("'")
+        if AZURE_KEY.fullmatch(token):
+            found.setdefault("AZURE_OPENAI_API_KEY", token)
+            continue
         for prefix, name in PREFIXES:
             if token.startswith(prefix) and len(token) > len(prefix) + 8:
                 found.setdefault(name, token)
@@ -62,7 +81,9 @@ def _parse(text: str) -> dict:
 
 def load(root: Path) -> dict:
     """Every key this machine exposes, nearest source winning."""
-    found: dict = {name: os.environ[name] for name in NAMES if os.environ.get(name)}
+    found: dict = {name: os.environ[name] for name in NAMES + SETTINGS if os.environ.get(name)}
+    if AZURE_KEY.fullmatch(found.get("OPENAI_API_KEY", "")):
+        found.setdefault("AZURE_OPENAI_API_KEY", found.pop("OPENAI_API_KEY"))
     for path in _files(root):
         try:
             if path.exists():
@@ -93,14 +114,14 @@ VALID_TOKEN = re.compile(r"^[A-Za-z0-9._\-]{16,400}$")
 
 
 def managed_file(root: Path) -> Path:
-    return Path(root).resolve() / ".env"
+    return _base(root) / ".env"
 
 
 def source(root: Path, name: str) -> str | None:
     """Where the key in use comes from, as a label. Never the value."""
     if os.environ.get(name):
         return "environment"
-    root = Path(root).resolve()
+    root = _base(root)
     labels = {root / ".env": "saved in the app", root.parent / ".env": "Resume/.env",
               root.parent / "keys.txt": "Resume/keys.txt"}
     for path in _files(root):

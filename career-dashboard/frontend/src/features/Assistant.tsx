@@ -22,6 +22,7 @@ import {
   Mail,
   MessageSquare,
   Network,
+  Paperclip,
   Pencil,
   RefreshCw,
   RotateCcw,
@@ -39,8 +40,9 @@ import {
   XCircle,
 } from "lucide-react";
 import type { ComponentType } from "react";
-import { api, fileUrl, safeUrl } from "../api";
+import { API_BASE, api, fileUrl, safeUrl, uploadFile } from "../api";
 import { Badge, Modal, RichText } from "../components/UI";
+import QuestionCard from "../components/QuestionCard";
 import type {
   AssistantAgent,
   AssistantConversation,
@@ -50,13 +52,16 @@ import type {
   Run,
   Summary,
 } from "../types";
-import { tierTitle } from "../components/JobList";
+import { useTierTitles } from "../components/JobList";
 
 type Props = {
   data: Summary;
   refresh: () => Promise<void>;
   notify: (text: string, error?: boolean) => void;
   onJob: (id: string) => void;
+  /** A question another tab handed over ("Ask the assistant"); cleared once taken. */
+  asked?: { text: string; send: boolean; n: number } | null;
+  onAsked?: () => void;
 };
 
 /** What the front page offers: each is a real message the agent understands. */
@@ -194,6 +199,11 @@ export function exportMarkdown(title: string, messages: AssistantMessage[], now:
 }
 
 /** The one-tap answers a pending question accepts, so a yes never needs typing. */
+/** A suggestion ending in "…" to be completed: its text without the ellipsis, else null. */
+export function unfinished(text: string): string | null {
+  return /(…|\.\.\.)\s*$/.test(text) ? text.replace(/\s*(…|\.\.\.)\s*$/, " ") : null;
+}
+
 export function quickReplies(pending: AssistantOverview["pending"]): { label: string; send: string }[] {
   if (!pending) return [];
   if (pending.kind === "confirm_tool" || pending.kind === "confirm_applied") {
@@ -251,7 +261,7 @@ function greeting(now: Date = new Date()) {
   return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
 }
 
-export default function Assistant({ data, refresh, notify, onJob }: Props) {
+export default function Assistant({ data, refresh, notify, onJob, asked, onAsked }: Props) {
   const [overview, setOverview] = useState<AssistantOverview>();
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -271,6 +281,29 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
   const [away, setAway] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const boxRef = useRef<HTMLTextAreaElement>(null);
+  // A document about the candidate, read on the server; its text goes into the composer
+  // with a request to propose what is new, and each change still waits for a yes.
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [attaching, setAttaching] = useState(false);
+  async function attach(file: File) {
+    setAttaching(true);
+    try {
+      const r = await uploadFile<{ name: string; text: string; characters: number }>(API_BASE + "/v2/documents/text", file, file.name);
+      const intro = `Here is a document about me (${r.name}). Compare it with my profile and propose anything new or different for me to confirm; change nothing without my yes.\n\n`;
+      const text = intro + r.text.slice(0, 118000 - intro.length);
+      setDraft(text);
+      if (boxRef.current) {
+        boxRef.current.value = text;
+        grow(boxRef.current);
+        boxRef.current.focus();
+      }
+      notify(r.characters > 118000 ? `${r.name} is long: the first part is in the message box. Send it, then attach it again for the rest.` : `${r.name} is in the message box. Send it when ready.`);
+    } catch (e) {
+      notify((e as Error).message, true);
+    } finally {
+      setAttaching(false);
+    }
+  }
   const searchRef = useRef<HTMLInputElement>(null);
   // Which messages were still processing at the last poll: when one settles,
   // the rest of the app is refreshed so every tab shows what the chat changed.
@@ -551,6 +584,18 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
     else window.setTimeout(() => searchRef.current?.focus(), 0);
   }
 
+  // A question from another tab, taken once the thread has loaded so it lands after it. One
+  // that only reads is sent; one that would start work waits in the box, as does anything
+  // asked while a reply is still being worked on.
+  const askedN = asked?.n;
+  useEffect(() => {
+    if (!asked || !overview) return;
+    onAsked?.();
+    if (asked.send && !working && !sending) void send(asked.text);
+    else prompt(asked.text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askedN, !!overview]);
+
   /** A rail click pre-fills the composer and never sends: a tap on a list is not a request.
    *  A complete message is one Enter away; one that needs a job name waits for it. */
   function prompt(text: string) {
@@ -655,7 +700,7 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
             </div>
           </div>
           <div className="chat-bar-actions" role="toolbar" aria-label="Chat actions">
-            <button type="button" className="bar-button" onClick={() => void newChat()} title={`New chat (${mod}⇧O)`}>
+            <button type="button" className="bar-button" onClick={() => void newChat()} title={`New chat (${mac ? "⌘⇧O" : "Ctrl+Shift+O"})`}>
               <SquarePen size={15} />
               <span>New chat</span>
             </button>
@@ -804,6 +849,7 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
                     now={now}
                     jobTier={m.data.job_id ? jobs.get(m.data.job_id)?.sponsor_tier : undefined}
                     stopping={stopping && m.state === "processing"}
+                    latest={i === shown.length - 1 && !echo}
                   />
                 </Fragment>
               );
@@ -911,6 +957,27 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
               }}
             />
             <div className="chat-input-buttons">
+              <button
+                type="button"
+                className="chat-attach"
+                onClick={() => fileRef.current?.click()}
+                disabled={working || attaching}
+                aria-label="Add a document about you"
+                title="Add a document about you (Word, PDF or text): the assistant proposes what is new"
+              >
+                {attaching ? <LoaderCircle className="spin" size={16} /> : <Paperclip size={16} />}
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                hidden
+                accept=".docx,.pdf,.txt,.md"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) void attach(file);
+                }}
+              />
               {working && (
                 <button
                   type="button"
@@ -935,7 +1002,7 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
               <small className="muted">Long pastes are fine</small>
             ) : (
               <small className="muted">
-                <kbd>Enter</kbd> sends · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line · <kbd>{mod}⇧O</kbd> new chat · <kbd>{mod}K</kbd> search
+                <kbd>Enter</kbd> sends · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line · <kbd>{mac ? "⌘⇧O" : "Ctrl+Shift+O"}</kbd> new chat · <kbd>{mod}K</kbd> search
               </small>
             )}
             <label
@@ -1253,7 +1320,7 @@ export function AgentRail({
             </select>
           </label>
           {engine.moved_from && (
-            <small className="muted">{engine.moved_from} is not ready on this Mac, so {engine.label.split(" · ")[0]} answers the chat.</small>
+            <small className="muted">{engine.moved_from} is not ready on this machine, so {engine.label.split(" · ")[0]} answers the chat.</small>
           )}
           {runsElsewhere && (
             <small className={engine.runs.ready ? "muted" : "rail-warn"}>
@@ -1377,6 +1444,7 @@ export function Exchange({
   now,
   jobTier,
   stopping = false,
+  latest = false,
 }: {
   message: AssistantMessage;
   names: Map<string, string>;
@@ -1391,7 +1459,10 @@ export function Exchange({
   now: number;
   jobTier?: string | null;
   stopping?: boolean;
+  /** The newest exchange: only its open question gets answer buttons. */
+  latest?: boolean;
 }) {
+  const tierTitle = useTierTitles();
   const long = m.message.length > FOLD_AT;
   const shown = long && !expanded ? m.message.slice(0, FOLD_AT) + "…" : m.message;
   const working = m.state === "processing";
@@ -1409,6 +1480,12 @@ export function Exchange({
   const showSteps = stepsOpen ?? (working || failed);
   const stepSummary = m.steps.map((s) => s.label).filter((label, i, all) => all.indexOf(label) === i).slice(0, 3).join(" · ");
   const currentStep = working ? m.steps[m.steps.length - 1] : undefined;
+  // "Add these roles: …" is a template to finish, not a message: it goes to the composer.
+  const useSuggestion = (text: string) => {
+    const open = unfinished(text);
+    if (open !== null && onEdit) onEdit(open);
+    else onSend(text);
+  };
   return (
     <>
       <div className="chat-turn you">
@@ -1601,14 +1678,72 @@ export function Exchange({
                 </div>
               </div>
             )}
-            {!working && !!m.data.suggestions?.length && (
-              <div className="chat-suggestions">
-                {m.data.suggestions.map((s) => (
-                  <button key={s} type="button" className="chip" onClick={() => onSend(s)}>
-                    {s}
-                  </button>
+            {!working && !!m.data.cards?.length && (
+              <ul className="chat-cards" aria-label="Resumes in this answer">
+                {m.data.cards.map((card) => (
+                  <li key={card.job_id} className="chat-card-row">
+                    <FileText size={15} aria-hidden="true" />
+                    <span className="chat-card-name">
+                      <b>{card.company}</b> — {card.title}
+                      {card.revision != null && <small> · v{card.revision}</small>}
+                    </span>
+                    {card.tier && (
+                      <Badge
+                        tone={card.tier === "S" ? "green" : card.tier === "A" ? "lime" : "neutral"}
+                        title={tierTitle[card.tier as keyof typeof tierTitle]}
+                      >
+                        Tier {card.tier}
+                      </Badge>
+                    )}
+                    {(card.coverage != null || card.ats != null) && (
+                      <small className="chat-card-scores">
+                        {card.coverage != null && <>{card.coverage} coverage</>}
+                        {card.coverage != null && card.ats != null && " · "}
+                        {card.ats != null && <>{card.ats} ATS</>}
+                      </small>
+                    )}
+                    <span className="chat-card-actions">
+                      {card.pdf && (
+                        <a
+                          className="secondary"
+                          href={fileUrl(card.pdf)}
+                          download={card.company.replace(/\W+/g, "-") + "-resume.pdf"}
+                        >
+                          <Download size={14} /> PDF
+                        </a>
+                      )}
+                      <button type="button" className="secondary" onClick={() => onJob(card.job_id)}>
+                        Open
+                      </button>
+                    </span>
+                  </li>
                 ))}
-              </div>
+              </ul>
+            )}
+            {!working && !!m.data.suggestions?.length && (
+              latest && m.state === "needs_input" && m.data.intent === "agent_question" ? (
+                // The agent's question, answered like a terminal prompt: click or press 1–9, or type below.
+                <QuestionCard
+                  question={{
+                    id: m.id,
+                    text: m.response,
+                    options: m.data.suggestions.map((s) => ({ label: s, value: s })),
+                    multi: false,
+                    other: false,
+                    skippable: false,
+                  }}
+                  busy={false}
+                  onAnswer={(choices) => choices[0] && useSuggestion(choices[0])}
+                />
+              ) : (
+                <div className="chat-suggestions">
+                  {m.data.suggestions.map((s) => (
+                    <button key={s} type="button" className="chip" onClick={() => useSuggestion(s)}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )
             )}
           </div>
           {!working && (

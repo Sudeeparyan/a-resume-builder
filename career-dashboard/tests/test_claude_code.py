@@ -116,6 +116,8 @@ def test_prompt_goes_on_stdin_and_nested_session_markers_are_dropped(tmp_path, m
     assert "the prompt" not in " ".join(seen["cmd"])
     assert "CLAUDECODE" not in seen["env"]
     assert seen["timeout"] == claude_code.TIMEOUT["text"]
+    # UTF-8 both ways, never the Windows ANSI code page (a "→" in a posting would not encode).
+    assert seen["encoding"] == "utf-8" and seen["errors"] == "replace"
 
 
 def test_failures_become_plain_messages(tmp_path, monkeypatch):
@@ -249,34 +251,34 @@ def test_specialists_run_through_the_cli_and_are_schema_checked(tmp_path, monkey
 
     def run(prompt, schema, **options):
         seen.update(prompt=prompt, schema=schema, **options)
-        return {"role_family_matches": True, "seniority_suitable": True, "location_matches": True,
-                "hard_blockers": [], "reasons": ["analyst role"]}, {"input_tokens": 5, "output_tokens": 2}
+        return {"company": "Acme", "title": "Data Analyst", "location": "Austin, TX",
+                "url": ""}, {"input_tokens": 5, "output_tokens": 2}
 
     monkeypatch.setattr(claude_code, "run", run)
     team = AgentTeam(tmp_path, {"strong": ("claude_code", "sonnet"), "cheap": ("claude_code", "haiku")},
                      on_usage=recorded.append)
-    verdict = team.run("relevance_judge", {"posting": {"title": "Data Analyst"}, "candidate_summary": "BI"})
-    assert isinstance(verdict, schemas.RelevanceVerdict) and verdict.reasons == ["analyst role"]
+    verdict = team.run("posting_parser", {"posting_text": "Data Analyst at Acme, Austin, TX"})
+    assert isinstance(verdict, schemas.PostingFields) and verdict.company == "Acme"
     assert seen["model"] == "haiku" and seen["web"] is False
     assert "Data Analyst" in seen["prompt"] and "Data Analyst" not in seen["system"]
-    assert seen["schema"]["required"] and "role_family_matches" in seen["schema"]["properties"]
+    assert "company" in seen["schema"]["properties"]
     assert recorded[0]["provider"] == "claude_code" and recorded[0]["input_tokens"] == 5
 
-    monkeypatch.setattr(claude_code, "run", lambda *a, **k: ({"reasons": "not a list"}, {}))
+    monkeypatch.setattr(claude_code, "run", lambda *a, **k: ({"company": ["not", "text"]}, {}))
     with pytest.raises(AgentError, match="did not match its schema"):
-        team.run("relevance_judge", {})
+        team.run("posting_parser", {})
 
     def down(*a, **k):
         raise ValueError("Your Claude subscription's usage limit is reached.")
 
     monkeypatch.setattr(claude_code, "run", down)
     with pytest.raises(AgentError, match="usage limit"):
-        team.run("relevance_judge", {})
+        team.run("posting_parser", {})
 
 
 def test_the_hiring_manager_stays_isolated_on_the_local_runtime(tmp_path, monkeypatch):
-    seen = {}
-    monkeypatch.setattr(claude_code, "run", lambda prompt, schema, **o: (seen.update(prompt=prompt) or {
+    prompts = []
+    monkeypatch.setattr(claude_code, "run", lambda prompt, schema, **o: (prompts.append(prompt) or {
         "expected_skills": [], "expected_experience": [], "convincing_evidence": [],
         "interview_topics": [], "cannot_promise": "no shortlist"}, {}))
     team = AgentTeam(tmp_path, {"strong": ("claude_code", "sonnet"), "cheap": ("claude_code", "haiku")})
@@ -285,7 +287,9 @@ def test_the_hiring_manager_stays_isolated_on_the_local_runtime(tmp_path, monkey
     except AgentError as error:
         if "did not match" not in str(error):
             raise
-    assert set(json.loads(seen["prompt"])) == {"job_description", "public_company_research"}
+    assert set(json.loads(prompts[0])) == {"job_description", "public_company_research"}
+    # A re-ask after an answer of the wrong shape adds only the reason, never other data.
+    assert all(p.startswith(prompts[0]) and "YOUR PREVIOUS ANSWER WAS REJECTED" in p[len(prompts[0]):] for p in prompts[1:])
 
 
 # --- starting again from an empty job list ------------------------------------

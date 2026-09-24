@@ -5,7 +5,7 @@ import hashlib, json, re, threading, uuid
 from datetime import datetime, timezone, date
 from pathlib import Path
 from zoneinfo import ZoneInfo
-from backend.paths import TIMEZONE
+
 from backend.services.planning import plan
 from backend.services.postings import canonical_url, posting_key
 
@@ -28,18 +28,15 @@ AGENTS = [
     {'id': 'profile', 'name': 'Profile curator', 'reads': 'Profile entries, the evidence registry and your words about yourself', 'profile_access': True,
      'does': 'Turns what you tell it ("I finished the AWS course") into profile proposals that wait for your review, keeps the review states that gate new drafts, and records questions only you can answer in QUESTIONS-FOR-YOU.md.',
      'implementation': 'Revision-bound change sets in SQLite; the profile_curator specialist for plain-English requests; never writes data/context except the questions file', 'guide': 'backend/chat_changes.py'},
-    {'id': 'instruction_tracker', 'name': 'Instruction chat', 'reads': 'User messages and the selected draft', 'profile_access': True,
-     'does': 'Applies precise edits, captures profile facts for reconciliation and retains unresolved messages.',
-     'implementation': 'Rules and SQLite; zero AI calls', 'guide': 'backend/services/instruction_tracker.py'},
     {'id': 'resume_match', 'name': 'Independent resume matcher', 'reads': 'Finished PDF text and saved JD only', 'profile_access': False,
      'does': 'Scores document term coverage for free; optional cached AI review explains matches and gaps independently.',
      'implementation': 'Pure document scorer plus optional isolated Codex process', 'guide': 'backend/services/resume_match.py'},
     {
-        "id": "resume_advisor", "name": "Agent 1 · Resume advisor",
-        "reads": "Saved JD and recent public company research only", "profile_access": False,
-        "does": "Suggests resume priorities, convincing project evidence and skills; proposed projects remain ideas, never candidate claims.",
-        "implementation": "Two isolated Codex processes with dated sources; explicit opt-in; shared persistent stage cache",
-        "guide": "backend/workflows/agents/resume-advisor.md",
+        "id": "fit", "name": "Requirement check",
+        "reads": "The posting and your registered evidence (skills, projects, experience, education)", "profile_access": True,
+        "does": "Lists what each job asks for, quoting the posting's own sentence, and marks each item met, partial or missing with the evidence that shows it. The fit score, the tailor, resume coverage and the study plan all use this one list.",
+        "implementation": "The fit_analyst specialist on a free plan only (Kimi, Codex or Claude, never a paid key), verified in code: an excerpt must be in the posting and an evidence id in the registry; rules when no free plan is free",
+        "guide": "backend/services/fit.py",
     },
     {
         "id": "resume_tracker", "name": "Agent 2 · Resume tracker",
@@ -105,7 +102,7 @@ AGENTS = [
     {
         "id": "study_plan",
         "name": "Study planner",
-        "reads": "Saved JD, the match check's genuine gaps and registered skill/project titles",
+        "reads": "Saved JD, the requirement check's genuine gaps and registered skill/project titles",
         "profile_access": True,
         "does": "Writes study-plan.md for this company: what they will probe and what to learn before they call. Everything in it is a skill not yet held; it never reaches the resume.",
         "implementation": "One AI call without web; writes into the application folder",
@@ -140,19 +137,59 @@ AGENT_SWITCHES = [
      "description": "Finds new US postings that pass the sponsorship and never-re-apply gates. The 7am daily search uses this too."},
     {"id": "research", "label": "Company & hiring research", "uses_ai": True,
      "description": "Researches the employer, what the hiring manager will look for, and how your profile fits."},
-    {"id": "resume_advisor", "label": "Resume advice", "uses_ai": True,
-     "description": "Suggests which points, projects and skills to lead with for one job."},
     {"id": "study_plan", "label": "Study plan", "uses_ai": True,
      "description": "Writes the interview preparation notes for one company. Never touches the resume."},
     {"id": "resume_match", "label": "Independent resume review", "uses_ai": True,
      "description": "Reads only the finished PDF and the posting, then reports matches and gaps."},
-    {"id": "instruction_interpret", "label": "Resume chat", "uses_ai": True,
-     "description": "Turns your resume chat messages into edits on the draft."},
     {"id": "email", "label": "Gmail sync", "uses_ai": True,
      "description": "Reads Gmail for application confirmations and replies. Also runs on the mail schedule."},
     {"id": "resume_build", "label": "Resume build & ATS check", "uses_ai": False,
      "description": "Compiles the current draft into the one-page PDF and scores it."},
 ]
+
+
+def agents_for(root) -> list[dict]:
+    """The agent list as this profile's pages show it. The backup profile (its root holds
+    the code) keeps the wording above; another profile reads it in its own country's
+    terms: no H-1B index or US Letter page where they do not apply."""
+    if (Path(root) / "backend").is_dir():
+        return AGENTS
+    from backend.countries import pack_for
+
+    pack = pack_for(root)
+    # Gmail belongs to the backup profile (services/agents.mail_available).
+    out = [dict(agent) for agent in AGENTS if agent["id"] != "email"]
+    for agent in out:
+        if agent["id"] == "discovery":
+            agent["does"] = (agent["does"].replace("current US postings", f"current {pack.adjective} postings")
+                             .replace("in the four target families", "in the target role families"))
+        elif agent["id"] == "sponsorship" and pack.sponsor_index != "uscis":
+            cannot = (pack.data.get("discovery") or {}).get("cannot_hire") or "citizenship or a clearance"
+            agent.update(
+                name="Work-permit gate",
+                reads="Each posting's own words, the employer name and domain",
+                does=f"Excludes postings that refuse to support a work permit or require {cannot}, logging the exact "
+                     "sentence; ranks the rest A (says yes) or C (silent). Never excludes for silence.",
+                implementation="Deterministic patterns in data/config/sponsorship.yml; zero AI calls",
+            )
+        elif agent["id"] == "resume":
+            agent["does"] = agent["does"].replace("US Letter", pack.paper_label)
+    return out
+
+
+def agent_switches_for(root) -> list[dict]:
+    """AGENT_SWITCHES in this profile's terms (see agents_for)."""
+    if (Path(root) / "backend").is_dir():
+        return AGENT_SWITCHES
+    from backend.countries import pack_for
+
+    pack = pack_for(root)
+    out = [dict(switch) for switch in AGENT_SWITCHES if switch["id"] != "email"]
+    for switch in out:
+        if switch["id"] == "discovery":
+            switch["description"] = (f"Finds new {pack.adjective} postings that pass the work-permit and never-re-apply "
+                                     "gates. The daily search uses this too.")
+    return out
 
 
 def agent_switch_label(kind):
@@ -240,9 +277,18 @@ class CareerServices:
     def now():
         return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
-    @staticmethod
-    def today():
-        return datetime.now(ZoneInfo(TIMEZONE)).date().isoformat()
+    def today(self):
+        # The profile's own time zone (profile.yml candidate.timezone).
+        return datetime.now(ZoneInfo(self.w.timezone)).date().isoformat()
+
+    def gate(self, company, text, url="", location="", extra_sentences=None, employer_type=""):
+        """The sponsorship / work-permit gate with this profile's own rules and employer index."""
+        from backend.services import sponsorship
+
+        return sponsorship.evaluate(
+            company, text, url, location, extra_sentences=extra_sentences, employer_type=employer_type,
+            rules=sponsorship.rules_for(self.w.root), sponsor_index=sponsorship.index_for(self.w.root),
+        )
 
     def retire_malformed_skill_fragments(self, db):
         """Soft-retire fragments created by the former comma-based parser."""
@@ -332,7 +378,7 @@ class CareerServices:
             except Exception:  # noqa: BLE001 - an older database may lack the token columns
                 tokens = {}
         settings = []
-        for switch in AGENT_SWITCHES:
+        for switch in agent_switches_for(self.w.root):
             kind = switch["id"]
             stats = usage.get(kind) or {}
             runs = stats.get("runs") or 0
@@ -356,8 +402,9 @@ class CareerServices:
         evidence = self.w.evidence()
 
         def insert(id, kind, title, summary, data, source):
+            # An entry removed on the Profile page stays in the registry on hold as the record.
             db.execute(
-                "INSERT OR IGNORE INTO knowledge(id,kind,title,summary,data,source,updated_at) VALUES(?,?,?,?,?,?,?)",
+                "INSERT OR IGNORE INTO knowledge(id,kind,title,summary,data,source,deleted,updated_at) VALUES(?,?,?,?,?,?,?,?)",
                 (
                     id,
                     kind,
@@ -365,6 +412,7 @@ class CareerServices:
                     str(summary),
                     json.dumps(data, ensure_ascii=False),
                     source,
+                    1 if isinstance(data, dict) and data.get("profile_removed") else 0,
                     self.now(),
                 ),
             )
@@ -446,77 +494,150 @@ class CareerServices:
 
     def save_knowledge(self, item, id=None):
         kind = item["kind"]
-        title = item["title"].strip()
-        summary = item.get("summary", "").strip()
-        if kind not in KINDS or not title:
+        fields = item.get("fields")
+        title = (item.get("title") or "").strip()
+        summary = (item.get("summary") or "").strip()
+        if kind not in KINDS or (fields is None and not title):
             raise ValueError("Choose a category and enter a title")
         if len(title) > 250 or len(summary) > 30000:
             raise ValueError("Profile entry is too long")
-        with self.w.connect() as db:
-            db.execute("BEGIN IMMEDIATE")
-            old = (
-                db.execute("SELECT * FROM knowledge WHERE id=?", (id,)).fetchone()
-                if id
-                else None
-            )
-            if id and not old:
-                raise ValueError("Profile entry not found")
-            if old and item.get("revision") != old["revision"]:
-                raise ValueError("This entry changed elsewhere. Reload before saving.")
-            key = id or "user:" + uuid.uuid4().hex[:16]
-            data = item.get("data", json.loads(old["data"]) if old else {})
-            if not isinstance(data, dict):
-                raise ValueError("Entry details must be an object")
-            if old and old["kind"] == "personal":
-                data = {**data, "value": summary}
-            source = old["source"] if old else "User supplied in Profile"
-            revision = old["revision"] + 1 if old else 1
-            db.execute(
-                "INSERT INTO knowledge VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind,title=excluded.title,summary=excluded.summary,data=excluded.data,revision=excluded.revision,deleted=0,review_state=excluded.review_state,updated_at=excluded.updated_at",
-                (
-                    key,
-                    kind,
-                    title,
-                    summary,
-                    json.dumps(data, ensure_ascii=False),
-                    source,
-                    revision,
-                    0,
-                    "user_updated",
-                    self.now(),
-                ),
-            )
-            self.w.record_event(
-                db,
-                "profile_entry_saved",
-                entry_id=key,
-                before=dict(old) if old else None,
-                after=item,
-            )
-            self.bump_profile_revision(db)
+        sync = synced = None
+        try:
+            with self.w.connect() as db:
+                db.execute("BEGIN IMMEDIATE")
+                old = (
+                    db.execute("SELECT * FROM knowledge WHERE id=?", (id,)).fetchone()
+                    if id
+                    else None
+                )
+                if id and not old:
+                    raise ValueError("Profile entry not found")
+                if old and item.get("revision") != old["revision"]:
+                    raise ValueError("This entry changed elsewhere. Reload before saving.")
+                key = id or "user:" + uuid.uuid4().hex[:16]
+                source = old["source"] if old else "User supplied in Profile"
+                review_state = "user_updated"
+                if fields is not None:
+                    # A Profile form save: the named fields decide title, summary and data together.
+                    from backend.services.profile_fields import apply_fields
+                    from backend.services.profile_sync import ProfileSync
+
+                    if old and old["kind"] != kind:
+                        raise ValueError("A saved entry keeps its category. Add a new entry instead.")
+                    current = {**dict(old), "data": json.loads(old["data"])} if old else None
+                    title, summary, data = apply_fields(kind, fields, current)
+                    if not title:
+                        raise ValueError("Choose a category and enter a title")
+                    if len(title) > 250 or len(summary) > 30000:
+                        raise ValueError("Profile entry is too long")
+                    # Annie's own form save is her record of the fact: it goes everywhere now,
+                    # with no review step. Changes from the chat or Studio still wait for Confirm.
+                    sync = ProfileSync(self, db)
+                    data = sync.row_saved(
+                        {"id": key, "kind": kind, "title": title, "summary": summary, "data": data, "source": source},
+                        current["data"] if current else None,
+                    )
+                    review_state = "registered"
+                else:
+                    data = item.get("data", json.loads(old["data"]) if old else {})
+                if not isinstance(data, dict):
+                    raise ValueError("Entry details must be an object")
+                if fields is None and old and old["kind"] == "personal":
+                    data = {**data, "value": summary}
+                revision = old["revision"] + 1 if old else 1
+                db.execute(
+                    "INSERT INTO knowledge VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind,title=excluded.title,summary=excluded.summary,data=excluded.data,revision=excluded.revision,deleted=0,review_state=excluded.review_state,updated_at=excluded.updated_at",
+                    (
+                        key,
+                        kind,
+                        title,
+                        summary,
+                        json.dumps(data, ensure_ascii=False),
+                        source,
+                        revision,
+                        0,
+                        review_state,
+                        self.now(),
+                    ),
+                )
+                self.w.record_event(
+                    db,
+                    "profile_entry_saved",
+                    entry_id=key,
+                    before=dict(old) if old else None,
+                    after=item,
+                )
+                self.bump_profile_revision(db)
+                if sync:
+                    synced = sync.finish()
+                    sync.write()
+        except Exception:
+            if sync:
+                sync.restore()
+            raise
+        if sync:
+            sync.done()
         self.export_profile()
         self.w.export_tracking()
-        return next(i for i in self.knowledge() if i["id"] == key)
+        saved = next(i for i in self.knowledge() if i["id"] == key)
+        return {**saved, "synced": synced} if sync else saved
 
-    def delete_knowledge(self, id):
+    def delete_knowledge(self, id, propagate=False):
+        """Remove an entry. From the Profile page (propagate) it leaves every file and draft
+        at once; from the chat or the CLI it waits for Confirm like any other suggestion."""
+        sync = synced = None
+        try:
+            with self.w.connect() as db:
+                db.execute("BEGIN IMMEDIATE")
+                old = db.execute(
+                    "SELECT * FROM knowledge WHERE id=? AND deleted=0", (id,)
+                ).fetchone()
+                if not old:
+                    raise ValueError("Profile entry not found")
+                if propagate:
+                    from backend.services.profile_fields import label_for
+                    from backend.services.profile_sync import ProfileSync
+
+                    row = {**dict(old), "data": json.loads(old["data"])}
+                    sync = ProfileSync(self, db)
+                    sync.row_removed(row, label_for(row))
+                db.execute(
+                    "UPDATE knowledge SET deleted=1,revision=revision+1,review_state=?,updated_at=? WHERE id=?",
+                    ("registered" if propagate else "user_updated", self.now(), id),
+                )
+                self.w.record_event(
+                    db, "profile_entry_removed", entry_id=id, before=dict(old)
+                )
+                self.bump_profile_revision(db)
+                if sync:
+                    synced = sync.finish()
+                    sync.write()
+        except Exception:
+            if sync:
+                sync.restore()
+            raise
+        if sync:
+            sync.done()
+        self.export_profile()
+        self.w.export_tracking()
+        return {"deleted": True, "synced": synced}
+
+    def restore_knowledge(self, id):
+        """Keep an entry whose removal was suggested but not confirmed."""
         with self.w.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             old = db.execute(
-                "SELECT * FROM knowledge WHERE id=? AND deleted=0", (id,)
+                "SELECT * FROM knowledge WHERE id=? AND deleted=1 AND review_state='user_updated'", (id,)
             ).fetchone()
             if not old:
-                raise ValueError("Profile entry not found")
+                raise ValueError("This entry is not waiting to be removed. Reload the Profile.")
             db.execute(
-                "UPDATE knowledge SET deleted=1,revision=revision+1,review_state='user_updated',updated_at=? WHERE id=?",
+                "UPDATE knowledge SET deleted=0,revision=revision+1,updated_at=? WHERE id=?",
                 (self.now(), id),
             )
-            self.w.record_event(
-                db, "profile_entry_removed", entry_id=id, before=dict(old)
-            )
-            self.bump_profile_revision(db)
-        self.export_profile()
-        self.w.export_tracking()
-        return {"deleted": True}
+            self.w.record_event(db, "profile_entry_kept", entry_id=id)
+        # Kept as it stands now: confirming it writes any other pending wording through too.
+        return self.reconcile_knowledge([id])
 
     def pending_knowledge(self):
         """Entries edited by the user (including removals) that still block new drafts."""
@@ -527,31 +648,60 @@ class CareerServices:
         ]
 
     def reconcile_knowledge(self, ids=None):
-        """Confirm reviewed profile edits so new drafts can be created again.
+        """Confirm suggested profile changes so they apply everywhere.
 
-        Every edit, removal or Studio capture parks an entry in 'user_updated', and
-        profile_dirty() blocks new resumes until the user has looked at it. This is
-        that review step: it only changes review_state, never the wording or the
-        evidence registry.
+        Changes from the Profile chat, the assistant, Resume Studio or the CLI park an
+        entry in 'user_updated', and profile_dirty() blocks new resumes until Annie has
+        looked at it. Confirming is her approval: the entry, as the Profile page shows
+        it, is written through to the YAML files, the base resume and open drafts
+        (profile_sync), exactly like a save from the Profile form.
         """
+        from backend.services.profile_fields import apply_fields, fields_for, label_for
+        from backend.services.profile_sync import ProfileSync
+
         pending = self.pending_knowledge()
         chosen = [p for p in pending if ids is None or p["id"] in set(ids)]
         if ids is not None and len(chosen) != len(set(ids)):
             raise ValueError("Some entries are no longer pending. Reload the Profile and try again.")
         if not chosen:
             return {"reconciled": [], "profile_dirty": self.profile_dirty(), "revision": self.profile_revision()}
-        with self.w.connect() as db:
-            db.execute("BEGIN IMMEDIATE")
-            for entry in chosen:
-                db.execute(
-                    "UPDATE knowledge SET review_state='registered',updated_at=? WHERE id=? AND review_state='user_updated'",
-                    (self.now(), entry["id"]),
-                )
-            self.w.record_event(db, "profile_reconciled", entry_ids=[e["id"] for e in chosen])
-            self.bump_profile_revision(db)
+        sync = synced = None
+        try:
+            with self.w.connect() as db:
+                db.execute("BEGIN IMMEDIATE")
+                sync = ProfileSync(self, db)
+                for entry in chosen:
+                    row = db.execute("SELECT * FROM knowledge WHERE id=?", (entry["id"],)).fetchone()
+                    item = {**dict(row), "data": json.loads(row["data"])}
+                    label = label_for(item)
+                    try:
+                        if item["deleted"]:
+                            sync.row_removed(item, label)
+                            data = item["data"]
+                        else:
+                            # What the page shows for the entry is what gets recorded.
+                            _, _, shown = apply_fields(item["kind"], fields_for(item), item)
+                            data = sync.row_saved({**item, "data": shown}, item["data"], from_form=False)
+                    except ValueError as error:
+                        message = str(error)
+                        raise ValueError(message if message.startswith(label) else f"{label}: {message}") from None
+                    db.execute(
+                        "UPDATE knowledge SET data=?,review_state='registered',updated_at=? WHERE id=? AND review_state='user_updated'",
+                        (json.dumps(data, ensure_ascii=False), self.now(), entry["id"]),
+                    )
+                self.w.record_event(db, "profile_reconciled", entry_ids=[e["id"] for e in chosen])
+                self.bump_profile_revision(db)
+                synced = sync.finish()
+                sync.write()
+        except Exception:
+            if sync:
+                sync.restore()
+            raise
+        sync.done()
         self.export_profile()
         self.w.export_tracking()
-        return {"reconciled": [e["id"] for e in chosen], "profile_dirty": self.profile_dirty(), "revision": self.profile_revision()}
+        return {"reconciled": [e["id"] for e in chosen], "profile_dirty": self.profile_dirty(),
+                "revision": self.profile_revision(), "synced": synced}
 
     def export_profile(self):
         from career import atomic_write
@@ -671,7 +821,7 @@ class CareerServices:
         """
         from backend.services import reapply, sponsorship
         title = values.get("title", values.get("role", ""))
-        verdict = verdict or sponsorship.evaluate(
+        verdict = verdict or self.gate(
             values["company"], values.get("description", ""), values.get("url", ""), values.get("location", ""),
             extra_sentences=[values.get("restriction_quote", "")] if values.get("restriction_quote") else None,
             employer_type=values.get("employer_type", ""),
@@ -805,7 +955,7 @@ class CareerServices:
         """Re-run the gate on a saved job. If the posting now refuses, it moves to Excluded."""
         from backend.services import sponsorship
         job = self.w.get_job(job_id)
-        verdict = sponsorship.evaluate(job["company"], job.get("description", ""), job.get("url", ""), job.get("location", ""))
+        verdict = self.gate(job["company"], job.get("description", ""), job.get("url", ""), job.get("location", ""))
         if sponsorship.overridden(job.get("sponsor_evidence"), verdict):
             return {"excluded": False, "job": job, "note": "You restored this posting after reviewing that sentence, so it stays."}
         if verdict.excluded:
@@ -868,7 +1018,17 @@ class CareerServices:
         row = dict(row)
         if row.get("restored_at"):
             raise ValueError("This posting was already restored")
-        override = Verdict(tier="C", screen=Screen("KEEP", "silent", "Restored by Annie after review; the exclusion was judged wrong", sentence=row["sentence"]), restored=True)
+        from backend.services.sponsorship import resolve_tier, rules_for
+
+        # The exclusion is overruled, but the employer's ranking signals still count: a university
+        # stays S (cap-exempt), a proven sponsor stays B. (Restores used to land as C every time.)
+        signals = self.gate(row["company"], row["description"] or "", row["url"] or "", row["location"] or "")
+        screen = Screen("KEEP", "silent", "Restored after review; the exclusion was judged wrong", sentence=row["sentence"])
+        override = Verdict(tier=resolve_tier(screen, signals.cap_exempt, signals.h1b_approvals), screen=screen,
+                           cap_exempt=signals.cap_exempt, cap_exempt_reason=signals.cap_exempt_reason,
+                           h1b_found=signals.h1b_found, h1b_matched_name=signals.h1b_matched_name,
+                           h1b_approvals=signals.h1b_approvals, h1b_years=signals.h1b_years, everify=signals.everify,
+                           restored=True, tier_labels=rules_for(self.w.root).get("tier_labels") or {})
         # Mark it restored first so the never-re-apply check does not see its own record.
         with self.w.connect() as db:
             db.execute("UPDATE excluded_postings SET restored_at=? WHERE id=?", (self.now(), excluded_id))
@@ -915,9 +1075,14 @@ class CareerServices:
             ),
             reverse=True,
         )
+        from backend.services.agents import GMAIL_ONLY_BACKUP, mail_available
+
+        available = mail_available(self.w.root)
         return {
             "connection": self.pref("gmail", {"connected": False}),
             "messages": rows,
+            "available": available,
+            **({} if available else {"note": GMAIL_ONLY_BACKUP}),
         }
 
     def ingest_mail(self, batch):
@@ -951,7 +1116,7 @@ class CareerServices:
                 if (
                     m.get("submission_date")
                     and date.fromisoformat(m["submission_date"])
-                    > timestamp.astimezone(ZoneInfo(TIMEZONE)).date()
+                    > timestamp.astimezone(ZoneInfo(self.w.timezone)).date()
                 ):
                     raise ValueError("Submission date cannot be after the message")
                 job_id = m.get("job_id") or None
@@ -1175,7 +1340,7 @@ class CareerServices:
                 status = job["status"]
             received = (
                 datetime.fromisoformat(m["received_at"].replace("Z", "+00:00"))
-                .astimezone(ZoneInfo(TIMEZONE))
+                .astimezone(ZoneInfo(self.w.timezone))
                 .isoformat()
             )
             # Every confirmed outcome establishes an application record, but only an
@@ -1408,7 +1573,7 @@ class CareerServices:
             if draft:
                 preview_file = self.w.root / draft["folder"] / "preview.json"
                 if preview_file.exists():
-                    preview = json.loads(preview_file.read_text())
+                    preview = json.loads(preview_file.read_text(encoding="utf-8"))
                     pdf = self.w.root / "data/output" / preview["path"] / "resume.pdf"
                     if pdf.exists():
                         path = str(pdf.relative_to(self.w.root / "data/output"))
@@ -1492,7 +1657,7 @@ class CareerServices:
             "goals": self.goals(),
             "mail": self.mail(),
             "runs": self.runs(),
-            "agents": AGENTS,
+            "agents": agents_for(self.w.root),
             "profile_dirty": self.profile_dirty(),
             "counts": {
                 "saved": len(jobs),

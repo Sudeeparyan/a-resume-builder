@@ -1,4 +1,6 @@
-"""Deterministic posting freshness, relevance, legitimacy and batch selection."""
+"""Deterministic posting freshness, hard relevance gates, legitimacy and batch selection.
+
+The fit score itself comes from the job's verified requirement matrix (services/fit.py)."""
 
 from __future__ import annotations
 
@@ -8,6 +10,7 @@ import re
 import socket
 from datetime import datetime, timedelta, timezone
 from html import unescape
+from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
@@ -108,21 +111,59 @@ def years_required(description: str) -> int | None:
     return min(found) if found else None
 
 
-def _track_regexes():
-    """Title regex per track (A-D), built from profile.yml role_tracks signals + target titles."""
+def _load_profile(root=None) -> dict:
     try:
         import yaml
         from backend.paths import CONFIG
-        profile = yaml.safe_load((CONFIG / "profile.yml").read_text()) or {}
+        path = (Path(root) / "data/config/profile.yml") if root else (CONFIG / "profile.yml")
+        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except Exception:  # noqa: BLE001 - config missing in a bare test workspace
-        profile = {}
+        return {}
+
+
+def _track_regexes(profile: dict | None = None):
+    """Title regex per track (A-D), built from profile.yml role_tracks signals + target titles."""
+    profile = _load_profile() if profile is None else profile
     titles = [str(t) for group in ("primary", "secondary") for t in (profile.get("target_roles", {}) or {}).get(group, [])]
     signals = [str(sig) for track in profile.get("role_tracks", []) or [] for sig in track.get("signals", [])]
     words = titles + signals or ["data engineer", "machine learning", "software engineer", "embedded"]
     return re.compile(r"(?i)\b(?:" + "|".join(re.escape(w) for w in sorted(set(words), key=len, reverse=True)) + r")\b")
 
 
+# Annie's (the default profile's) role pattern; a workspace uses its own (ProfileRules).
 SUPPORTED_ROLES = _track_regexes()
+
+
+class ProfileRules:
+    """What one profile's screens read from its own profile.yml, re-read when the file changes."""
+
+    _cache: dict[str, tuple[int, "ProfileRules"]] = {}
+
+    def __init__(self, profile: dict):
+        self.roles = _track_regexes(profile)
+        targets = profile.get("target_roles") or {}
+        self.max_years = int(targets.get("max_years_required") or 4)
+        scoring = profile.get("scoring") or {}
+        # "Annie holds a Master's": the highest degree, for the PhD blocker's wording.
+        self.degree = str(scoring.get("highest_degree") or "a Master's")
+        self.name = str((profile.get("candidate") or {}).get("preferred_name") or "").strip() or "The candidate"
+        self.role_blocker = str(
+            scoring.get("role_blocker")
+            or "Role does not match one of the four target families (data, ML/AI, software, embedded/test)."
+        )
+
+    @classmethod
+    def of(cls, root) -> "ProfileRules":
+        path = Path(root) / "data/config/profile.yml"
+        try:
+            stamp = path.stat().st_mtime_ns
+        except OSError:
+            stamp = 0
+        cached = cls._cache.get(str(path))
+        if not cached or cached[0] != stamp:
+            cached = (stamp, cls(_load_profile(root)))
+            cls._cache[str(path)] = cached
+        return cached[1]
 CLOSED = re.compile(
     r"\b(job|position|role|vacancy|requisition|posting)\b.{0,55}\b(closed|expired|filled|no longer available|not accepting applications)\b|\bno longer accepting applications\b",
     re.I | re.S,
@@ -142,11 +183,6 @@ def normalize_company(name: str) -> str:
 
 def company_id(name: str) -> str:
     return "company-" + hashlib.sha256(normalize_company(name).encode()).hexdigest()[:16]
-
-
-def _terms(text: str) -> set[str]:
-    stop = {"and", "the", "with", "for", "from", "that", "this", "your", "our", "you", "are"}
-    return {w for w in re.findall(r"[a-z][a-z0-9+#.-]{2,}", text.casefold()) if w not in stop}
 
 
 def _host_matches_company(url: str, company: str) -> bool:
@@ -240,7 +276,7 @@ class JobQualityService:
         refusal = None
         if state == "active" and text and job["status"] in {"saved", "prepared"}:
             from backend.services import sponsorship
-            verdict = sponsorship.evaluate(job["company"], text, job["url"], job.get("location", ""))
+            verdict = self.s.gate(job["company"], text, job["url"], job.get("location", ""))
             if verdict.excluded and not sponsorship.overridden(job.get("sponsor_evidence"), verdict):
                 refusal = verdict
                 evidence.append(f'The posting now says: "{verdict.screen.sentence}" It moved to Excluded roles.')
@@ -299,65 +335,78 @@ class JobQualityService:
             ).fetchall()
         return [{**dict(row), "evidence": json.loads(row["evidence"])} for row in rows]
 
-    def relevance(self, posting: dict, profile_text: str = "") -> dict:
+    def blockers(self, posting: dict) -> list[str]:
+        """The hard gates that need no AI: place, seniority, role family, years, PhD, a real posting, sponsorship."""
         title = str(posting.get("title", ""))
         location = str(posting.get("location", ""))
         description = str(posting.get("description", ""))
-        full = f"{title}\n{description}"
         blockers = []
-        us_ok = is_us_location(location)
+        # This profile's own country, targets and wording (profile.yml + its country pack).
+        from backend.countries import pack_for
+        pack = pack_for(self.w.root)
+        rules = ProfileRules.of(self.w.root)
         # A bare "Remote" is not a refusal; it earns no location points and gets checked at research time.
-        bare_remote = re.fullmatch(r"(?i)\s*remote\s*", location or "") is not None
-        if not us_ok and not bare_remote:
-            blockers.append("Location is not in the United States (or US-remote). Only US roles are pursued.")
+        if not pack.location_ok(location) and not pack.open_remote(location):
+            blockers.append(pack.text("location_blocker"))
         if SENIORITY_BLOCK.search(title):
             blockers.append("Seniority in the title (Senior/Staff/Lead/Principal/Manager) is outside the entry-level target.")
-        if not SUPPORTED_ROLES.search(title):
-            blockers.append("Role does not match one of the four target families (data, ML/AI, software, embedded/test).")
+        if not rules.roles.search(title):
+            blockers.append(rules.role_blocker)
         years = years_required(description)
-        if years and years > 4:
-            blockers.append(f"The posting asks for {years}+ years of experience; the profile caps at 4.")
+        if years and years > rules.max_years:
+            blockers.append(f"The posting asks for {years}+ years of experience; the profile caps at {rules.max_years}.")
         if requires_phd(title, description):
-            blockers.append("The posting requires a PhD; Annie holds a Master's.")
+            blockers.append(f"The posting requires a PhD; {rules.name} holds {rules.degree}.")
         if len(description.strip()) < 80 or not str(posting.get("url", "")).startswith(("http://", "https://")):
             blockers.append("A full job description and real application route are required.")
-        from backend.services.sponsorship import screen as sponsorship_screen
-        gate = sponsorship_screen(full)
+        from backend.services.sponsorship import rules_for, screen as sponsorship_screen
+        gate = sponsorship_screen(title + "\n" + description, rules_for(self.w.root))
         if gate.verdict == "EXCLUDED":
             blockers.append(f"Sponsorship gate: {gate.reason_label}. Posting says: \"{gate.sentence}\"")
-        profile_terms = _terms(profile_text)
-        jd_terms = _terms(full)
-        overlap = len(profile_terms & jd_terms) / max(1, min(30, len(jd_terms)))
-        requirement = min(40, round(overlap * 55))
-        role = 25 if SUPPORTED_ROLES.search(title) and not SENIORITY_BLOCK.search(title) else 0
-        place = 15 if us_ok else 0
-        professional_markers = {"python", "sql", "pipeline", "streaming", "pytorch", "aws", "airflow", "kafka", "c++", "c#", "labview", "embedded", "testing"}
-        professional = min(15, 3 * len(professional_markers & jd_terms & profile_terms))
-        domains = {"medical", "healthcare", "clinical", "device", "insurance", "research", "manufacturing", "iot"}
-        domain = min(5, len(domains & jd_terms & profile_terms) * 2)
-        score = requirement + role + place + professional + domain
+        return blockers
+
+    def relevance(self, posting: dict, profile_text: str = "", analysis: dict | None = None, cat: dict | None = None) -> dict:
+        """Hard gates first, then the fit from the job's verified requirement matrix (services/fit.py).
+
+        ``analysis`` is a matrix already made for this posting (by AI on a free plan); without
+        one the rules path scores it from the posting's own words. ``profile_text`` is extra
+        registered profile wording the rules path may count as evidence.
+        """
+        from backend.services import fit
+        from backend.services.sponsorship import rules_for, screen as sponsorship_screen
+
+        blockers = self.blockers(posting)
+        analysis = analysis or fit.analyse(self.s, posting, cat=cat, profile_text=profile_text)
+        for blocker in analysis["matrix"]["hard_blockers"]:
+            blockers.append(f"{blocker['reason'][:1].upper() + blocker['reason'][1:]}. Posting says: \"{blocker['excerpt'][:200]}\"")
+        score = analysis["score"]
+        eligible = not blockers and score >= fit.FIT_THRESHOLD and analysis["must_have_ok"]
+        why = "; ".join(blockers)
+        if not why and not eligible:
+            must = analysis["parts"]["required"]
+            why = (f"Meets only {must['met']} of {must['total']} must-haves" if not analysis["must_have_ok"]
+                   else f"Fit {score}/100 is below {fit.FIT_THRESHOLD}") + " (" + fit.brief(analysis) + ")."
+        gate = sponsorship_screen(str(posting.get("title", "")) + "\n" + str(posting.get("description", "")),
+                                  rules_for(self.w.root))
         return {
             "score": score,
-            "eligible": not blockers and score >= 70,
-            "components": {
-                "requirement_evidence": requirement,
-                "role_seniority": role,
-                "location": place,
-                "professional_fit": professional,
-                "domain": domain,
-            },
+            "eligible": eligible,
+            "components": analysis["components"],
             "blockers": blockers,
+            "why": why,
             "sponsorship": {"verdict": gate.verdict, "reason": gate.reason, "sentence": gate.sentence},
-            "threshold": 70,
+            "threshold": fit.FIT_THRESHOLD,
+            "fit": analysis,
         }
 
     def assess_company(self, company: str, posting_url: str, sources: list[dict], findings: list[str], red_flags: list[str], *, size_category="unknown", employee_min=None, employee_max=None, sponsorship_state="unknown", override_reason="") -> dict:
         cid = self.ensure_company(company)
         source_urls = [str(source.get("url", "")) for source in sources if source.get("url")]
         owned_or_ats = _host_matches_company(posting_url, company)
+        # A cited registry or company-page URL is the record itself, so sources count as much as notes.
         legal_presence = any(
-            term in " ".join(findings).casefold()
-            for term in ("company register", "secretary of state", "sec.gov", "edgar", "opencorporates", "legal entity", "trading presence", "registered", "incorporated", "bbb.org", "linkedin.com/company", "crunchbase")
+            term in " ".join(findings + source_urls).casefold()
+            for term in ("company register", "secretary of state", "sec.gov", "edgar", "opencorporates", "legal entity", "trading presence", "registered", "incorporated", "bbb.org", "linkedin.com/company", "crunchbase", "uscis h-1b employer data hub")
         )
         detected = list(red_flags)
         if FRAUD.search(" ".join(findings + red_flags)):
@@ -387,17 +436,27 @@ class JobQualityService:
         self.s.sync_projections()
         return {"company_id": cid, "state": state, "sources": sources, "findings": findings, "red_flags": detected, "checked_at": checked}
 
-    def balanced_five(self, candidates: list[dict]) -> dict:
-        """Return an honest 2 startup / 1 mid / 2 large subset. Mid and large companies must be tier S/A/B (cap-exempt, says yes, or proven sponsor); startups may be tier C."""
+    def balanced_five(self, candidates: list[dict], total: int = 5) -> dict:
+        """Return an honest 2 startup / 1 mid / 2 large subset, scaled to ``total`` jobs. Mid and large companies must be tier S/A/B (cap-exempt, says yes, or proven sponsor); startups may be tier C.
+
+        That sponsor-record rule needs a sponsor history to check against (the US pack's
+        USCIS index). A country without one (Ireland) has no proven-sponsor tier, so there
+        the gate's own verdict is the rule: a posting that refuses a permit is already out."""
+        from backend.countries import pack_for
+
+        records = bool(pack_for(self.w.root).sponsor_index)
         valid = [
             item for item in candidates
             if item.get("legitimacy_state") == "verified" and item.get("relevance", {}).get("eligible")
         ]
         selected = []
         shortages = []
+        startups, mids = round(total * 2 / 5), round(total / 5)
         for category, count, sponsorship_required in (
-            ("startup", 2, False), ("mid", 1, True), ("large", 2, True)
+            ("startup", startups, False), ("mid", mids, records), ("large", total - startups - mids, records)
         ):
+            if count <= 0:
+                continue
             pool = [
                 item for item in valid
                 if item.get("size_category") == category

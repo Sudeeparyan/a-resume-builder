@@ -110,3 +110,12 @@ def test_cli_add_goes_through_the_gate(service, tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["career.py", "add", "--file", str(silent)])
     career.main()
     assert json.loads(capsys.readouterr().out)["job"]["sponsor_tier"] in {"S", "A", "B", "C"}
+
+
+def test_a_restored_posting_keeps_its_real_tier(service):
+    """Johns Hopkins was restored as tier C in the live test (24 Sep 2026); a university is S."""
+    note = ("No visa-sponsorship or citizenship sentence was visible, but the posting says: " + REFUSAL)
+    service.add_posting(posting(company="Hopkins State University", url="https://jobs.hopkins-state.edu/1", extra=note))
+    [row] = service.excluded()
+    restored = service.restore_excluded(row["id"])["job"]
+    assert restored["sponsor_tier"] == "S"

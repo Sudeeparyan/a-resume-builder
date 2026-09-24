@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile and fail-closed validate Annie's base or tailored LaTeX resume.
+"""Compile and fail-closed validate a candidate's base or tailored LaTeX resume.
 
 Page count, paper, fonts, sections, header and the stable facts come from
 backend/resume_contract.py (profile.yml + evidence.yml), never from this file.
@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -22,11 +23,15 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from backend.resume_contract import load_contract  # noqa: E402
+from backend.resume_contract import contract_for, load_contract  # noqa: E402
+from backend.pdf_compiler import tectonic_executable  # noqa: E402
 
+# ROOT is where the code lives; DATA_ROOT is the workspace whose resume is checked.
+# They are the same for Annie; --workspace points DATA_ROOT at another profile.
+DATA_ROOT = ROOT
 CONTRACT = load_contract()
-BASE_TEMPLATE = (ROOT / "data/templates/resume-base.tex").resolve()
-EVIDENCE_PATH = ROOT / "data/context/evidence.yml"
+BASE_TEMPLATE = (DATA_ROOT / "data/templates/resume-base.tex").resolve()
+EVIDENCE_PATH = DATA_ROOT / "data/context/evidence.yml"
 PDF_INSPECTOR = ROOT / "backend/scripts/pdf_inspect.swift"
 MIN_CHARS = 900
 
@@ -58,6 +63,18 @@ PROHIBITED_LAYOUT_PATTERNS = {
 
 # Every number the PDF may show must already appear in registered wording.
 ALLOWED_VISIBLE_NUMBERS = set(CONTRACT.allowed_visible_numbers)
+
+
+def configure(workspace) -> None:
+    """Validate the resume of the workspace rooted at `workspace` (a profile folder)."""
+    global DATA_ROOT, CONTRACT, BASE_TEMPLATE, EVIDENCE_PATH, REQUIRED_SECTIONS, UNSAFE_PATTERNS, ALLOWED_VISIBLE_NUMBERS
+    DATA_ROOT = Path(workspace).resolve()
+    CONTRACT = contract_for(DATA_ROOT)
+    BASE_TEMPLATE = (DATA_ROOT / "data/templates/resume-base.tex").resolve()
+    EVIDENCE_PATH = DATA_ROOT / "data/context/evidence.yml"
+    REQUIRED_SECTIONS = tuple(CONTRACT.required_sections)
+    UNSAFE_PATTERNS = dict(CONTRACT.unsafe_patterns)
+    ALLOWED_VISIBLE_NUMBERS = set(CONTRACT.allowed_visible_numbers)
 
 
 def sha256(path: Path) -> str:
@@ -154,6 +171,19 @@ def expand_zero_argument_macros(source: str, body: str) -> str:
     return expanded
 
 
+LATEX_ACCENTS = {"'": "\u0301", "`": "\u0300", "^": "\u0302", '"': "\u0308", "~": "\u0303", "c": "\u0327", "v": "\u030c"}
+LATEX_SYMBOLS = {
+    r"\textbullet{}": "\u2022", r"\textperiodcentered{}": "\u00b7", r"\textdegree{}": "\u00b0",
+    r"$\times$": "\u00d7", r"$\rightarrow$": "\u2192", r"$\le$": "\u2264", r"$\ge$": "\u2265",
+    r"\texteuro{}": "\u20ac", r"\pounds{}": "\u00a3",
+}
+PLAIN_PUNCTUATION = (
+    ("---", "-"), ("--", "-"), ("\u2014", "-"), ("\u2013", "-"), ("\u2012", "-"), ("\u2010", "-"), ("\u2011", "-"), ("\u2212", "-"),
+    ("``", '"'), ("''", '"'), ("\u201c", '"'), ("\u201d", '"'), ("`", "'"), ("\u2018", "'"), ("\u2019", "'"),
+    ("\u2026", "..."), ("\u00a0", " "),
+)
+
+
 def normalize_latex_text(value: str) -> str:
     # Callers pass an already isolated construct or plain registry text. Do not
     # treat a literal percent in registry prose as the start of a LaTeX comment.
@@ -162,14 +192,28 @@ def normalize_latex_text(value: str) -> str:
         r"\%": "%",
         r"\&": "&",
         r"\_": "_",
+        r"\#": "#",
+        r"\$": "$",
         r"\textbar{}": "|",
         "--": "-",
     }
+    # A forced line break ("\\" or "\\[1pt]") ends a skills line; it is layout, not text.
+    text = re.sub(r"\\\\(?:\[[^\]]*\])?", " ", text)
     for old, new in replacements.items():
         text = text.replace(old, new)
+    # career.tex_escape prints R² as R\textsuperscript{2}; read it back as registered.
+    text = re.sub(r"\\textsuperscript\{([23])\}", lambda m: "\u00b2" if m[1] == "2" else "\u00b3", text)
+    # ...and accented letters and symbols as LaTeX (Tectonic's T1 fonts drop raw Unicode).
+    text = re.sub(r"\\(['`^\"~cv])\{?([A-Za-z])\}?",
+                  lambda m: unicodedata.normalize("NFC", m[2] + LATEX_ACCENTS[m[1]]), text)
+    for latex, plain in LATEX_SYMBOLS.items():
+        text = text.replace(latex, plain)
     text = re.sub(r"\\(?:textbf|textit|emph)\{([^{}]*)\}", r"\1", text)
     text = re.sub(r"\\[A-Za-z@]+(?:\[[^\]]*\])?", " ", text)
     text = text.replace("{", " ").replace("}", " ")
+    # One plain form for every dash and quote, whether typed as Unicode or as LaTeX.
+    for fancy, plain in PLAIN_PUNCTUATION:
+        text = text.replace(fancy, plain)
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -353,7 +397,7 @@ def build_report(db_path, tex_path, evidence: dict[str, Any] | None = None, sour
     if source is None:
         source = tex_path.read_text(encoding="utf-8")
     if evidence is None:
-        workspace = Path(db_path).resolve().parent.parent if db_path else ROOT
+        workspace = Path(db_path).resolve().parent.parent if db_path else DATA_ROOT
         candidate = workspace / "data/context/evidence.yml"
         evidence = load_yaml(candidate if candidate.is_file() else EVIDENCE_PATH)
     claims = scan_claims(source, evidence, load_predicted_origins(db_path))
@@ -526,7 +570,7 @@ def inspect_pdf(pdf_path: Path, render_dir: Path) -> dict[str, Any]:
 
 
 def compile_latex(source_path: Path, output_dir: Path) -> tuple[Path | None, str, str]:
-    tectonic = shutil.which("tectonic")
+    tectonic = tectonic_executable()
     if not tectonic:
         return None, "", "tectonic is not installed"
     result = subprocess.run(
@@ -610,7 +654,7 @@ def validate_evidence_map(
     claim_ids = mapping.get("resume_claim_ids")
     held = mapping.get("held_claims_used")
     mapped_project = mapping.get("selected_project_id")
-    source_macros = extract_zero_argument_macros(source_path.read_text())
+    source_macros = extract_zero_argument_macros(source_path.read_text(encoding="utf-8"))
     selected_ids = [source_macros.get(k) for k in ('SelectedProjectID', 'SecondProjectID')]
     add_failure(failures, mapping.get('selected_project_ids') == selected_ids,
                 'Evidence map selected_project_ids must match both resume slots in order')
@@ -884,7 +928,7 @@ def validate_selected_project(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description=f"Validate Annie's LaTeX resume and optionally compile a {CONTRACT.describe_pages()} {CONTRACT.paper.title()} PDF."
+        description="Validate a candidate's LaTeX resume and optionally compile it to the page count and paper its profile.yml sets."
     )
     parser.add_argument("tex", type=Path, help="Path to the complete LaTeX resume")
     parser.add_argument("--compile", action="store_true", help="Compile with tectonic and inspect the PDF")
@@ -913,14 +957,21 @@ def main() -> int:
         type=Path,
         help="career.db used to resolve resume_items:<id> evidence tags (default: <workspace>/data/career.db)",
     )
+    parser.add_argument(
+        "--workspace",
+        type=Path,
+        help="Workspace (profile) folder whose profile.yml and evidence.yml govern the check (default: the app's own data)",
+    )
     args = parser.parse_args()
+    if args.workspace:
+        configure(args.workspace.expanduser())
 
     source_path = args.tex.expanduser().resolve()
     if args.report:
         if not source_path.is_file():
             print(json.dumps({"error": f"Missing LaTeX source: {source_path}"}))
             return 1
-        db_path = args.db.expanduser().resolve() if args.db else ROOT / "data/career.db"
+        db_path = args.db.expanduser().resolve() if args.db else DATA_ROOT / "data/career.db"
         print(json.dumps(build_report(db_path if db_path.is_file() else None, source_path), indent=2))
         return 0
     failures: list[str] = []
@@ -968,7 +1019,7 @@ def main() -> int:
     if args.studio_layout:
         sys.path.insert(0, str(ROOT))
         from backend.services.resume_layout import validate_density, measure_pages
-        layout_errors, layout_clean = validate_density(source)
+        layout_errors, layout_clean = validate_density(source, contract=CONTRACT)
         failures.extend(layout_errors)
         required_order = re.findall(r"\\section\{([^{}]+)\}", clean)
         allowed_orders = [list(order) for order in CONTRACT.allowed_section_orders]
@@ -981,8 +1032,8 @@ def main() -> int:
         evidence = {}
     qa["candidate_revision"] = evidence.get("candidate_revision")
     qa["registry_sha256"] = sha256(EVIDENCE_PATH)
-    qa["profile_sha256"] = sha256(ROOT / "data/config/profile.yml")
-    profile = load_yaml(ROOT / "data/config/profile.yml")
+    qa["profile_sha256"] = sha256(DATA_ROOT / "data/config/profile.yml")
+    profile = load_yaml(DATA_ROOT / "data/config/profile.yml")
     candidate = profile.get("candidate", {})
     phone = candidate.get("phone", "")
     unsafe_patterns = dict(UNSAFE_PATTERNS)
@@ -1206,7 +1257,7 @@ def main() -> int:
                 )
                 qa["page_count"] = page_count
                 if args.studio_layout and pages:
-                    qa["layout"] = measure_pages(pdf_path, render_dir)
+                    qa["layout"] = measure_pages(pdf_path, render_dir, contract=CONTRACT)
                     add_failure(failures, qa["layout"]["full_pages"], f"Studio PDF must fill {CONTRACT.describe_pages()} of {CONTRACT.paper.title()} with readable spacing and no large gaps")
                 qa["pdf_metadata"] = (
                     inspection.get("metadata")
@@ -1294,16 +1345,22 @@ def main() -> int:
                 header_values = CONTRACT.header_values()
                 first_lines = [line.strip() for line in first_page_text.splitlines() if line.strip()]
                 flattened_first = re.sub(r"\s+", " ", first_page_text)
+                # PDF text extraction splits some kerned letter pairs ("T echnological",
+                # "A WS"), so each value is also accepted with whitespace removed.
+                def compact(value: str) -> str:
+                    return re.sub(r"\s+", "", str(value)).casefold()
+
+                compact_first = compact(flattened_first)
                 add_failure(
                     failures,
-                    bool(first_lines) and header_values and first_lines[0] == header_values[0]
-                    and all(value in flattened_first for value in header_values[1:]),
+                    bool(first_lines) and header_values and compact(first_lines[0]) == compact(header_values[0])
+                    and all(value in flattened_first or compact(value) in compact_first for value in header_values[1:]),
                     "Visible PDF header identity/contact does not match the canonical profile",
                 )
                 for value in CONTRACT.visible_invariants:
                     add_failure(
                         failures,
-                        value in flattened_pdf_text,
+                        value in flattened_pdf_text or compact(value) in compact_pdf_text,
                         f"Compiled PDF is missing visible invariant: {value}",
                     )
                 # Any employer or degree that is printed must carry its registered title and dates.
@@ -1323,7 +1380,8 @@ def main() -> int:
                     failures,
                     isinstance(expected_project_title, str)
                     # The stack sits on the title line (Annie's style), so match the line start rather than the whole line.
-                    and (sum(line.strip().startswith(expected_project_title) for line in normalized_pdf_text.splitlines()) == 1 if args.studio_layout else normalized_pdf_text.count(expected_project_title) == 1),
+                    and (sum(compact(line).startswith(compact(expected_project_title)) for line in normalized_pdf_text.splitlines()) == 1
+                         if args.studio_layout else compact_pdf_text.count(compact(expected_project_title)) == 1),
                     "Compiled PDF must show the registered selected-project title exactly once",
                 )
                 second_title = qa.get('second_project', {}).get('title')

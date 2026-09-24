@@ -22,13 +22,15 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from backend.ai import limits
+
 ID = "claude_code"
 LABEL = "Claude Code (local, subscription)"
 # Aliases the CLI resolves to the current model of each family, so the list
 # does not go stale when a new release ships.
 MODELS = ("sonnet", "opus", "haiku")
 DEFAULTS = {"strong": "sonnet", "cheap": "haiku"}
-NOTE = ("Runs through the Claude Code CLI on this Mac, signed in to your Claude "
+NOTE = ("Runs through the Claude Code CLI on this machine, signed in to your Claude "
         "subscription. No API key; calls count against the plan's usage limits.")
 
 # Where the CLI lives when it is not on PATH. Each pattern may match several
@@ -36,6 +38,9 @@ NOTE = ("Runs through the Claude Code CLI on this Mac, signed in to your Claude 
 BUNDLED = (
     "~/.claude/local/claude",
     "~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude",
+    # Windows: the VS Code extension's binary and the native installer's.
+    "~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude.exe",
+    "~/.local/bin/claude.exe",
     "~/Library/Application Support/Claude/claude-code/*/claude.app/Contents/MacOS/claude",
 )
 
@@ -101,11 +106,13 @@ def command(cli: Path, schema: dict, *, model: str, web: bool, system: str | Non
 def describe_failure(data: dict) -> str:
     """Why a finished-but-failed call failed, in words the user can act on."""
     status = data.get("api_error_status")
-    text = str(data.get("result") or data.get("error") or "").casefold()
+    raw = str(data.get("result") or data.get("error") or "")
+    text = raw.casefold()
     if status == 401 or "not logged in" in text or "please run /login" in text or "authentication" in text:
         return "Claude Code is not signed in. Open the Claude app or run `claude` once and sign in."
-    if status == 429 or "usage limit" in text or "rate limit" in text or "out of extra usage" in text:
-        return "Your Claude subscription's usage limit is reached. Wait for it to reset, then retry."
+    if status == 429 or limits.is_limit(text):
+        # Keep "resets 5:40pm (America/Chicago)" so the router rests Claude until then.
+        return limits.with_hint("Your Claude subscription's usage limit is reached. Wait for it to reset, then retry.", raw)
     if data.get("subtype") == "error_max_turns":
         return "Claude Code stopped before finishing the task. Retry a smaller pass."
     if status:
@@ -156,7 +163,7 @@ def _run_once(prompt: str, schema: dict, *, model: str, web: bool, system: str |
     cli = find_cli()
     if cli is None:
         raise ValueError(
-            "Claude Code is not installed on this Mac. Install the Claude app or the "
+            "Claude Code is not installed on this machine. Install the Claude app or the "
             "Claude Code extension, sign in, then retry."
         )
     if model not in MODELS:
@@ -166,10 +173,12 @@ def _run_once(prompt: str, schema: dict, *, model: str, web: bool, system: str |
     # An empty working directory: nothing for the file tools to read.
     with tempfile.TemporaryDirectory(prefix="career-claude-") as folder:
         try:
-            # The prompt travels on stdin, never inside a shell command.
+            # The prompt travels on stdin, never inside a shell command. Claude Code reads and
+            # writes UTF-8; Windows' ANSI default would fail on a "→" in a posting.
             done = subprocess.run(
                 command(cli, schema, model=model, web=web, system=system),
-                input=prompt, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                input=prompt, text=True, encoding="utf-8", errors="replace",
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 timeout=limit, cwd=folder, env=env,
             )
         except subprocess.TimeoutExpired:
@@ -181,6 +190,9 @@ def _run_once(prompt: str, schema: dict, *, model: str, web: bool, system: str |
         data = json.loads(done.stdout or "")
     except json.JSONDecodeError:
         said = " ".join((done.stderr or done.stdout or "").split())[:200]
+        if limits.is_limit(said):
+            raise ValueError(limits.with_hint(
+                "Your Claude subscription's usage limit is reached. Wait for it to reset, then retry.", said)) from None
         raise ValueError(
             "Claude Code did not return a result"
             + (f" ({said})" if said else "")

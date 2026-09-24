@@ -24,6 +24,27 @@ EXCLUDED = [
     "This position is open to US persons only (EAR).",
     "Candidates requiring sponsorship will not be considered.",
     "Must not require sponsorship for employment visa status.",
+    # "Current or future" wording (a live Greenhouse posting, 23 Sep 2026, slipped through before).
+    "Authorization to work in the United States without current or future sponsorship.",
+    "Must be authorized to work in the U.S. without the need for current or future visa sponsorship.",
+    "Applicants must not require present or future employer sponsorship.",
+    "The posting excludes current/future sponsorship.",
+    # Citizenship wording with the verb first (Babel Street, Torc Robotics, 23 Sep 2026).
+    "This position requires U.S. citizenship due to federal government contracting requirements.",
+    "Accordingly, only U.S. citizens are eligible for this role.",
+    "This role is open only to United States citizens.",
+    # "Visa" between the verb and "sponsorship" (True Anomaly, 23 Sep 2026, slipped through before).
+    "We are unable to provide visa sponsorship.",
+    "We cannot offer H-1B sponsorship for this position.",
+    "The company will not provide visa sponsorship for this role.",
+    # "Not eligible for sponsorship" (end-to-end test, 24 Sep 2026, slipped through before).
+    "This position is not eligible for visa sponsorship.",
+    "This role is not eligible for sponsorship.",
+    # A real refusal that also names a word about text is still a refusal.
+    "No visa sponsorship is offered for this role, as stated in the text.",
+    # A guard covers what it negates, not a refusal after "but".
+    "No visa-sponsorship or citizenship sentence was visible, but the posting says: without sponsorship now or in the future.",
+    "No security clearance is required, but US citizenship is required.",
 ]
 
 KEPT = [
@@ -39,6 +60,20 @@ KEPT = [
     "No citizenship, clearance or ITAR language appears in this posting.",
     "The employer states no sponsorship or work-authorization language in the listing.",
     "No visa or citizenship restrictions stated in the posting.",
+    "The posting says nothing about current or future sponsorship.",
+    "The listing is silent on current or future visa sponsorship.",
+    # A researcher's note on what the page did NOT show (Johns Hopkins, live Azure search, 24 Sep 2026;
+    # the Ireland wording from the 24 Sep profile test). Built into the gate for every profile.
+    "No visa-sponsorship, work-authorization, citizenship, clearance, ITAR/EAR, or US-person sentence was visible in the official posting text reviewed.",
+    "The pages reviewed do not show the precise sentence about citizenship or security clearance.",
+    "Citizenship or clearance language was not found in the posting.",
+    "No sponsorship refusal, citizenship requirement or ITAR wording was found on the page.",
+    # The application form's question asks; it does not refuse (SimpliSafe, 23 Sep 2026).
+    "Will you now or in the future require sponsorship?",
+    "Do you now, or will you in the future, require visa sponsorship to work in the US?",
+    "The application asks about present or future sponsorship but does not state whether it is available.",
+    "This role does not require U.S. citizenship.",
+    "We are able to provide visa sponsorship for this role.",
     "",
 ]
 
@@ -133,3 +168,13 @@ def test_verdict_serializes_for_the_cli():
 def test_line_breaks_never_double_the_full_stop():
     parts = split_sentences("Build pipelines.\nMust be authorized to work in the US without sponsorship now or in the future.\n- Apply today")
     assert parts == ["Build pipelines.", "Must be authorized to work in the US without sponsorship now or in the future.", "Apply today"]
+
+
+def test_absence_notes_never_exclude_on_any_country_pack():
+    """The built-in guards hold whatever a profile's own sponsorship.yml lists."""
+    note = ("No visa-sponsorship, work-authorization, citizenship, clearance, ITAR/EAR, or US-person "
+            "sentence was visible in the official posting text reviewed.")
+    for pack in ("us", "ie"):
+        rules = load_rules(str(ROOT / f"backend/countries/{pack}/sponsorship.yml"))
+        assert screen(note, rules).verdict == "KEEP", pack
+        assert screen("This position is not eligible for visa sponsorship.", rules).verdict == "EXCLUDED", pack

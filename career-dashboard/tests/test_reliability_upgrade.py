@@ -99,6 +99,13 @@ def test_relevance_legitimacy_and_balanced_shortfall_are_honest(service):
         assert fine["eligible"], (wording, fine["blockers"])
     blocked = quality.assess_company("Acme", posting["url"], [{"url": "https://acme.example/about", "accessed_at": "2026-09-17"}], ["Registered legal entity"], ["Recruiter requests payment fee"])
     assert blocked["state"] == "blocked"
+    # A cited company record counts whether the AI names it in its notes or only links it as a source.
+    ats = "https://job-boards.greenhouse.io/hexarmor/jobs/7718550003"
+    note = ["LinkedIn company record, observed in search results, identifies HexArmor in Grand Rapids, Michigan."]
+    linked = quality.assess_company("HexArmor", ats, [{"url": "https://www.linkedin.com/company/hexarmor", "accessed_at": "2026-09-23"}, {"url": ats}], note, [])
+    assert linked["state"] == "verified"
+    unlinked = quality.assess_company("HexArmor", ats, [{"url": ats}], note, [])
+    assert unlinked["state"] == "needs_review"
     result = quality.balanced_five([])
     assert not result["complete"]
     assert result["jobs"] == []
@@ -115,6 +122,11 @@ def test_grounded_assessments_separate_readiness_coverage_and_fit():
     grounded = extract_requirements(pasted)
     assert grounded and all(item["excerpt"] in pasted for item in grounded), [item["excerpt"] for item in grounded]
     assert any("security plan" in item["excerpt"] for item in grounded)
+    # Section headings introduce lists; they are not requirements (Color Health, 23 Sep 2026).
+    headed = "Minimum Qualifications\nBachelor's degree required.\nHelpful Though Not Required:\n- Experience with Kafka\nWhat you'll need:"
+    names = [item["requirement"] for item in extract_requirements(headed)]
+    assert "Helpful Though Not Required:" not in names and "Minimum Qualifications" not in names
+    assert "What you'll need:" not in names and "Bachelor's degree required." in names
     result = assess(
         "Annie Prasanna Manoharan\nannie@example.com +1 (479) 301-1366\nEducation\nMS Computer Engineering\nTechnical Skills\nSQL and Power BI\nProfessional Experience\nBuilt dashboards\nProjects\nReporting " + "evidence " * 260,
         jd,

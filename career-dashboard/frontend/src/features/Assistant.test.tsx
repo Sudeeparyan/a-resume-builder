@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { clock, dayLabel, elapsed, exportMarkdown, flowFor, matches, quickReplies, Exchange, HistoryDrawer } from "./Assistant";
+import { clock, dayLabel, elapsed, exportMarkdown, flowFor, matches, quickReplies, unfinished, Exchange, HistoryDrawer } from "./Assistant";
 import { RichText } from "../components/UI";
 import type { AssistantConversation, AssistantMessage, Run } from "../types";
 
@@ -149,5 +149,14 @@ describe("Rendering", () => {
     const html = renderToStaticMarkup(<RichText text={"```\n<b>not bold</b>\n```"} />);
     expect(html).toContain("&lt;b&gt;not bold&lt;/b&gt;");
     expect(html).not.toContain("<b>not bold</b>");
+  });
+});
+
+describe("suggested answers", () => {
+  it("treats a template ending in an ellipsis as text to finish, not a message to send", () => {
+    expect(unfinished("Add these roles: …")).toBe("Add these roles: ");
+    expect(unfinished("Replace them with these roles: ...")).toBe("Replace them with these roles: ");
+    expect(unfinished("yes")).toBeNull();
+    expect(unfinished("Keep Cork")).toBeNull();
   });
 });

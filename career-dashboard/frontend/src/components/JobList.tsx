@@ -1,6 +1,7 @@
 import { ArrowUpRight, FileText, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Badge, Empty } from "./UI";
+import { useMarket } from "../profiles";
 import type { Job } from "../types";
 export const statuses = [
   "saved",
@@ -41,9 +42,15 @@ export const tierTitle: Record<string, string> = {
   B: "Proven H-1B sponsor; posting is silent",
   C: "Posting is silent, no H-1B record; still worth applying",
 };
+/** The tier wording for this tab's profile: its country's own labels, else the US ones above. */
+export function useTierTitles(): Record<string, string> {
+  const { tierLabels } = useMarket();
+  return { ...tierTitle, ...tierLabels };
+}
 export function TierBadge({ job, long = false }: { job: Job; long?: boolean }) {
   const tier = job.sponsor_tier || "C";
-  const label = job.sponsor_evidence?.label || tierTitle[tier];
+  const titles = useTierTitles();
+  const label = job.sponsor_evidence?.label || titles[tier];
   return (
     <Badge tone={tier === "S" ? "green" : tier === "A" ? "lime" : "neutral"} title={label}>
       {long ? `Tier ${tier} · ${label}` : `Tier ${tier}`}

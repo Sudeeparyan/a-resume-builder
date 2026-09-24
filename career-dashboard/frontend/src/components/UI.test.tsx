@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { RichText, ReportView } from "./UI";
+import { AskAssistant, AskContext, RichText, ReportView } from "./UI";
 import { JobList, TierBadge, tierTitle } from "./JobList";
 import { ExcludedRoles } from "../features/Dashboard";
 import { safeUrl, fileUrl } from "../api";
 import type { Job } from "../types";
+import { ProfileContext, type ProfileEntry } from "../profiles";
 describe("Agent report safety", () => {
   it("renders untrusted markup as plain text", () => {
     const html = renderToStaticMarkup(
@@ -134,6 +135,21 @@ describe("Sponsorship tiers and exclusions", () => {
     expect(html).toContain(tierTitle.C);
   });
 
+  it("uses the profile's own country wording for tiers (no H-1B outside the US)", () => {
+    const ireland: ProfileEntry = {
+      id: "srikanth", name: "Srikanth N", country: "ie", state: "ready", locked: false, initials: "SN",
+      market: { code: "ie", name: "Ireland", adjective: "Irish", paper: "A4", timezone: "UTC", default_location: "Ireland",
+                tier_labels: { C: "Posting is silent on work permits; still worth applying" } },
+    };
+    const html = renderToStaticMarkup(
+      <ProfileContext.Provider value={{ current: ireland, profiles: [ireland], reload: async () => {} }}>
+        <TierBadge job={{ ...baseJob, id: "x", title: "Role", url: "https://example.test/x", created_at: "2026-09-17T10:00:00Z" }} long />
+      </ProfileContext.Provider>,
+    );
+    expect(html).toContain("Posting is silent on work permits; still worth applying");
+    expect(html).not.toContain("H-1B");
+  });
+
   it("lists excluded roles with the triggering sentence and a restore action", () => {
     const html = renderToStaticMarkup(
       <ExcludedRoles
@@ -192,5 +208,26 @@ describe("Pipeline labels and fit scores", () => {
       />,
     );
     expect(html).not.toContain("Fit ");
+  });
+});
+
+describe("Ask the assistant", () => {
+  const prompts = [
+    { label: "How is the search going?", text: "How is the Daily Search going right now?" },
+    { label: "Run a search from the chat", text: "Run the daily search for 2 jobs", send: false },
+  ];
+  it("stays hidden where there is no assistant to hand the question to", () => {
+    expect(renderToStaticMarkup(<AskAssistant prompts={prompts} />)).toBe("");
+  });
+  it("offers each question and says whether it asks now or waits in the chat box", () => {
+    const html = renderToStaticMarkup(
+      <AskContext.Provider value={() => {}}>
+        <AskAssistant prompts={prompts} />
+      </AskContext.Provider>,
+    );
+    expect(html).toContain("Ask the assistant");
+    expect(html).toContain("How is the search going?");
+    expect(html).toContain("Asks now in the chat");
+    expect(html).toContain("Opens the chat with this ready to send");
   });
 });

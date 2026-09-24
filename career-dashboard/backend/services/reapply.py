@@ -57,7 +57,7 @@ def check(company: str, title: str, jobs: Iterable[dict[str, Any]], excluded: It
             return {"blocked": True, "rule": "same_role", "note": f"Same company and role already {label} ({row.get('url') or row.get('id')})."}
         if status == "rejected" and changed and (today - changed).days < rules["reject_cooldown_days"]:
             left = rules["reject_cooldown_days"] - (today - changed).days
-            return {"blocked": True, "rule": "rejected_180", "note": f"{company} rejected Annie {(today - changed).days} days ago; suppressed for {left} more days."}
+            return {"blocked": True, "rule": "rejected_180", "note": f"{company} rejected you {(today - changed).days} days ago; suppressed for {left} more days."}
         if status == "ghosted" and changed and (today - changed).days < rules["ghost_cooldown_days"]:
             left = rules["ghost_cooldown_days"] - (today - changed).days
             return {"blocked": True, "rule": "ghosted_90", "note": f"{company} went quiet {(today - changed).days} days ago; wait {left} more days before a different role."}

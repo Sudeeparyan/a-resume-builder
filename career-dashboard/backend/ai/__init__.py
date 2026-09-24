@@ -11,17 +11,21 @@ __all__ = [
 
 # Where a tier goes when its chosen provider cannot run here: the signed-in local
 # runtimes first (no key, no per-call cost), then whichever hosted key exists.
-FALLBACK_ORDER = ("claude_code", "codex", "kimi_cli", "openrouter", "anthropic", "openai", "gemini", "kimi")
+FALLBACK_ORDER = ("claude_code", "codex", "kimi_cli", "openrouter", "anthropic", "openai", "azure_openai", "gemini", "kimi")
 
 
 def ready_providers(root) -> dict:
-    """Which providers can actually run on this machine right now, by id."""
-    from backend.ai import claude_code, codex, kimi_cli, models
+    """Which providers can actually run on this machine right now, by id.
+
+    ``auto`` (the router) is ready when any endpoint on its route is.
+    """
+    from backend.ai import claude_code, codex, kimi_cli, models, router
 
     ready = dict(models.available(Path(root)))
     ready[claude_code.ID] = claude_code.available()
     ready[codex.ID] = codex.available()
     ready[kimi_cli.ID] = kimi_cli.available()
+    ready[router.ID] = router.ready_from(ready)
     return ready
 
 
@@ -31,8 +35,10 @@ def any_provider_configured(root) -> bool:
 
 
 def provider_label(provider_id: str) -> str:
-    from backend.ai import catalog, claude_code, codex, kimi_cli
+    from backend.ai import catalog, claude_code, codex, kimi_cli, router
 
+    if provider_id == router.ID:
+        return router.SHORT
     if provider_id == claude_code.ID:
         return "Claude Code"
     if provider_id == codex.ID:
@@ -43,8 +49,10 @@ def provider_label(provider_id: str) -> str:
 
 
 def _default_model(provider_id: str, tier: str) -> str:
-    from backend.ai import catalog, claude_code, codex, kimi_cli
+    from backend.ai import catalog, claude_code, codex, kimi_cli, router
 
+    if provider_id == router.ID:
+        return router.ID  # the router picks each endpoint's model per tier itself
     if provider_id == claude_code.ID:
         return claude_code.DEFAULTS[tier]
     if provider_id == codex.ID:
@@ -56,12 +64,15 @@ def _default_model(provider_id: str, tier: str) -> str:
 
 def main_choice(preferences: dict, ready: dict) -> tuple[str, str]:
     """The provider and model every background run starts from: the Settings choice,
-    else the same built-in the gateway uses (OpenAI with a key here, otherwise Codex)."""
-    from backend.ai import codex
+    else the same built-in the gateway uses: Auto (free plans first) when any of its
+    endpoints can run here, then OpenAI with a key here, otherwise Codex."""
+    from backend.ai import codex, router
 
     stored = preferences.get("default") or {}
     if stored.get("provider"):
         return stored["provider"], stored.get("model") or _default_model(stored["provider"], "strong")
+    if router.DEFAULT_WHEN_UNSET and ready.get(router.ID):
+        return router.ID, router.ID
     if ready.get("openai"):
         return "openai", _default_model("openai", "strong")
     return codex.ID, codex.DEFAULTS["strong"]
@@ -139,16 +150,69 @@ def usage_recorder(services):
     return record
 
 
+def choice_label(provider_id: str, model: str) -> str:
+    """"Kimi Code · kimi-code/k3", or just "Auto · free plans first" for the router."""
+    from backend.ai import router
+
+    return router.LABEL if provider_id == router.ID else provider_label(provider_id) + " · " + model
+
+
+def paid_gate(services):
+    """What the router asks before each paid call: None while today's paid limit has room."""
+    from backend.services.agent_cache import paid_block
+
+    return lambda _provider: paid_block(services)
+
+
+def switch_recorder(services, action: str = "specialist"):
+    """Records each route switch (a failed endpoint replaced by the next) in the activity log."""
+
+    def record(event: dict) -> None:
+        try:
+            with services.w.connect() as db:
+                services.w.record_event(
+                    db, "provider_fallback", ai_action=event.get("agent") and f"{action}:{event['agent']}" or action,
+                    from_provider=event["from_provider"], to_provider=event["to_provider"],
+                    reason=str(event.get("reason") or "")[:300],
+                )
+        except Exception:
+            pass  # telemetry; a failed write must never fail the step that just succeeded
+
+    return record
+
+
+def route_options(services, action: str = "specialist") -> dict:
+    """The router settings a caller hands to AgentTeam: the saved route, the paid gate, the switch log."""
+    from backend.ai import router
+
+    preferences = services.pref("ai_preferences", {}) or {}
+    return {"policy": router.policy_from(preferences), "paid_gate": paid_gate(services),
+            "on_switch": switch_recorder(services, action)}
+
+
 def team_for(services, on_usage=None):
     """An AgentTeam built from the saved tier preferences, on a provider that is ready.
 
     Kept here so callers need no knowledge of where preferences are stored.
     """
+    from backend.ai import router
     from backend.ai.agents.graph import AgentTeam
 
     preferences = services.pref("ai_preferences", {}) or {}
-    tiers, _moved = resolve_tiers(services.w.root, preferences)
-    return AgentTeam(services.w.root, tiers, on_usage or usage_recorder(services))
+    ready = ready_providers(services.w.root)
+    tiers, _moved = resolve_tiers(services.w.root, preferences, ready)
+    # The backup Settings names, when it can run here: the chat and the specialists
+    # get the same one retry the gateway gives background runs. Auto needs none:
+    # it already falls back through its whole route.
+    backup = preferences.get("fallback") or {}
+    fallback = None
+    routed = all(provider == router.ID for provider, _model in tiers.values())
+    if not routed and backup.get("provider") and ready.get(backup["provider"]):
+        fallback = (backup["provider"], backup.get("model") or _default_model(backup["provider"], "strong"))
+    from backend.ai.persona import persona_for
+
+    return AgentTeam(services.w.root, tiers, on_usage or usage_recorder(services), fallback=fallback,
+                     persona=persona_for(services.w.root), route=route_options(services))
 
 
 def engine(services) -> dict:
@@ -158,7 +222,7 @@ def engine(services) -> dict:
     from the chat; choosing one goes through ``settings.choose_main`` like the
     Settings tab.
     """
-    from backend.ai import catalog, claude_code, codex, kimi_cli
+    from backend.ai import catalog, claude_code, codex, kimi_cli, router
 
     root = services.w.root
     preferences = services.pref("ai_preferences", {}) or {}
@@ -167,19 +231,21 @@ def engine(services) -> dict:
     provider, model = tiers["strong"]
     moved_from = moved.get("strong")
     options = []
+    if ready.get(router.ID):
+        options.append({"provider": router.ID, "model": router.ID, "label": router.LABEL})
     for provider_id in FALLBACK_ORDER:
         if not ready.get(provider_id):
             continue
         if provider_id == claude_code.ID:
             listed = list(claude_code.MODELS)
         elif provider_id == codex.ID:
-            listed = list(codex.MODELS)
+            listed = list(codex.models())
         elif provider_id == kimi_cli.ID:
-            listed = list(kimi_cli.MODELS)
+            listed = list(kimi_cli.models())
         else:
             cached = (catalog._read_cache(root).get(provider_id) or {}).get("models") or []
-            defaults = catalog.PROVIDERS[provider_id]["defaults"]
-            listed = list(dict.fromkeys([defaults["strong"], defaults["cheap"], *cached]))[:12]
+            defaults = catalog.defaults(provider_id, root)
+            listed = [m for m in dict.fromkeys([defaults["strong"], defaults["cheap"], *cached]) if m][:12]
         for name in listed:
             options.append({"provider": provider_id, "model": name, "label": provider_label(provider_id) + " · " + name})
     runs_provider, runs_model = main_choice(preferences, ready)
@@ -200,13 +266,13 @@ def engine(services) -> dict:
     except Exception:
         last_fallback = None  # telemetry only; never block the page on it
     return {
-        "provider": provider, "model": model, "label": provider_label(provider) + " · " + model,
+        "provider": provider, "model": model, "label": choice_label(provider, model),
         "ready": bool(ready.get(provider)),
         "moved_from": provider_label(moved_from) if moved_from else None,
         # What the runs the chat starts (discovery, research, builds) go through
         # unless Settings gave an action its own provider.
         "runs": {"provider": runs_provider, "model": runs_model,
-                 "label": provider_label(runs_provider) + " · " + runs_model,
+                 "label": choice_label(runs_provider, runs_model),
                  "ready": bool(ready.get(runs_provider))},
         "fallback": stored_fallback,
         "last_fallback": last_fallback,

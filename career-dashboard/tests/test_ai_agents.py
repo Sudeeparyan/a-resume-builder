@@ -10,7 +10,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / "backend/scripts")]
 
 from backend.ai import catalog, keys  # noqa: E402
 from backend.ai.agents import schemas, specialists  # noqa: E402
-from backend.ai.agents.graph import AgentError, AgentTeam, build_posting_graph  # noqa: E402
+from backend.ai.agents.graph import AgentError, AgentTeam  # noqa: E402
 
 OPENROUTER = "sk-or-v1-" + "b" * 60
 ANTHROPIC = "sk-ant-" + "c" * 60
@@ -81,97 +81,10 @@ def test_missing_key_files_are_not_an_error(tmp_path):
 def test_every_provider_declares_a_model_for_each_tier():
     for provider_id, spec in catalog.PROVIDERS.items():
         for tier in catalog.TIERS:
-            assert spec["defaults"][tier], f"{provider_id} has no {tier} default"
+            # Azure's model is her own deployment, named in .env (tests/test_azure_openai.py).
+            if provider_id != catalog.AZURE:
+                assert spec["defaults"][tier], f"{provider_id} has no {tier} default"
             assert spec["key"] in keys.NAMES
-
-
-class StubTeam:
-    """Stands in for AgentTeam so the graph can be exercised without a network."""
-
-    def __init__(self, results=None, failing=()):
-        self.results = results or {}
-        self.failing = set(failing)
-        self.calls = []
-
-    def run(self, name, payload, **_options):
-        self.calls.append((name, payload))
-        if name in self.failing:
-            raise AgentError(f"{name} unavailable")
-        return self.results[name]
-
-
-def posting():
-    return {
-        "title": "Data Analyst",
-        "company": "Example Ltd",
-        "url": "https://example.com/jobs/1",
-        "description": "We need SQL and Power BI. Nice to have Python.",
-    }
-
-
-def test_each_specialist_writes_its_own_state_key():
-    """Parallel branches must not contend for one slot."""
-    stub = StubTeam({
-        "relevance_judge": schemas.RelevanceVerdict(
-            role_family_matches=True, seniority_suitable=True, location_matches=True,
-            hard_blockers=[], reasons=["analyst role in Ireland"]),
-        "company_investigator": schemas.CompanyAssessment(
-            legal_presence=True, size_category="mid", sponsorship_evidence="none",
-            red_flags=[], findings=[]),
-        "requirement_extractor": schemas.RequirementSet(requirements=[
-            schemas.Requirement(text="SQL", category="required",
-                                excerpt="We need SQL and Power BI."),
-        ]),
-    })
-    state = build_posting_graph(stub).invoke(
-        {"posting": posting(), "page_text": "", "profile_summary": "", "errors": []}
-    )
-    assert state["relevance"]["role_family_matches"] is True
-    assert state["company"]["size_category"] == "mid"
-    assert [r["text"] for r in state["requirements"]] == ["SQL"]
-    assert state["errors"] == []
-    # No page text was supplied, so verification must not have been attempted.
-    assert "posting_verifier" not in [name for name, _ in stub.calls]
-
-
-def test_a_requirement_whose_excerpt_is_absent_is_discarded():
-    """A model may paraphrase. Anything not verbatim in the saved JD is not evidence."""
-    stub = StubTeam({
-        "relevance_judge": schemas.RelevanceVerdict(
-            role_family_matches=True, seniority_suitable=True, location_matches=True,
-            hard_blockers=[], reasons=[]),
-        "company_investigator": schemas.CompanyAssessment(
-            legal_presence=True, size_category="mid", sponsorship_evidence="none",
-            red_flags=[], findings=[]),
-        "requirement_extractor": schemas.RequirementSet(requirements=[
-            schemas.Requirement(text="SQL", category="required",
-                                excerpt="We need SQL and Power BI."),
-            schemas.Requirement(text="Kubernetes", category="required",
-                                excerpt="Five years of Kubernetes in production."),
-        ]),
-    })
-    state = build_posting_graph(stub).invoke(
-        {"posting": posting(), "page_text": "", "profile_summary": "", "errors": []}
-    )
-    assert [r["text"] for r in state["requirements"]] == ["SQL"]
-
-
-def test_one_failing_specialist_does_not_lose_the_others():
-    stub = StubTeam(
-        {
-            "relevance_judge": schemas.RelevanceVerdict(
-                role_family_matches=True, seniority_suitable=True, location_matches=True,
-                hard_blockers=[], reasons=[]),
-            "requirement_extractor": schemas.RequirementSet(requirements=[]),
-        },
-        failing=["company_investigator"],
-    )
-    state = build_posting_graph(stub).invoke(
-        {"posting": posting(), "page_text": "", "profile_summary": "", "errors": []}
-    )
-    assert state["relevance"]["role_family_matches"] is True
-    assert state.get("company") is None
-    assert any("company_investigator" in error for error in state["errors"])
 
 
 def test_the_hiring_manager_is_marked_isolated():
@@ -221,6 +134,6 @@ def test_preferences_choose_the_provider_and_model_per_tier(tmp_path):
 def test_cheap_tier_carries_the_extraction_and_classification_work():
     """Cost control: only candidate-facing prose may use the expensive tier."""
     cheap = {name for name, agent in specialists.REGISTRY.items() if agent.tier == "cheap"}
-    assert {"requirement_extractor", "relevance_judge", "posting_verifier", "mail_classifier"} <= cheap
+    assert {"fit_analyst", "posting_parser", "mail_classifier"} <= cheap
     strong = {name for name, agent in specialists.REGISTRY.items() if agent.tier == "strong"}
     assert {"resume_tailor", "cover_letter_writer", "profile_curator"} <= strong

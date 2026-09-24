@@ -11,9 +11,10 @@ import {
   Settings2,
   Sparkles,
 } from "lucide-react";
-import { api, fileUrl } from "../api";
-import { Badge, Field, Modal, ReportView, Running } from "../components/UI";
+import { API_BASE, api, fileUrl } from "../api";
+import { AskAssistant, Badge, Field, Modal, ReportView, Running } from "../components/UI";
 import { JobList } from "../components/JobList";
+import { useMarket } from "../profiles";
 import { macroSpan, readField, writeField } from "./studioFields";
 import { AgentControl } from "./AgentControl";
 import type { CoverLetter, Job, Run, Summary } from "../types";
@@ -116,6 +117,7 @@ export default function ResumeStudio({
   refresh: () => Promise<void>;
 }) {
   const job = data.jobs.find((j) => j.id === jobId);
+  const market = useMarket();
   const [coverLetter, setCoverLetter] = useState<CoverLetter | null>(null);
   const [coverBusy, setCoverBusy] = useState(false);
   const [coverError, setCoverError] = useState("");
@@ -129,7 +131,20 @@ export default function ResumeStudio({
             resume with guided AI help.
           </p>
         </div>
-        <Badge>Editable one-page draft (US Letter)</Badge>
+        <div className="actions">
+          <AskAssistant
+            prompts={
+              job
+                ? [
+                    { label: "What is this resume missing?", text: `What does the ${job.company} — ${job.title} posting ask for that this resume does not show yet, and what can I honestly do about it?` },
+                    { label: "Is it ready to send?", text: `Is the ${job.company} — ${job.title} resume ready to send? Check the PDF, the scores and the Assurance claims.` },
+                    { label: "Change this resume", text: `Change the ${job.company} resume: `, send: false },
+                  ]
+                : [{ label: "Which jobs still need a resume?", text: "Which saved jobs still have no resume PDF?" }]
+            }
+          />
+          <Badge>Editable one-page draft ({market.paper})</Badge>
+        </div>
       </div>
       <div className="studio-job-bar">
         <Field label="Company and role">
@@ -239,6 +254,7 @@ function Editor({
 }) {
   const jobId = job.id;
   const company = job.company;
+  const market = useMarket();
   const [draft, setDraft] = useState<Draft>();
   const [source, setSource] = useState("");
   const [step, setStep] = useState<"analyse" | "match" | "improve">(
@@ -360,7 +376,7 @@ function Editor({
     // A plain link navigated the whole app to a raw JSON error page when the
     // server refused, so fetch the file and surface any refusal as a message.
     try {
-      const response = await fetch("/api" + base + "/download?format=" + format);
+      const response = await fetch(API_BASE + base + "/download?format=" + format);
       if (!response.ok) {
         const detail = await response.json().catch(() => ({}));
         throw new Error(
@@ -844,7 +860,7 @@ function Editor({
                   <div className="studio-help">
                     <b>Lead with the skills this role names</b>
                     <span>
-                      Annie's resumes carry no summary: the skills block does
+                      These resumes carry no summary: the skills block does
                       that job. Put the strongest matching skills first in each
                       category. Only skills already in your profile belong here.
                     </span>
@@ -888,7 +904,7 @@ function Editor({
                   Version {draft.preview.revision} · {draft.preview.page_count}{" "}
                   {draft.preview.page_count === 1 ? "page" : "pages"} ·{" "}
                   {draft.preview.page_count === 1
-                    ? "US Letter target: exactly 1 page"
+                    ? `${market.paper} target: exactly 1 page`
                     : "Too long: use Fit to one page (it trims content, never fonts below 10pt)"}
                 </p>
                 {draft.preview.layout && (

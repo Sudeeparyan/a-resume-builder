@@ -125,3 +125,44 @@ def test_assurance_tracks_predicted_claims_and_decisions(service, job, client, m
 
     overview = client.get("/api/v2/agents/activity?limit=5").json()
     assert overview["reviews"] == {"pending": 4, "kept": 1, "removed": 0, "tailored_jobs": 1}
+
+
+def test_a_suggestion_not_on_the_page_still_has_its_keep_and_remove(service, job, client, monkeypatch):
+    """Live on 23 Sep: Azure proposed more projects than the page holds; those claims came
+    without `items` and the Assurance tab crashed reading items.length."""
+    from backend.ai.agents import schemas
+
+    result = tailored_result(service)
+    result.projects.append(schemas.TailoredProject(
+        title="Care-Team Guideline Retrieval Prototype", context="Python, LangChain",
+        bullets=["Prototyped retrieval over care guidelines with LangChain and a local vector index"], origin="predicted"))
+    monkeypatch.setattr(backend.ai, "any_provider_configured", lambda root: True)
+    monkeypatch.setattr(backend.ai, "team_for", lambda services, on_usage=None: StubTeam(result))
+    assert client.post("/api/v2/studio/" + job["id"] + "/tailor").status_code == 200
+    report = client.get("/api/v2/assurance/" + job["id"]).json()
+    assert all(isinstance(claim["items"], list) for claim in report["claims"])
+    extra = next(claim for claim in report["claims"] if claim["text"] == "Care-Team Guideline Retrieval Prototype")
+    assert extra["items"] and extra["line"] is None and "not printed" in extra["note"]
+
+
+def test_claim_text_reads_as_printed():
+    """Assurance showed "C\\#" and a trailing "\\\\[1pt]" line break on skills lines (23 Sep)."""
+    from validate_resume import normalize_latex_text
+
+    assert normalize_latex_text(r"\textbf{Languages:} Python, SQL, C\#, C++\\[1pt]") == "Languages: Python, SQL, C#, C++"
+    assert normalize_latex_text(r"Automated 94\% of tests \& saved \$1k\\") == "Automated 94% of tests & saved $1k"
+
+
+def test_new_extraction_rules_refresh_a_cached_requirement_list(service, job, monkeypatch):
+    """On 23 Sep the v3 list (with the heading "Helpful Though Not Required:") kept being
+    reused after v4, because the cache was keyed on the posting text alone."""
+    from backend import assessment
+
+    scorer = assessment.AssessmentService(service)
+    first = scorer.requirements(job["id"])
+    with service.w.connect() as db:
+        db.execute("UPDATE job_requirements SET requirement='Stale heading:' WHERE id=(SELECT MIN(id) FROM job_requirements WHERE job_id=?)", (job["id"],))
+    assert any(row["requirement"] == "Stale heading:" for row in scorer.requirements(job["id"]))
+    monkeypatch.setattr(assessment, "SCORING_VERSION", "career-assessment-next")
+    fresh = scorer.requirements(job["id"])
+    assert [row["requirement"] for row in fresh] == [row["requirement"] for row in first]

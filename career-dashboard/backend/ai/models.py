@@ -27,7 +27,10 @@ class ProviderNotConfigured(ValueError):
 def available(root: Path) -> dict:
     """Which hosted providers have a usable key, without exposing any value."""
     present = keys.configured(root)
-    return {pid: present.get(spec["key"], False) for pid, spec in catalog.PROVIDERS.items()}
+    found = {pid: present.get(spec["key"], False) for pid, spec in catalog.PROVIDERS.items()}
+    # Azure also needs its endpoint and a deployment name before a call can work.
+    found[catalog.AZURE] = found.get(catalog.AZURE, False) and not catalog.azure_settings(root)["missing"]
+    return found
 
 
 def build(root: Path, provider_id: str, model: str, *, temperature: float = 0.0,
@@ -45,6 +48,20 @@ def build(root: Path, provider_id: str, model: str, *, temperature: float = 0.0,
         raise ProviderNotConfigured(
             f"{spec['label']} has no API key on this machine. Add {spec['key']} to .env."
         )
+
+    if provider_id == catalog.AZURE:
+        # Azure's v1 API is OpenAI-compatible: the key as the bearer token, the deployment as the model.
+        from langchain_openai import ChatOpenAI
+
+        azure = catalog.azure_settings(root)
+        if azure["missing"]:
+            raise ProviderNotConfigured(
+                f"Azure OpenAI needs {' and '.join(azure['missing'])} in career-dashboard/.env."
+            )
+        # Reasoning deployments (GPT-6 Luna) accept only their default temperature, and take
+        # structured-output tools only through the Responses API, not chat completions.
+        return ChatOpenAI(model=model, api_key=api_key, base_url=azure["base_url"], use_responses_api=True,
+                          max_tokens=max_tokens, timeout=timeout, max_retries=2)
 
     if provider_id in ("openrouter", "openai", "kimi"):
         from langchain_openai import ChatOpenAI

@@ -27,7 +27,6 @@ WARNINGS: list[str] = []
 
 REQUIRED_FILES = (
     "AGENTS.md",
-    "CLAUDE.md",
     "README.md",
     "DATA_CONTRACT.md",
     "data/config/profile.yml",
@@ -61,9 +60,11 @@ REQUIRED_FILES = (
     "backend/workflows/modes/upskill.md",
     "backend/workflows/agents/job-discovery.md",
     "backend/workflows/agents/study-planner.md",
-    ".github/agents/resume-builder.agent.md",
-    ".github/agents/us-job-hunter.agent.md",
 )
+# The skills every AI app reads (Claude Code, Codex, Kimi Code, ...), at the repo root beside the
+# one AGENTS.md; relative to REPO_ROOT.
+SKILLS_DIR = ".agents/skills"
+REQUIRED_SKILLS = ("hunt", "job-hunter", "resume-tailor", "profile-intake", "interview-prep", "verify-job-url")
 
 # The previous edition of this app belonged to another candidate. None of his
 # identity, employers, clients or Irish immigration terms may reach Annie's active
@@ -84,8 +85,24 @@ PREVIOUS_EDITION = tuple(
         ("Critical Skills ", "Employment Permit"),
     )
 )
+# Other profiles are real now (backend/profiles.py): the country packs, the document
+# intake and their tests name Irish immigration terms, and a test profile's own
+# university, on purpose. Those files only; Annie's data, guides and agents stay clean.
+PREVIOUS_EDITION_ALLOWED = (
+    "backend/countries/",
+    "backend/services/intake/",
+    "backend/ai/agents/schemas.py",
+    "frontend/src/profiles.tsx",
+    "frontend/src/features/Onboarding.tsx",
+    "frontend/src/features/OnboardingChat.tsx",
+    "tests/fixtures/intake_draft.py",
+    "tests/test_intake_build.py",
+    "tests/test_profiles.py",
+    "tests/test_setup_chat.py",
+)
 TEXT_SUFFIXES = {".md", ".txt", ".tex", ".yml", ".yaml", ".json", ".csv", ".tsv", ".py", ".ts", ".tsx", ".html"}
-SKIPPED_PARTS = {".venv", "node_modules", "dist", "__pycache__", ".pytest_cache", "output", "migrations"}
+# profiles/ holds other people's workspaces; validate_profiles() checks each one on its own terms.
+SKIPPED_PARTS = {".venv", "node_modules", "dist", "__pycache__", ".pytest_cache", "output", "migrations", "profiles"}
 
 
 def fail(message: str) -> None:
@@ -94,6 +111,24 @@ def fail(message: str) -> None:
 
 def warn(message: str) -> None:
     WARNINGS.append(message)
+
+
+def built_from(source: Path, pdf: Path) -> bool:
+    """The base PDF's QA record says it was compiled from exactly this source and is this PDF.
+
+    File times alone mislead after a copy or a fresh checkout (the .tex can land a moment
+    after its PDF); the hashes validate_resume.py records do not.
+    """
+    import hashlib
+    import json
+
+    qa = pdf.parent / "qa.json"
+    try:
+        record = json.loads(qa.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()  # noqa: E731
+    return record.get("source_sha256") == digest(source) and record.get("pdf_sha256") == digest(pdf)
 
 
 def read(relative_path: str, root: Path = ROOT) -> str:
@@ -147,9 +182,9 @@ def latex_braces_balanced(source: str) -> bool:
     return depth == 0
 
 
-def validate_skill(relative_dir: str) -> None:
-    skill_dir = ROOT / relative_dir
-    source = read(f"{relative_dir}/SKILL.md")
+def validate_skill(relative_dir: str, root: Path = ROOT) -> None:
+    skill_dir = root / relative_dir
+    source = read(f"{relative_dir}/SKILL.md", root)
     match = re.match(r"^---\n(.*?)\n---\n", source, re.DOTALL)
     if not match:
         fail(f"Invalid or missing skill frontmatter: {relative_dir}/SKILL.md")
@@ -191,6 +226,8 @@ def validate_no_previous_edition() -> None:
     for path, relative in active_files():
         # The USCIS employer list is public data and legitimately names any employer.
         if relative == Path("backend/scripts/validate_workspace.py") or relative.parts[:2] == ("data", "sponsors"):
+            continue
+        if relative.as_posix().startswith(PREVIOUS_EDITION_ALLOWED):
             continue
         try:
             source = path.read_text(encoding="utf-8")
@@ -237,7 +274,7 @@ def validate_profile(profile: dict[str, Any], registry: dict[str, Any]) -> None:
     expected = {"ghost_after_days": 21, "reject_cooldown_days": 180, "ghost_cooldown_days": 90}
     for key, value in expected.items():
         if reapply.get(key) != value:
-            warn(f"profile.yml reapply.{key} is {reapply.get(key)!r}; Annie's CLAUDE.md rule is {value}")
+            warn(f"profile.yml reapply.{key} is {reapply.get(key)!r}; Annie's AGENTS.md rule is {value}")
 
     location = profile.get("location_preferences") or {}
     if "United States" not in str(location):
@@ -253,14 +290,19 @@ def validate_profile(profile: dict[str, Any], registry: dict[str, Any]) -> None:
 
 def validate_agents(profile: dict[str, Any]) -> None:
     name = (profile.get("candidate") or {}).get("full_name", "")
-    builder = read(".github/agents/resume-builder.agent.md")
+    builder = read(f"{SKILLS_DIR}/resume-tailor/SKILL.md", REPO_ROOT)
     for value in (name, "data/context/evidence.yml", "one page", "signature project", "backend/scripts/validate_resume.py"):
         if value and value.lower() not in builder.lower():
-            fail(f"Resume Builder agent is missing its contract: {value}")
-    hunter = read(".github/agents/us-job-hunter.agent.md")
+            fail(f"The resume-tailor skill is missing its contract: {value}")
+    hunter = read(f"{SKILLS_DIR}/job-hunter/SKILL.md", REPO_ROOT)
     for value in (name, "sponsorship", "United States", "sentence"):
         if value and value.lower() not in hunter.lower():
-            fail(f"US Job Hunter agent is missing its contract: {value}")
+            fail(f"The job-hunter skill is missing its contract: {value}")
+    # One rulebook for every AI app: no tool-specific instruction files beside it.
+    for stray in ("CLAUDE.md", "career-dashboard/CLAUDE.md", ".claude/skills", ".claude/commands",
+                  "career-dashboard/.github/agents"):
+        if (REPO_ROOT / stray).exists():
+            warn(f"{stray} is back: keep AI instructions in AGENTS.md and skills in {SKILLS_DIR}/")
     policy = read("AGENTS.md")
     for value in (name, "sponsor", "one page", "never", "study plan"):
         if value.lower() not in policy.lower():
@@ -395,7 +437,7 @@ def validate_resume() -> None:
     pdf = ROOT / "data/output/base" / (f"{name[0]}_{name[-1]}_Resume.pdf" if name else "resume.pdf")
     if not pdf.is_file():
         warn(f"Base resume PDF not built yet: {pdf.relative_to(ROOT)}")
-    elif pdf.stat().st_mtime < source.stat().st_mtime:
+    elif pdf.stat().st_mtime < source.stat().st_mtime and not built_from(source, pdf):
         fail("Base resume PDF is stale; recompile it from data/templates/resume-base.tex")
 
 
@@ -438,13 +480,55 @@ def validate_layout() -> None:
         warn("backup/ is missing; the pre-port snapshot is gone")
 
 
+def validate_profiles() -> None:
+    """Every built profile besides Annie: its files exist, parse, and describe one consistent workspace."""
+    import yaml
+
+    sys.path.insert(0, str(ROOT))
+    from backend.profiles import ProfileStore
+    from backend.resume_contract import contract_for
+
+    store = ProfileStore(base=ROOT / "profiles", legacy_root=ROOT)
+    for profile in store.list():
+        if profile.get("legacy") or profile["state"] != "ready":
+            continue
+        root = store.root_for(profile["id"])
+        label = f"Profile {profile['id']}"
+        for relative in ("data/config/profile.yml", "data/config/sponsorship.yml", "data/config/portals.yml",
+                         "data/context/evidence.yml", "data/templates/resume-base.tex", "AGENTS.md"):
+            if not (root / relative).is_file():
+                fail(f"{label} is missing {relative}")
+        try:
+            own = yaml.safe_load((root / "data/config/profile.yml").read_text(encoding="utf-8")) or {}
+            registry = yaml.safe_load((root / "data/context/evidence.yml").read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError) as exc:
+            fail(f"{label}: profile.yml or evidence.yml cannot be read ({exc})")
+            continue
+        ids = [item.get("id") for group in ("claims", "projects") for item in registry.get(group) or []]
+        if len(ids) != len(set(ids)):
+            fail(f"{label}: duplicate evidence IDs")
+        identity = next((c.get("value") for c in registry.get("claims") or [] if c.get("id") == "IDENTITY-001"), None)
+        if identity != (own.get("candidate") or {}).get("full_name"):
+            fail(f"{label}: profile.yml candidate.full_name must equal the registry's IDENTITY-001 value")
+        if not (ROOT / "backend/countries" / str(own.get("country_pack") or "") / "pack.yml").is_file():
+            fail(f"{label}: country_pack {own.get('country_pack')!r} has no pack in backend/countries/")
+        try:
+            contract = contract_for(root)
+            if contract.pages != 1:
+                warn(f"{label}: resume_contract asks for {contract.pages} pages")
+        except Exception as exc:  # noqa: BLE001 - reported, the rest still runs
+            fail(f"{label}: its resume contract does not load ({exc})")
+
+
 def main() -> int:
     for required in REQUIRED_FILES:
         read(required)
-    for yaml_file in ("data/config/portals.yml", "data/config/regions.yml", "data/templates/batch.example.yml",
-                      ".agents/skills/verify-job-url/agents/openai.yaml"):
+    for yaml_file in ("data/config/portals.yml", "data/config/regions.yml", "data/templates/batch.example.yml"):
         load_yaml_mapping(yaml_file)
-    validate_skill(".agents/skills/verify-job-url")
+    read("AGENTS.md", REPO_ROOT)
+    for skill in REQUIRED_SKILLS:
+        validate_skill(f"{SKILLS_DIR}/{skill}", REPO_ROOT)
+        load_yaml_mapping(f"../{SKILLS_DIR}/{skill}/agents/openai.yaml")
     validate_python()
     validate_no_previous_edition()
     profile = load_yaml_mapping("data/config/profile.yml") or {}
@@ -456,6 +540,7 @@ def main() -> int:
     validate_resume()
     validate_sponsorship()
     validate_layout()
+    validate_profiles()
 
     for message in WARNINGS:
         print(f"WARN: {message}")
@@ -464,7 +549,8 @@ def main() -> int:
             print(f"FAIL: {message}")
         print(f"\nWorkspace validation failed with {len(ERRORS)} error(s).")
         return 1
-    print("PASS: Annie's profile, registry, sponsorship gate, agents, workflows, layout and base resume are consistent.")
+    print("PASS: Annie's profile, registry, sponsorship gate, agents, workflows, layout and base resume are consistent"
+          " (and every other built profile's files).")
     return 0
 
 

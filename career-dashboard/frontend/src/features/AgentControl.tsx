@@ -18,6 +18,8 @@ type Budget = {
   cached_results: number;
   cache_hits: number;
   remaining_calls: number;
+  paid_calls_today?: number;
+  free_calls_today?: number;
   note: string;
   by_provider: {
     provider: string;
@@ -419,9 +421,10 @@ export function AgentControl({
         <details className="assistant-details">
           <summary>AI limit & worker history</summary>
           <p>
-            {control.budget.calls_today} of {control.budget.daily_call_limit} AI
-            calls used today · {control.budget.cached_results} saved results ·{" "}
-            {control.budget.cache_hits} cache hits
+            {control.budget.paid_calls_today ?? control.budget.calls_today} of{" "}
+            {control.budget.daily_call_limit} paid AI calls used today ·{" "}
+            {control.budget.free_calls_today ?? 0} free on your plans ·{" "}
+            {control.budget.cached_results} saved results · {control.budget.cache_hits} cache hits
           </p>
           {!!control.budget.by_provider?.length && (
             <p className="small">
@@ -445,11 +448,11 @@ export function AgentControl({
               );
             }}
           >
-            <Field label="Maximum AI calls per day">
+            <Field label="Maximum paid AI calls per day">
               <input
                 type="number"
                 min={0}
-                max={50}
+                max={200}
                 value={limit ?? control.budget.daily_call_limit}
                 onChange={(e) => setLimit(Number(e.target.value))}
               />
@@ -459,7 +462,7 @@ export function AgentControl({
             </button>
           </form>
           <p className="small">
-            Set 0 for saved results and free checks only. {control.budget.note}
+            Set 0 to never pay: only your free plans will run. {control.budget.note}
           </p>
           <details>
             <summary>All worker runs ({control.runs.length})</summary>

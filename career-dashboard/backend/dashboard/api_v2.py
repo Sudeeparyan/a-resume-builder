@@ -2,10 +2,10 @@
 
 from typing import Any, Optional
 from contextlib import asynccontextmanager
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-from backend.services.workspace_v2 import CareerServices, AGENTS
+from backend.services.workspace_v2 import CareerServices, agents_for
 from backend.services.agents import AgentRunner
 
 
@@ -22,15 +22,17 @@ class StudioPreview(BaseModel):
     revision: int = Field(ge=1)
 
 
-class InstructionInput(BaseModel):
-    message: str = Field(min_length=1, max_length=10000)
-    job_id: Optional[str] = None
-    revision: Optional[int] = None
-    request_id: str = Field(min_length=1, max_length=100)
-
-
 class AIPolicyInput(BaseModel):
-    daily_call_limit: int = Field(ge=0, le=50)
+    # Paid AI calls a day (Azure and API keys); free plans never count. 0 = never pay.
+    daily_call_limit: int = Field(ge=0, le=200)
+
+
+class AIRouteInput(BaseModel):
+    order: list[str] = Field(default_factory=list, max_length=10)
+    enabled: dict[str, bool] = Field(default_factory=dict)
+    allow_fallbacks: bool = True
+    # Tokens per 5-hour window she typed per free plan; empty = learned or the starting guess.
+    capacity: dict[str, Optional[int]] = Field(default_factory=dict)
 
 
 class GoalInput(BaseModel):
@@ -45,6 +47,8 @@ class KnowledgeInput(BaseModel):
     summary: str = Field(default="", max_length=30000)
     data: dict[str, Any] = Field(default_factory=dict)
     revision: Optional[int] = None
+    # Profile form fields; when present they decide title, summary and data (profile_fields.py).
+    fields: Optional[dict[str, Any]] = None
 
 
 class ReconcileInput(BaseModel):
@@ -76,6 +80,19 @@ class AgentInput(BaseModel):
     provider: Optional[str] = None
     model: Optional[str] = None
     preset: str = "default"
+    # Discovery only: how many jobs to save (default 5).
+    count: Optional[int] = Field(default=None, ge=1, le=15)
+
+
+class PipelineInput(BaseModel):
+    count: int = Field(default=5, ge=1, le=15)
+    source: str = Field(default="default", max_length=40)
+    # Left out: the AI chosen in Settings (Auto by default) does the work.
+    provider: Optional[str] = Field(default=None, max_length=40)
+    model: Optional[str] = Field(default=None, max_length=200)
+    steps: dict[str, bool] = Field(default_factory=dict)
+    # Also prepare saved jobs an earlier run left unprepared (the 7 AM run sets this).
+    include_unprepared: bool = False
 
 
 class TierChoice(BaseModel):
@@ -162,17 +179,18 @@ def attach(app, workspace, schedule: bool = False):
     from backend.services.resume_studio import ResumeStudio
     studio = ResumeStudio(service)
     runner.studio = studio
-    from backend.services.instruction_tracker import InstructionTracker
     from backend.job_quality import JobQualityService
     from backend.chat_changes import ChatChangeService
-    tracker = InstructionTracker(service, studio)
     quality = JobQualityService(service)
     chats = ChatChangeService(service, studio)
+    from backend.services.pipeline import Pipeline
+    pipeline = Pipeline(service, runner, studio)
+    app.state.pipeline = pipeline
     from backend.services.assistant import Assistant
     from backend.services.assistant_tools import Toolbox
-    assistant = Assistant(service, studio, runner, quality, tools=Toolbox(service, studio, runner, quality, chats))
+    # The chat reaches the Daily Search pipeline through the same object the page uses.
+    assistant = Assistant(service, studio, runner, quality, tools=Toolbox(service, studio, runner, quality, chats, pipeline))
     app.state.assistant = assistant
-    app.state.tracker = tracker
     app.state.studio = studio
     app.state.career = service
     app.state.agents = runner
@@ -192,6 +210,24 @@ def attach(app, workspace, schedule: bool = False):
 
     @router.get("/profile")
     def profile():
+        from backend.services.profile_fields import SCHEMAS, label_for, lines, view
+        from backend.services.profile_sync import locate, lock_reason, resume_gap
+
+        labels = {item["id"]: label_for(item) for item in service.knowledge(True)}
+        registry = workspace.evidence()
+        registered_projects = {p.get("id") for p in registry.get("projects") or []}
+
+        def off_resumes(item):
+            """Why a saved project is kept off resumes (it is not in the registry yet), or None."""
+            if item["kind"] != "project" or item["review_state"] != "registered":
+                return None
+            if locate(item)[1] in registered_projects:
+                return None
+            data, label = item["data"], labels[item["id"]]
+            content = {"title": label, "bullets": lines(item["summary"]),
+                       "context": (data.get("resume_content") or {}).get("context") or ", ".join(data.get("technologies") or [])}
+            return resume_gap(content, label) or "Not on resumes yet."
+
         sources = {}
         # Every readable file in data/context is a source: Annie's own 01-09 files, the
         # readable profile, the questions ledger, pending updates and sources/*.md.
@@ -199,14 +235,22 @@ def attach(app, workspace, schedule: bool = False):
         for path in sorted(list(context.glob("*.md")) + list((context / "sources").glob("*.md"))):
             sources[str(path.relative_to(workspace.root))] = path.read_text(encoding="utf-8")
         return {
-            "items": service.knowledge(),
+            "items": [
+                {**view(item), "locked": lock_reason(item, registry, labels[item["id"]]),
+                 "off_resumes": off_resumes(item)}
+                for item in service.knowledge()
+            ],
+            "schema": SCHEMAS,
             "removed": sum(i["deleted"] for i in service.knowledge(True)),
-            "registry": workspace.evidence(),
+            "registry": registry,
             "configuration": workspace.profile(),
             "sources": sources,
-            "agents": AGENTS,
+            "agents": agents_for(workspace.root),
             "profile_dirty": service.profile_dirty(),
-            "pending": service.pending_knowledge(),
+            "pending": [
+                {**entry, "label": labels.get(entry["id"], entry["title"])}
+                for entry in service.pending_knowledge()
+            ],
             "revision": service.profile_revision(),
             "skills": [
                 {
@@ -227,7 +271,7 @@ def attach(app, workspace, schedule: bool = False):
                 {
                     "name": "Verify job URL",
                     "purpose": "Checks specific posting URLs; browser review may still be required",
-                    "path": ".agents/skills/verify-job-url/SKILL.md",
+                    "path": "../.agents/skills/verify-job-url/SKILL.md",
                 },
                 {
                     "name": "Resume validation",
@@ -247,7 +291,12 @@ def attach(app, workspace, schedule: bool = False):
 
     @router.delete("/profile/items/{id}")
     def remove_item(id: str):
-        return service.delete_knowledge(id)
+        # The Profile page's Remove: Annie's own decision, applied everywhere at once.
+        return service.delete_knowledge(id, propagate=True)
+
+    @router.post("/profile/items/{id}/restore")
+    def keep_item(id: str):
+        return service.restore_knowledge(id)
 
     @router.post("/profile/reconcile")
     def reconcile_items(data: ReconcileInput):
@@ -274,19 +323,30 @@ def attach(app, workspace, schedule: bool = False):
         except Exception:
             return result
         if not result.get("duplicate") and result.get("job"):
-            c = relevance.get("components") or {}
-            rationale = (
-                f"Fit {relevance['score']}/100 — requirement overlap {c.get('requirement_evidence', 0)}/40, "
-                f"role & seniority {c.get('role_seniority', 0)}/25, US location {c.get('location', 0)}/15, "
-                f"skills match {c.get('professional_fit', 0)}/15, domain {c.get('domain', 0)}/5."
-            )
+            from backend.services import fit
+            # The rules check now; the AI check (free plans) runs when the resume is tailored.
+            fit.save(service, result["job"]["id"], relevance["fit"])
             with workspace.connect() as db:
-                db.execute(
-                    "UPDATE jobs SET fit_score=?, fit_rationale=?, "
-                    "raw_jd=CASE WHEN raw_jd='' THEN description ELSE raw_jd END WHERE id=?",
-                    (relevance["score"], rationale, result["job"]["id"]),
-                )
+                db.execute("UPDATE jobs SET raw_jd=CASE WHEN raw_jd='' THEN description ELSE raw_jd END WHERE id=?",
+                           (result["job"]["id"],))
+        relevance = {k: v for k, v in relevance.items() if k != "fit"}
         return {**result, "relevance": relevance}
+
+    @router.get("/jobs/{job_id}/fit")
+    def job_fit(job_id: str):
+        """What the job asks for and which registered evidence meets each item (services/fit.py)."""
+        from backend.services import fit
+
+        workspace.get_job(job_id)
+        return fit.for_job(service, job_id, use_ai=False)
+
+    @router.post("/jobs/{job_id}/fit")
+    def refresh_job_fit(job_id: str):
+        """Check again, by AI on a free plan when one is free (never a paid key)."""
+        from backend.services import fit
+
+        workspace.get_job(job_id)
+        return fit.for_job(service, job_id, refresh=True)
 
     @router.get("/excluded")
     def excluded_postings(include_restored: bool = False):
@@ -367,11 +427,35 @@ def attach(app, workspace, schedule: bool = False):
 
     @router.get("/agents")
     def agents():
-        return {"agents": AGENTS, "runs": service.runs()}
+        return {"agents": agents_for(workspace.root), "runs": service.runs()}
 
     @router.post("/agents/run", status_code=202)
     def run(data: AgentInput):
-        return runner.enqueue(data.kind, data.job_id, data.provider, data.model, data.preset)
+        return runner.enqueue(data.kind, data.job_id, data.provider, data.model, data.preset, count=data.count)
+
+    # Daily Search pipeline: find jobs, then only the helpers she switched on (services/pipeline.py).
+    @router.get("/pipeline")
+    def pipeline_overview():
+        return pipeline.overview()
+
+    @router.get("/pipeline/status")
+    def pipeline_status():
+        return pipeline.status()
+
+    @router.put("/pipeline/preferences")
+    def pipeline_preferences(data: PipelineInput):
+        return pipeline.save_preferences(data.model_dump())
+
+    @router.post("/pipeline/run", status_code=202)
+    def pipeline_run(data: PipelineInput):
+        return pipeline.start(data.model_dump())
+
+    @router.post("/pipeline/{run_id}/stop")
+    def pipeline_stop(run_id: str):
+        stopped = pipeline.stop(run_id)
+        if stopped is None:
+            raise ValueError("That search run was not found.")
+        return stopped
 
     @router.get("/ai/providers")
     def ai_providers(action: Optional[str] = None):
@@ -404,6 +488,26 @@ def attach(app, workspace, schedule: bool = False):
         from backend.ai import settings as ai_settings
 
         return ai_settings.save_fallback(service, runner.gateway, data.provider, data.model)
+
+    @router.get("/ai/route")
+    def ai_route():
+        """Auto's route: the saved order and switches, and each endpoint's live state."""
+        from backend.ai import settings as ai_settings
+
+        entry = ai_settings._auto_entry(service, runner.gateway)
+        return {"route": entry["route"], "endpoints": entry["endpoints"], "ready": entry["configured"]}
+
+    @router.put("/ai/route")
+    def save_ai_route(data: AIRouteInput):
+        from backend.ai import settings as ai_settings
+
+        return ai_settings.save_route(service, runner.gateway, data.model_dump())
+
+    @router.delete("/ai/route/rest/{provider}")
+    def wake_ai_plan(provider: str):
+        from backend.ai import settings as ai_settings
+
+        return ai_settings.wake(service, runner.gateway, provider)
 
     @router.put("/ai/keys/{provider}")
     def save_ai_key(provider: str, data: AIKeyInput):
@@ -505,19 +609,11 @@ def attach(app, workspace, schedule: bool = False):
 
     @router.get('/agent-control')
     def agent_control():
-        return {'budget': runner.cache.stats(), 'runs': service.runs(), 'agents': AGENTS}
+        return {'budget': runner.cache.stats(), 'runs': service.runs(), 'agents': agents_for(workspace.root)}
 
     @router.put('/agent-control/budget')
     def ai_budget(data: AIPolicyInput):
         return runner.cache.configure(data.daily_call_limit)
-
-    @router.get('/instructions')
-    def instructions(job_id: Optional[str] = None):
-        return tracker.history(job_id)
-
-    @router.post('/instructions')
-    def instruction(data: InstructionInput):
-        return tracker.send(**data.model_dump())
 
     @router.post('/studio/{job_id}/score')
     def score_studio(job_id: str):
@@ -544,6 +640,30 @@ def attach(app, workspace, schedule: bool = False):
         from backend.services.assurance import build_assurance
 
         return build_assurance(service, studio, job_id)
+
+    @router.post('/documents/text')
+    async def document_text(request: Request, name: str):
+        """Read one more document about the candidate (Word, PDF, text) so the Assistant can
+        propose what is new in it. The file is kept in data/context/files/; nothing reaches
+        the profile until the candidate confirms each proposed change."""
+        from backend.services.intake.extract import MAX_BYTES, blocks_for
+        from backend.services.intake.job import safe_name
+
+        data = await request.body()
+        if not data or len(data) > MAX_BYTES:
+            raise ValueError("Upload a document of up to 20 MB.")
+        filename = safe_name(name)
+        folder = workspace.root / "data/context/files"
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / filename
+        path.write_bytes(data)
+        try:
+            blocks = blocks_for([(path, filename)])
+        except ValueError:
+            path.unlink(missing_ok=True)
+            raise
+        text = "\n".join(("## " if b.kind == "heading" else "- " if b.kind == "list" else "") + b.text for b in blocks)
+        return {"name": filename, "characters": len(text), "blocks": len(blocks), "text": text}
 
     @router.get('/assistant')
     def assistant_overview():
@@ -594,18 +714,36 @@ def attach(app, workspace, schedule: bool = False):
 
     app.include_router(router)
 
-    @asynccontextmanager
-    async def lifespan(app):
+    def start_background():
         runner.recover()
+        pipeline.recover()
         # Background work (Gmail sync, posting liveness sweep) reaches the network,
         # so it starts only for a real server run, never for a constructed app.
         if schedule:
             runner.start_schedule()
-        yield
+
+    def stop_background(stop_search: bool = False):
+        # Closing a profile (reset/delete) also asks a running Daily Search to stop at
+        # its next step; a normal shutdown leaves that to recover() on the next start.
+        if stop_search:
+            latest = pipeline._latest(active=True)
+            if latest:
+                pipeline.stop(latest["id"])
         runner.stop.set()
         runner.pool.shutdown(wait=False, cancel_futures=True)
         if assistant.pool:
             assistant.pool.shutdown(wait=False, cancel_futures=True)
+
+    # A profile app mounted by the shell (dashboard/shell.py) has no lifespan of its
+    # own, so the shell calls these two directly; a standalone app uses the lifespan.
+    app.state.start_background = start_background
+    app.state.stop_background = stop_background
+
+    @asynccontextmanager
+    async def lifespan(app):
+        start_background()
+        yield
+        stop_background()
 
     app.router.lifespan_context = lifespan
     return service

@@ -1,43 +1,26 @@
-# Python
-__pycache__/
-*.pyc
-.pytest_cache/
-.mypy_cache/
-career-dashboard/backend/.venv/
-.venv/
-
-# Node / built frontend (rebuilt by run.py on start)
-career-dashboard/frontend/node_modules/
-career-dashboard/frontend/dist/
-# career-dashboard/frontend/tsconfig.tsbuildinfo
-
-# # Live database and its snapshots — never commit personal application state
-# career-dashboard/data/*.db
-# career-dashboard/data/*.db-*
-# career-dashboard/data/migrations/*.db
-# career-dashboard/data/migrations/*.json
-# career-dashboard/data/sponsors/index.db*
-# career-dashboard/data/model-catalog.json
-
-# # Generated views (rebuilt from the database)
-# career-dashboard/data/jobs.json
-# career-dashboard/data/activity.json
-# career-dashboard/data/active-profile.json
-# career-dashboard/data/workspace-state.json
-# career-dashboard/data/pipeline.md
-# career-dashboard/data/application-tracker.md
-# career-dashboard/data/applied-companies.md
-# daily-job-search/*/run.json
-
-# Local runtimes and caches
-daily-job-search/.runtime/
-*.pid
+# This repo must stay private: everything is committed, including personal
+# details and the jobs database. Only secrets, installed libraries, and regenerated caches
+# and build output stay out.
 
 # Secrets
 .env
 .env.*
 !.env.example
 keys.txt
+
+# Libraries (reinstalled from requirements / package.json)
+.venv/
+venv/
+node_modules/
+
+# Caches and build output (regenerated; run.py rebuilds the frontend on start)
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+career-dashboard/frontend/dist/
+daily-job-search/.runtime/
+*.pid
 
 # LaTeX build artefacts
 *.aux
@@ -48,4 +31,8 @@ keys.txt
 *.synctex.gz
 
 .DS_Store
-Archive.zip
+
+# Other people's profiles (their documents, jobs, resumes and chats) stay on this PC
+# only. Annie's workspace (career-dashboard/data/) is tracked as before.
+career-dashboard/profiles/*
+!career-dashboard/profiles/.gitkeep

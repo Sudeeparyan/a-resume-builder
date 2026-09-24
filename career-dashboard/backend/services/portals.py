@@ -15,18 +15,21 @@ import html as _html
 import json
 import re
 from typing import Any
+from pathlib import Path
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 from backend.paths import CONFIG, TIMEZONE
 
 
-def _today() -> str:
-    """The access date in Annie's time zone, for the source records on each posting."""
+def _today(tz: str | None = None) -> str:
+    """The access date in the candidate's time zone, for the source records on each posting."""
     from datetime import datetime
     from zoneinfo import ZoneInfo
-    return datetime.now(ZoneInfo(TIMEZONE)).date().isoformat()
+    return datetime.now(ZoneInfo(tz or TIMEZONE)).date().isoformat()
 
+# Annie's list; a profile reads its own data/config/portals.yml (tracked_companies(root=...)).
 PORTALS_YML = CONFIG / "portals.yml"
 TIMEOUT = 20
 USER_AGENT = "Mozilla/5.0 (annie-career-workspace; local job search)"
@@ -57,11 +60,12 @@ def html_to_text(raw: str) -> str:
     return _NL_RE.sub("\n\n", text).strip()
 
 
-def tracked_companies(enabled_only: bool = True) -> list[dict[str, Any]]:
-    """Read portals.yml; cap-exempt employers first (no lottery for them)."""
+def tracked_companies(enabled_only: bool = True, root=None) -> list[dict[str, Any]]:
+    """Read the workspace's portals.yml; cap-exempt employers first (no lottery for them)."""
+    path = Path(root) / "data/config/portals.yml" if root else PORTALS_YML
     try:
         import yaml
-        data = yaml.safe_load(PORTALS_YML.read_text()) or {}
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except Exception:  # noqa: BLE001 - a missing or broken file means no tracked boards
         return []
     rows = [r for r in data.get("tracked_companies") or [] if isinstance(r, dict) and (not enabled_only or r.get("enabled", True))]
@@ -101,7 +105,7 @@ def _get_json(url: str):
         return None, "the board returned invalid JSON"
 
 
-def _posting(row, source_id, title, url, location, description, employer_type="company"):
+def _posting(row, source_id, title, url, location, description, employer_type="company", tz=None):
     return {
         "company": row.get("name") or "",
         "title": (title or "").strip(),
@@ -109,7 +113,7 @@ def _posting(row, source_id, title, url, location, description, employer_type="c
         "url": url or "",
         "requisition_id": str(source_id or ""),
         "description": (description or "").strip(),
-        "company_sources": [{"title": f"{row.get('name')} careers", "url": row.get("careers_url", ""), "accessed_at": _today()}],
+        "company_sources": [{"title": f"{row.get('name')} careers", "url": row.get("careers_url", ""), "accessed_at": _today(tz)}],
         "legal_presence": "Posting read from the company's own ATS board (tracked in portals.yml).",
         "verification": "Read directly from the employer's ATS JSON feed.",
         "red_flags": [],
@@ -125,7 +129,40 @@ def _posting(row, source_id, title, url, location, description, employer_type="c
     }
 
 
-def fetch_board(row: dict[str, Any]) -> tuple[list[dict[str, Any]], str | None]:
+def _lever_text(job: dict[str, Any]) -> str:
+    body = job.get("descriptionPlain") or html_to_text(job.get("description") or "")
+    for lst in job.get("lists") or []:
+        body += "\n\n" + (lst.get("text") or "") + "\n" + html_to_text(lst.get("content") or "")
+    # The closing section is where Lever postings usually state sponsorship and clearance.
+    return (body + "\n\n" + (job.get("additionalPlain") or html_to_text(job.get("additional") or ""))).strip()
+
+
+def full_text(url: str) -> str | None:
+    """The complete text of one Greenhouse, Lever or Ashby posting, from the board's public feed.
+
+    These pages are built by script, so some AI web tools (Azure's) read only part of them,
+    and an AI summary can drop the sponsorship sentence; the gates need the employer's own
+    words. None when the link is not on one of these boards or the feed cannot be read.
+    """
+    parts = urlsplit(url or "")
+    host = (parts.hostname or "").lower()
+    path = [segment for segment in parts.path.split("/") if segment]
+    if host in {"boards.greenhouse.io", "job-boards.greenhouse.io"} and "jobs" in path[:-1]:
+        job_id = path[path.index("jobs") + 1]
+        data, _ = _get_json(f"https://boards-api.greenhouse.io/v1/boards/{path[0]}/jobs/{job_id}")
+        return html_to_text((data or {}).get("content") or "") or None
+    if host == "jobs.lever.co" and len(path) >= 2:
+        data, _ = _get_json(f"https://api.lever.co/v0/postings/{path[0]}/{path[1]}")
+        return (_lever_text(data) or None) if isinstance(data, dict) else None
+    if host == "jobs.ashbyhq.com" and len(path) >= 2:
+        data, _ = _get_json(f"https://api.ashbyhq.com/posting-api/job-board/{path[0]}")
+        for job in (data or {}).get("jobs", []) or []:
+            if path[1] in (job.get("id"), job.get("jobId")) or (job.get("jobUrl") or "").rstrip("/").endswith(path[1]):
+                return (job.get("descriptionPlain") or html_to_text(job.get("descriptionHtml") or "")) or None
+    return None
+
+
+def fetch_board(row: dict[str, Any], tz: str | None = None) -> tuple[list[dict[str, Any]], str | None]:
     """(postings, error). ``error`` is None on success, even an empty board."""
     ats, token = board_token(row)
     if not ats or not token:
@@ -136,34 +173,31 @@ def fetch_board(row: dict[str, Any]) -> tuple[list[dict[str, Any]], str | None]:
         data, error = _get_json(f"https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true")
         for job in (data or {}).get("jobs", []) or []:
             out.append(_posting(row, job.get("id"), job.get("title"), job.get("absolute_url"),
-                                ((job.get("location") or {}).get("name") or ""), html_to_text(job.get("content") or "")))
+                                ((job.get("location") or {}).get("name") or ""), html_to_text(job.get("content") or ""), tz=tz))
     elif ats == "lever":
         data, error = _get_json(f"https://api.lever.co/v0/postings/{token}?mode=json")
         for job in data or []:
             cats = job.get("categories") or {}
-            body = job.get("descriptionPlain") or html_to_text(job.get("description") or "")
-            for lst in job.get("lists") or []:
-                body += "\n\n" + (lst.get("text") or "") + "\n" + html_to_text(lst.get("content") or "")
             out.append(_posting(row, job.get("id"), job.get("text"), job.get("hostedUrl") or job.get("applyUrl"),
-                                cats.get("location") or "", body))
+                                cats.get("location") or "", _lever_text(job), tz=tz))
     elif ats == "ashby":
         data, error = _get_json(f"https://api.ashbyhq.com/posting-api/job-board/{token}?includeCompensation=true")
         for job in (data or {}).get("jobs", []) or []:
             out.append(_posting(row, job.get("id") or job.get("jobId"), job.get("title"), job.get("jobUrl") or job.get("applyUrl"),
-                                job.get("location") or "", job.get("descriptionPlain") or html_to_text(job.get("descriptionHtml") or "")))
+                                job.get("location") or "", job.get("descriptionPlain") or html_to_text(job.get("descriptionHtml") or ""), tz=tz))
     return out, error
 
 
-def fetch_all(limit_per_board: int | None = None) -> tuple[list[dict[str, Any]], list[str]]:
-    """Every open posting on every tracked board that has an ATS feed, plus a coverage note per board."""
+def fetch_all(limit_per_board: int | None = None, root=None, tz: str | None = None) -> tuple[list[dict[str, Any]], list[str]]:
+    """Every open posting on every tracked board of the workspace at `root`, plus a coverage note per board."""
     postings: list[dict[str, Any]] = []
     coverage: list[str] = []
-    for row in tracked_companies():
+    for row in tracked_companies(root=root):
         ats, token = board_token(row)
         if not ats or not token:
             coverage.append(f"{row.get('name')}: no public ATS feed configured (careers page only)")
             continue
-        found, error = fetch_board(row)
+        found, error = fetch_board(row, tz)
         postings.extend(found[:limit_per_board] if limit_per_board else found)
         if error:
             coverage.append(f"{row.get('name')}: FETCH FAILED ({error}) via {ats}")

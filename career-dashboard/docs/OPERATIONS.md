@@ -32,13 +32,17 @@ a provider by its prefix.
 | `GEMINI_API_KEY` | Gemini directly |
 | `MOONSHOT_API_KEY` | Kimi directly — named form only: Kimi keys start with `sk-`, so a bare token is never guessed as Kimi |
 
-`keys.txt` and every `.env` are git-ignored. With no key configured, a local
-CLI runtime is used and costs nothing: Codex, Claude Code or Kimi Code,
-whichever is installed and signed in (Settings lists all three and picks the
-main one). Settings shows which keys were found,
-without revealing any value, and Test connection proves one works. Settings can
-also name a **backup provider**: a failed call is retried once on it and the
-switch is recorded in the activity log (`provider_fallback`).
+`keys.txt` and every `.env` are git-ignored. The default AI is **Auto**
+(`docs/AI-AGENTS.md`): the local runtimes, which cost nothing extra, in the
+order Kimi Code → Codex → Claude Code, each rested while its plan is at its
+usage limit, then Azure OpenAI only when all three are out and the daily
+paid-call limit has room. Settings shows which keys were found, without
+revealing any value, and Test connection proves one works. When one provider is
+chosen by name instead, Settings can also name a **backup provider**: a failed
+call is retried once on it. Every switch is recorded in the activity log
+(`provider_fallback`). Plan rest state and usage windows are in
+`career-dashboard/.ai-plan-health.json` (git-ignored); `workspace.py ai-status`
+prints them.
 
 An OpenRouter key's `limit` is a cap on the key, not money. Paid models need
 purchased credits on the account; without them a call returns HTTP 402.

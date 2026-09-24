@@ -13,8 +13,11 @@ import {
   LoaderCircle,
   X,
 } from "lucide-react";
-import { api } from "./api";
-import { Field, Loading, Modal, NoticeContext } from "./components/UI";
+import { api, PROFILE_ID } from "./api";
+import { ProfileContext, ProfileMenu, firstName, openProfile, timeLabel, useProfileListing } from "./profiles";
+import Onboarding from "./features/Onboarding";
+import OnboardingChat from "./features/OnboardingChat";
+import { AskContext, Field, Loading, Modal, NoticeContext } from "./components/UI";
 import JobDetail from "./components/JobDetail";
 import Dashboard from "./features/Dashboard";
 import DailySearch from "./features/DailySearch";
@@ -73,6 +76,20 @@ class ErrorBoundary extends Component<
   }
 }
 export default function App() {
+  // Which profile this tab belongs to (the /p/<id>/ address) and the others on this PC.
+  const { listing, current, failed, reload } = useProfileListing();
+  const onboarding = current?.state === "onboarding";
+  // Profiles are known (or the server predates them): the workspace can load.
+  const ready = Boolean(current && !onboarding) || failed;
+  useEffect(() => {
+    if (!listing) return;
+    // "/" or an unknown profile: go to the last-used one, keeping the tab named in the address.
+    if (!PROFILE_ID || !listing.profiles.some((p) => p.id === PROFILE_ID))
+      openProfile(listing.last_used || "annie", location.hash.slice(1));
+  }, [listing]);
+  useEffect(() => {
+    if (current) document.title = `${firstName(current.name) || current.name} · Career Workspace`;
+  }, [current]);
   const [route, setRoute] = useState(routeFromHash);
   const [data, setData] = useState<Summary>();
   const [error, setError] = useState("");
@@ -86,6 +103,30 @@ export default function App() {
       : null,
   );
   const [add, setAdd] = useState(false);
+  // A new profile is set up in the chat; the form is one click away (remembered per browser).
+  const [setupForm, setSetupForm] = useState(() => {
+    try {
+      return localStorage.getItem("setup-view") === "form";
+    } catch {
+      return false;
+    }
+  });
+  const chooseSetup = (form: boolean) => {
+    setSetupForm(form);
+    try {
+      localStorage.setItem("setup-view", form ? "form" : "chat");
+    } catch {
+      /* private window: the choice lasts for this page only */
+    }
+  };
+  // A question another tab handed to the Assistant; `n` makes asking the same thing twice count.
+  const [asked, setAsked] = useState<{ text: string; send: boolean; n: number } | null>(null);
+  const ask = useCallback((text: string, send = true) => {
+    setSelected(null);
+    setAsked((prev) => ({ text, send, n: (prev?.n ?? 0) + 1 }));
+    location.hash = "assistant";
+    setRoute("assistant");
+  }, []);
   const notify = useCallback(
     (text: string, error = false) => setToast({ text, error }),
     [],
@@ -100,6 +141,7 @@ export default function App() {
     }
   }, []);
   useEffect(() => {
+    if (!ready) return;
     refresh().catch(() => {});
     const timer = setInterval(() => refresh().catch(() => {}), 8000);
     const hash = () => {
@@ -112,7 +154,7 @@ export default function App() {
       clearInterval(timer);
       window.removeEventListener("hashchange", hash);
     };
-  }, [refresh]);
+  }, [refresh, ready]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(null), 10000);
@@ -137,17 +179,23 @@ export default function App() {
   const workingJob = working[0]
     ? data?.jobs.find((j) => j.id === working[0].job_id)
     : undefined;
-  const current = tabs.find((t) => t[0] === route);
+  const tab = tabs.find((t) => t[0] === route);
   return (
+    <ProfileContext.Provider value={{ current, profiles: listing?.profiles || [], reload }}>
     <NoticeContext.Provider value={toast}>
+      <AskContext.Provider value={ask}>
       <div className="app">
         <aside>
-          <div className="brand">
-            <b>A</b>
-            <div>
-              ANNIE<small>CAREER WORKSPACE</small>
+          {listing ? (
+            <ProfileMenu />
+          ) : (
+            <div className="brand">
+              <b>A</b>
+              <div>
+                ANNIE<small>CAREER WORKSPACE</small>
+              </div>
             </div>
-          </div>
+          )}
           <nav aria-label="Main navigation">
             {tabs.map(([id, label, Icon, group], i) => (
               <div key={id} className="nav-item">
@@ -155,9 +203,10 @@ export default function App() {
                   <span className="nav-group">{group}</span>
                 )}
                 <button
-                  title={label}
-                  aria-current={route === id ? "page" : undefined}
-                  className={route === id ? "active" : ""}
+                  title={onboarding ? "Available once this profile is built" : label}
+                  aria-current={route === id && !onboarding ? "page" : undefined}
+                  className={route === id && !onboarding ? "active" : ""}
+                  disabled={onboarding}
                   onClick={() => navigate(id)}
                 >
                   <Icon size={20} />
@@ -178,14 +227,21 @@ export default function App() {
               <br />
               Every single day.
             </p>
-            <small>Saved locally · US Central time</small>
+            <small>Saved locally · {timeLabel(current?.market?.timezone)}</small>
           </div>
         </aside>
         <main>
           <header>
             <span className="crumb">
-              {current?.[3]} <span aria-hidden="true">/</span>{" "}
-              <b>{current?.[1]}</b>
+              {onboarding ? (
+                <>
+                  New profile <span aria-hidden="true">/</span> <b>Add documents</b>
+                </>
+              ) : (
+                <>
+                  {tab?.[3]} <span aria-hidden="true">/</span> <b>{tab?.[1]}</b>
+                </>
+              )}
             </span>
             <span className="header-status">
               <button
@@ -207,10 +263,18 @@ export default function App() {
                   </>
                 )}
               </button>
-              <span className="avatar">AM</span>
+              {listing ? <ProfileMenu compact /> : <span className="avatar">AM</span>}
             </span>
           </header>
           <div className="page">
+            {onboarding && current ? (
+              setupForm ? (
+                <Onboarding profile={current} notify={notify} onUseChat={() => chooseSetup(false)} />
+              ) : (
+                <OnboardingChat profile={current} notify={notify} onUseForm={() => chooseSetup(true)} />
+              )
+            ) : (
+            <>
             {error && (
               <div className="callout warning" role="alert">
                 {error}
@@ -232,6 +296,8 @@ export default function App() {
                     refresh={refresh}
                     notify={notify}
                     onJob={openStudio}
+                    asked={asked}
+                    onAsked={() => setAsked(null)}
                   />
                 )}
                 {route === "dashboard" && (
@@ -285,6 +351,8 @@ export default function App() {
                 )}
               </ErrorBoundary>
             )}
+            </>
+            )}
           </div>
         </main>
         {toast && (
@@ -314,6 +382,9 @@ export default function App() {
         )}
         {add && data && (
           <AddJob
+            defaultLocation={
+              !current?.market || current.market.code === "us" ? "Remote (US)" : current.market.default_location
+            }
             date={data.goals.date}
             onClose={() => setAdd(false)}
             refresh={refresh}
@@ -322,16 +393,20 @@ export default function App() {
           />
         )}
       </div>
+      </AskContext.Provider>
     </NoticeContext.Provider>
+    </ProfileContext.Provider>
   );
 }
 function AddJob({
+  defaultLocation,
   date,
   onClose,
   refresh,
   notify,
   onSelect,
 }: {
+  defaultLocation: string;
   date: string;
   onClose: () => void;
   refresh: () => Promise<void>;
@@ -341,7 +416,7 @@ function AddJob({
   const [form, setForm] = useState({
     company: "",
     title: "",
-    location: "Remote (US)",
+    location: defaultLocation,
     url: "",
     requisition_id: "",
     description: "",

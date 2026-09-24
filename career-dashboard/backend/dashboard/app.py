@@ -1,9 +1,11 @@
-"""Annie's local dashboard. Bind to loopback through run.py."""
+"""One profile's local dashboard API. Bind to loopback through run.py (via dashboard/shell.py)."""
 
 from __future__ import annotations
 import json
+import os
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlsplit
@@ -17,7 +19,6 @@ from backend.paths import APP_ID, APP_ROOT as ROOT, APP_TITLE, SCRIPTS  # noqa: 
 
 sys.path.insert(0, str(SCRIPTS))
 from career import Workspace, safe_child  # noqa: E402
-from tracking import today  # noqa: E402
 
 
 class JobInput(BaseModel):
@@ -42,20 +43,8 @@ class NotesInput(BaseModel):
     text: str = Field(max_length=100000)
 
 
-def create_app(root=ROOT, schedule: bool = False):
-    root = Path(root).resolve()
-    workspace = Workspace(root)
-    app = FastAPI(title=APP_TITLE, version="2.0.0")
-    app.state.workspace = workspace
-    from backend.dashboard.api_v2 import attach
-
-    service = attach(app, workspace, schedule=schedule)
-    locks = {}
-    locks_guard = threading.Lock()
-
-    def job_lock(job_id):
-        with locks_guard:
-            return locks.setdefault(job_id, threading.Lock())
+def guard(app):
+    """Loopback only, same-origin only, and conservative response headers."""
 
     @app.middleware("http")
     async def local_only(request: Request, call_next):
@@ -80,6 +69,26 @@ def create_app(root=ROOT, schedule: bool = False):
         )
         return response
 
+    return app
+
+
+def create_app(root=ROOT, schedule: bool = False):
+    root = Path(root).resolve()
+    workspace = Workspace(root)
+    app = FastAPI(title=APP_TITLE, version="2.0.0")
+    app.state.workspace = workspace
+    from backend.dashboard.api_v2 import attach
+
+    service = attach(app, workspace, schedule=schedule)
+    locks = {}
+    locks_guard = threading.Lock()
+
+    def job_lock(job_id):
+        with locks_guard:
+            return locks.setdefault(job_id, threading.Lock())
+
+    guard(app)
+
     @app.exception_handler(ValueError)
     async def bad_input(request, exc):
         return JSONResponse({"detail": str(exc)}, status_code=400)
@@ -94,16 +103,23 @@ def create_app(root=ROOT, schedule: bool = False):
             )
         return FileResponse(built)
 
+    started_at = time.time()
+
     @app.get("/api/health")
     def health():
-        return {"app": APP_ID, "version": "2.0.0", "root": str(root)}
+        from backend.services.pipeline import busy
+
+        # pid, started_at and busy let the launcher replace a server running older
+        # code, and never one that is in the middle of a search or an agent run.
+        return {"app": APP_ID, "version": "2.0.0", "root": str(root),
+                "pid": os.getpid(), "started_at": started_at, "busy": busy(workspace)}
 
     @app.get("/api/overview")
     def overview():
         evidence = workspace.evidence()
         jobs = workspace.jobs()
         historical = (
-            json.loads((root / "data/historical-packs.json").read_text())
+            json.loads((root / "data/historical-packs.json").read_text(encoding="utf-8"))
             if (root / "data/historical-packs.json").exists()
             else []
         )
@@ -121,7 +137,7 @@ def create_app(root=ROOT, schedule: bool = False):
                 "historical_packs": len(historical),
             },
             "artifacts": workspace.artifacts(),
-            "questions": (root / "data/context/QUESTIONS-FOR-YOU.md").read_text(),
+            "questions": (root / "data/context/QUESTIONS-FOR-YOU.md").read_text(encoding="utf-8"),
             "historical": historical,
         }
 
@@ -131,7 +147,7 @@ def create_app(root=ROOT, schedule: bool = False):
             "profile": workspace.profile(),
             "evidence": workspace.evidence(),
             "notes": (
-                (root / "data/context/UPDATES.md").read_text()
+                (root / "data/context/UPDATES.md").read_text(encoding="utf-8")
                 if (root / "data/context/UPDATES.md").exists()
                 else ""
             ),
@@ -147,7 +163,7 @@ def create_app(root=ROOT, schedule: bool = False):
 
     @app.get("/api/search-runs")
     def searches():
-        return {"today": today(), "runs": workspace.search_runs()}
+        return {"today": workspace.today(), "runs": workspace.search_runs()}
 
     @app.post("/api/search-runs/{date}")
     def start_search(date: str):

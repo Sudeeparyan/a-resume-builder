@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hunt"
+  short_description: "Find sponsorship-safe US jobs and build a one-page resume and study plan for each"
+  default_prompt: "Use $hunt to find 10 companies for Annie and build each application."

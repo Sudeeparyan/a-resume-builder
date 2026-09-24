@@ -73,6 +73,39 @@ with web search (Claude Code, Codex, Kimi Code, OpenAI) and Gmail to Codex, and 
 lists where each kind of work will run. A provider named explicitly is still
 refused when it lacks the capability.
 
+## Auto: free plans first (the default)
+
+`backend/ai/router.py` routes like OpenRouter across her own plans. The
+default choice, `auto`, sends each step down an ordered route, **Kimi Code
+(K3) → Codex (GPT-6-Astra to write, GPT-6-Luna to read) → Claude Code (Opus to
+write, Sonnet to read) → Azure OpenAI**, to the first endpoint that is switched
+on, set up here, able to do the step (Gmail: Codex only), not resting, and, for
+Azure, inside the daily paid-call limit. Paid endpoints always sort last. A
+failure moves the step to the next endpoint; a usage-limit failure also rests
+that plan until the reset time the CLI printed (`limits.py` reads Claude's
+"resets 5:40pm (zone)", Codex's "try again in 2 hours 13 minutes", Claude's
+epoch form; an hour when it says nothing, two minutes for an Azure 429), and
+three failures in a row rest it for 15 minutes. The rest state lives in
+`.ai-plan-health.json` beside the shared `.env`, so every profile sees it. The
+gateway (`RouterProvider`), the specialist team (`AgentTeam` tiers set to
+`auto`) and Daily Search all use the same `router.route`; each call records the
+endpoint that served it (`ai_calls`, the Agents trace "Auto → Codex · …") and
+each switch as a `provider_fallback` activity event.
+
+Every call on a free plan is also metered against that plan's 5-hour window:
+real tokens when the CLI reports them (Claude Code), otherwise an estimate from
+the text plus a per-call overhead. Each plan's limit per window is what she
+typed in Settings, else the one learned when the plan last ran out (the tokens
+metered in that window), else a starting guess. Settings shows each plan's
+percentage used; Daily Search shows how a search's estimated tokens will fill
+the plans in route order before it starts.
+
+The daily limit (`ai_policy.daily_call_limit`) counts **paid** calls only; free
+plan calls never count, since each plan has its own usage window. When it is
+used up, Auto skips Azure until tomorrow and keeps working on the free plans;
+a paid provider chosen by name is stopped. `workspace.py ai-status` and
+`ai-wake --provider X` show and clear plan state from any AI app.
+
 Every run records its stages and AI calls in `agent_run_events` (provider,
 model, web or not, seconds, new or reused, error); `GET /api/v2/agents/activity`
 serves them to the Agents tab. Nothing in the trace is sent to a model.

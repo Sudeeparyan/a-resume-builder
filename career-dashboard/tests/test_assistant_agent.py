@@ -330,7 +330,7 @@ def test_tiers_move_to_a_runtime_that_is_ready_here(tmp_path):
 
 def test_strict_schema_closes_every_object_and_requires_every_field():
     schema = codex.strict_schema(schemas.AgentTurn.model_json_schema())
-    assert schema["additionalProperties"] is False and schema["required"] == ["thought", "action", "tool", "arguments", "reply", "suggestions"]
+    assert schema["additionalProperties"] is False and schema["required"] == ["thought", "action", "tool", "arguments", "reply", "suggestions", "more_calls"]
     assert "default" not in schema["properties"]["tool"] and schema["properties"]["action"]["enum"] == ["call", "ask", "reply"]
 
 
@@ -366,7 +366,7 @@ CODEX_SCHEMA_ERROR = ('OpenAI Codex v0.154.0\n--------\nmodel: gpt-6\n--------\n
 def test_codex_failures_name_the_real_reason_not_the_banner():
     assert codex.failure_reason(CODEX_SCHEMA_ERROR) == "Invalid schema for response_format: Missing excluded."
     assert codex.failure_reason("OpenAI Codex v0.154.0\nworkdir: /x\nERROR: You are not logged in") == \
-        "Codex is not signed in on this Mac: open the ChatGPT app and sign in, then retry."
+        "Codex is not signed in on this machine: open the ChatGPT app and sign in, then retry."
     assert codex.failure_reason("OpenAI Codex v0.154.0\nworkdir: /x\nmodel: gpt-6") == ""
 
 
@@ -444,6 +444,38 @@ def test_codex_runs_sealed_and_returns_the_object(tmp_path, monkeypatch):
     monkeypatch.setenv("CODEX_CLI", str(fake_codex(tmp_path / "broken", fail=True)))
     with pytest.raises(ValueError, match="could not finish"):
         codex.run("x", {"type": "object", "properties": {}})
+
+
+def test_codex_talks_utf8_whatever_the_windows_code_page(service, tmp_path, monkeypatch):
+    """Like the real CLI, the fake refuses stdin that is not UTF-8 and answers in raw UTF-8.
+    Before, Windows' ANSI code page broke both ways: a dash in a job title made Codex reject the
+    prompt, and a curly quote in its answer failed to decode (live pipeline run, 23 Sep 2026).
+    Both launchers are covered: the specialists' (codex.run) and the agent runner's."""
+    from backend.services.agents import AgentRunner
+    script = tmp_path / "fake_codex.py"
+    script.write_text(
+        "import json, sys\n"
+        "args = sys.argv[1:]\n"
+        "prompt = sys.stdin.buffer.read().decode('utf-8')\n"
+        "answer = {'echo': prompt, 'quote': '\\u201cDr\\u00e4ger\\u201d \\u2014 ok'}\n"
+        "open(args[args.index('-o') + 1], 'w', encoding='utf-8').write(json.dumps(answer, ensure_ascii=False))\n",
+        encoding="utf-8",
+    )
+    if os.name == "nt":
+        cli = tmp_path / "codex.cmd"
+        cli.write_text(f'@echo off\n"{sys.executable}" "{script}" %*\n', encoding="utf-8")
+    else:
+        cli = tmp_path / "codex"
+        cli.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{script}" "$@"\n', encoding="utf-8")
+        cli.chmod(0o755)
+    monkeypatch.setenv("CODEX_CLI", str(cli))
+    schema = {"type": "object", "properties": {"echo": {"type": "string"}, "quote": {"type": "string"}}}
+    expected = {"echo": "Boston, Massachusetts — hybrid at Dräger", "quote": "“Dräger” — ok"}
+    result, _ = codex.run("Boston, Massachusetts — hybrid at Dräger", schema)
+    assert result == expected
+    runner = AgentRunner(service, execute=lambda *a, **k: {})
+    assert runner.invoke("Boston, Massachusetts — hybrid at Dräger", schema, web=False) == expected
+    runner.pool.shutdown()
 
 
 def test_the_specialist_team_runs_on_codex(tmp_path, monkeypatch):
@@ -538,3 +570,147 @@ def test_the_trace_is_kept_with_the_message(assistant, monkeypatch):
     overview = assistant.overview()
     saved = next(m for m in overview["messages"] if m["id"] == "t1")
     assert saved["data"]["trace"][0]["tool"] == "list_jobs"
+
+
+# --- faster turns, the backup AI, and the Daily Search / Assurance tools (23 Sep 2026) ---
+
+def test_one_decision_may_add_read_only_calls_but_never_a_write(assistant, monkeypatch):
+    """Live: "which jobs have no resume?" took five model turns, one lookup each."""
+    job = seed_job(assistant, monkeypatch)
+    arguments = json.dumps({"job_id": job["id"]})
+    turn = schemas.AgentTurn(thought="Reading it all at once.", action="call", tool="list_jobs", arguments="{}",
+                             more_calls=[schemas.ToolCall(tool="get_job", arguments=arguments),
+                                         schemas.ToolCall(tool="resume_status", arguments=arguments),
+                                         schemas.ToolCall(tool="remove_job", arguments=arguments)])
+    team = ScriptedTeam(turn, reply("Read it all."))
+    use_team(monkeypatch, team)
+    done = assistant.send("tell me everything about the acme job", "m1")
+    assert done["state"] == "done" and len(team.calls) == 2
+    assert [s["label"] for s in done["steps"]] == ["Listing saved jobs", "Reading a job", "Reading the resume draft", "Thinking"]
+    task = team.calls[-1]["task"]
+    assert [entry.get("tool") for entry in task[1:]] == ["list_jobs", "get_job", "resume_status", "remove_job"]
+    assert task[-1]["error"].startswith("Not run") and not assistant.w.get_job(job["id"]).get("deleted_at")
+
+
+def test_the_team_tries_the_backup_ai_once_when_its_own_fails(tmp_path, monkeypatch):
+    calls = []
+
+    def exhausted(prompt, schema, **options):
+        calls.append(("codex", options["model"]))
+        raise ValueError("You have hit your usage limit")
+
+    def answering(prompt, schema, **options):
+        calls.append(("claude_code", options["model"]))
+        return {"thought": "Replying.", "action": "reply", "reply": "hi", "tool": "", "arguments": "{}",
+                "suggestions": [], "more_calls": []}, {}
+
+    monkeypatch.setattr(codex, "run", exhausted)
+    monkeypatch.setattr(claude_code, "run", answering)
+    tiers = {"strong": ("codex", "codex-runtime"), "cheap": ("codex", "codex-runtime")}
+    team = AgentTeam(tmp_path, tiers, fallback=("claude_code", "sonnet"))
+    assert team.run("workspace_agent", {"task": []}).reply == "hi"
+    assert calls == [("codex", "codex-runtime"), ("claude_code", "sonnet")]
+    assert team.fell_back["from_provider"] == "codex" and "usage limit" in team.fell_back["reason"]
+    # No backup named: the original failure stands, word for word.
+    with pytest.raises(AgentError, match="usage limit"):
+        AgentTeam(tmp_path, tiers).run("workspace_agent", {"task": []})
+
+
+def test_the_chat_says_once_when_the_backup_ai_answered(assistant, monkeypatch):
+    class BackupTeam(ScriptedTeam):
+        fallback = ("azure_openai", "gpt-6-luna")
+
+        def run(self, name, payload, **options):
+            self.fell_back = {"agent": name, "from_provider": "codex", "from_model": "codex-runtime",
+                              "to_provider": "azure_openai", "to_model": "gpt-6-luna", "reason": "usage limit reached"}
+            return super().run(name, payload, **options)
+
+    use_team(monkeypatch, BackupTeam(call("status"), reply("All good.")))
+    done = assistant.send("how am I doing this week and what is next?", "m1")
+    assert done["state"] == "done" and done["response"] == "All good."
+    switched = [s for s in done["steps"] if s["label"] == "Switched to the backup AI"]
+    assert len(switched) == 1 and "Azure OpenAI · gpt-6-luna" in switched[0]["detail"]
+    events = [e for e in assistant.w.activity(20) if e["action"] == "provider_fallback"]
+    assert events and events[0]["details"]["ai_action"] == "assistant_chat"
+
+
+def test_with_no_backup_the_failure_says_how_to_recover(assistant, monkeypatch):
+    use_team(monkeypatch, StubTeam(error="workspace_agent could not run on codex/codex-runtime: usage limit"))
+    failed = assistant.send("how am I doing this week and what is next?", "m1")
+    assert failed["state"] == "failed" and "choose a Backup provider in Settings" in failed["response"]
+    assert failed["data"]["suggestions"] == ["status", "help"]
+
+
+class FakePipeline:
+    """The Daily Search pipeline's surface, as services/pipeline.py offers it."""
+
+    def __init__(self):
+        self.started, self.stopped, self.run = [], [], None
+
+    def preferences(self):
+        return {"count": 2, "source": "default", "provider": "codex", "model": "codex-runtime",
+                "steps": {"research": False, "tailor": True, "study_plan": True, "pdf": True}}
+
+    def providers(self):
+        return [{"id": "codex", "label": "Codex", "ready": True, "models": [{"id": "codex-runtime"}]},
+                {"id": "azure_openai", "label": "Azure OpenAI", "ready": True, "models": [{"id": "gpt-6-luna"}, {"id": "gpt-5.1"}]}]
+
+    def start(self, values):
+        self.started.append(values)
+        self.run = {"id": "pipe1", "state": "running", "config": values, "error": None, "finished_at": None,
+                    "progress": {"stage": "Finding jobs", "jobs_target": values["count"], "find": {"state": "running"}, "jobs": []}}
+        return self.run
+
+    def status(self):
+        return {"current": self.run, "last": None, "budget": {"limit": 6, "used": 1, "remaining": 5},
+                "plan": {"remaining_today": 3}}
+
+    def stop(self, id):
+        self.stopped.append(id)
+        return self.run
+
+
+def test_the_chat_runs_and_follows_the_daily_search_pipeline(assistant):
+    pipeline = FakePipeline()
+    assistant.tools.pipeline = pipeline
+    started = assistant.tools.call("run_search_pipeline", {"count": 2, "provider": "azure_openai", "steps": ["research", "tailor", "pdf"]})
+    assert pipeline.started == [{"count": 2, "source": "default", "provider": "azure_openai", "model": "gpt-6-luna",
+                                 "steps": {"research": True, "tailor": True, "study_plan": False, "pdf": True}}]
+    assert started["summary"] == "Started: 2 job(s) on Azure OpenAI · gpt-6-luna · research, tailor, pdf"
+    with pytest.raises(ValueError, match="ready here: codex, azure_openai"):
+        assistant.tools.call("run_search_pipeline", {"provider": "gemini"})
+    with pytest.raises(ValueError, match="Unknown helper"):
+        assistant.tools.call("run_search_pipeline", {"steps": ["apply"]})
+    status = assistant.tools.call("search_pipeline_status")
+    assert status["run"]["stage"] == "Finding jobs" and status["run"]["ai"] == "azure_openai · gpt-6-luna"
+    assert [ai["provider"] for ai in status["ready_ais"]] == ["codex", "azure_openai"]
+    # The agent's snapshot carries the same brief, so "how is the search going?" needs no tool call.
+    assert assistant._snapshot()["daily_search"]["state"] == "running"
+    assert assistant.tools.call("stop_search_pipeline")["stopped"] and pipeline.stopped == ["pipe1"]
+    assistant.tools.pipeline = None
+    with pytest.raises(ValueError, match="not available"):
+        assistant.tools.call("search_pipeline_status")
+
+
+def test_the_snapshot_report_and_assurance_show_what_the_tabs_show(assistant, monkeypatch):
+    job = seed_job(assistant, monkeypatch)
+    row = next(j for j in assistant._snapshot()["jobs"] if j["id"] == job["id"])
+    assert row["research_done"] is False and row["study_plan_done"] is False and "resume_pdf" in row
+    assert assistant.tools.call("search_report")["found"] is False
+    now = assistant.s.now()
+    result = {"summary": "One saved.", "added_job_ids": [job["id"]],
+              "rejected_leads": ["https://jobs.example/tiny: company legitimacy needs review"],
+              "excluded": [{"company": "Refusing Co", "title": "Data Engineer", "url": "https://x.example",
+                            "reason": "Posting explicitly will not sponsor", "sentence": "We do not sponsor visas."}]}
+    columns = "id,kind,job_id,state,input,result,error,created_at,updated_at,provider,model,preset"
+    with assistant.w.connect() as db:
+        db.execute(f"INSERT INTO agent_runs({columns}) VALUES('r1','research',?,'completed','{{}}','{{}}',NULL,?,?,'azure_openai','gpt-6-luna','default')",
+                   (job["id"], now, now))
+        db.execute(f"INSERT INTO agent_runs({columns}) VALUES('d1','discovery',NULL,'completed','{{}}',?,NULL,?,?,'azure_openai','gpt-6-luna','default')",
+                   (json.dumps(result), now, now))
+    assert next(j for j in assistant._snapshot()["jobs"] if j["id"] == job["id"])["research_done"] is True
+    report = assistant.tools.call("search_report")
+    assert report["saved_jobs"][0]["id"] == job["id"] and report["turned_away"] == result["rejected_leads"]
+    assert report["excluded_by_sponsorship_gate"][0]["sentence"] == "We do not sponsor visas."
+    check = assistant.tools.call("resume_assurance", {"job_id": job["id"]})
+    assert check["job"]["id"] == job["id"] and check["counts"]["verified"] >= 1

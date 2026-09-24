@@ -20,6 +20,7 @@ def workspace(tmp_path):
         shutil.copytree(ROOT/name,tmp_path/name)
     # validate_resume.py runs as a subprocess from the copied root and imports the contract.
     shutil.copy2(ROOT/'backend/resume_contract.py', tmp_path/'backend/resume_contract.py')
+    shutil.copy2(ROOT/'backend/pdf_compiler.py', tmp_path/'backend/pdf_compiler.py')
     (tmp_path/'backend/__init__.py').write_text('')
     (tmp_path/'data').mkdir(exist_ok=True)
     (tmp_path/'data/historical-packs.json').write_text('[]')
@@ -66,6 +67,10 @@ def test_drafts_are_versioned_and_never_applications(workspace):
     assert (workspace.root/first['folder']/'resume.tex').exists()
     job=workspace.get_job(j['id']); assert job['status']=='prepared' and job['application_date'] is None
     assert job['folder']==second['folder']
+    # The starter files are UTF-8 whatever the Windows code page, since every later step reads them as UTF-8.
+    for name in ('evidence-map.yml','evaluation.md','company-research.md','study-plan.md'):
+        (workspace.root/second['folder']/name).read_bytes().decode('utf-8')
+    assert '’' in (workspace.root/second['folder']/'company-research.md').read_text(encoding='utf-8')
 
 def test_each_ready_project_uses_exact_registry_content(workspace):
     j=add(workspace)

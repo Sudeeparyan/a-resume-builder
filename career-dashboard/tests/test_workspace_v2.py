@@ -191,7 +191,14 @@ def test_reconcile_clears_profile_dirty_without_touching_wording(service):
     confirmed = next(i for i in service.knowledge() if i["id"] == entry["id"])
     assert confirmed["review_state"] == "registered"
     assert confirmed["summary"] == "Orchestrated pipelines"
-    assert before == (service.w.root / "data/context/evidence.yml").read_bytes()
+    # Confirming records the suggestion in the evidence registry: the name is the skill and
+    # its summary a note. The fact removed before it was ever confirmed never gets there.
+    registry = service.w.evidence()
+    airflow = next(c for c in registry["claims"] if c.get("title") == "Apache Airflow")
+    assert airflow["approved_facts"] == ["Apache Airflow"] and airflow["evidence_note"] == "Orchestrated pipelines"
+    assert airflow["status"] == "user_reported"
+    assert "Old fact" not in (service.w.root / "data/context/evidence.yml").read_text(encoding="utf-8")
+    assert before != (service.w.root / "data/context/evidence.yml").read_bytes()
     assert service.reconcile_knowledge()["reconciled"] == []
     with service.w.connect() as db:
         assert db.execute(
@@ -305,6 +312,127 @@ def test_email_worker_requires_verified_completed_search(service):
     assert run["state"] == "failed"
     assert "not connected" in run["error"]
     assert service.mail()["connection"]["connected"] is False
+
+
+def test_a_broken_search_tool_fails_the_search_instead_of_finding_nothing(service):
+    """Live on 23 Sep: Azure's web search tool failed and the run read "Found 0 new jobs"."""
+    def broken(*args, **kwargs):
+        return {"summary": "The web search tool failed before producing search results.",
+                "jobs": [], "rejected_leads": [], "search_worked": False}
+
+    runner = AgentRunner(service, broken)
+    runner.enqueue("discovery", count=1)
+    runner.pool.shutdown(wait=True)
+    run = service.runs()[0]
+    assert run["state"] == "failed"
+    assert "not working" in run["error"] and "try again" in run["error"]
+    assert "failed before producing search results" in run["error"]
+
+    # A search that worked and verified nothing is still an honest empty result.
+    runner = AgentRunner(service, lambda *a, **kw: {**broken(), "search_worked": True})
+    queued = runner.enqueue("discovery", count=1)
+    runner.pool.shutdown(wait=True)
+    assert next(r for r in service.runs() if r["id"] == queued["id"])["state"] == "completed"
+
+
+def test_discovery_gates_the_full_posting_from_the_job_board(service, monkeypatch):
+    """Live on 23 Sep: Azure's web tool read only part of Ashby and Greenhouse pages. The boards
+    publish every posting in full, so the gates read the employer's own words, not a summary."""
+    from backend.services import portals
+
+    strong = ("Required Python, SQL, Apache Kafka streaming pipelines, Airflow orchestration on AWS Glue and S3, "
+              "data validation and quality checks. Responsibilities include ETL, lakehouse data modeling and clinical "
+              "device telemetry dashboards. PyTorch a plus.")
+    refusing = "https://job-boards.greenhouse.io/acme/jobs/111"
+    partial = "https://jobs.ashbyhq.com/bright/0b1c2d3e-aaaa-4bbb-8ccc-123456789abc"
+    feeds = {
+        "https://boards-api.greenhouse.io/v1/boards/acme/jobs/111":
+            {"content": "&lt;p&gt;" + strong + "&lt;/p&gt;&lt;p&gt;We are unable to provide visa sponsorship for this role.&lt;/p&gt;"},
+        "https://api.ashbyhq.com/posting-api/job-board/bright":
+            {"jobs": [{"id": "0b1c2d3e-aaaa-4bbb-8ccc-123456789abc", "descriptionPlain": strong + " Full posting from the board."}]},
+    }
+    monkeypatch.setattr(portals, "_get_json", lambda url: (feeds.get(url), None if url in feeds else "HTTP 404"))
+
+    def lead(company, url):
+        return {
+            "company": company, "title": "Data Engineer", "location": "Austin, TX", "url": url, "requisition_id": "",
+            "description": "The page showed only part of the posting: Python and SQL data pipelines.",
+            "company_sources": [{"title": "Register", "url": "https://register.example/" + company, "accessed_at": "2026-09-23"}],
+            "legal_presence": "Registered legal entity and trading presence",
+            "red_flags": [], "size_category": "mid", "employee_min": 500, "employee_max": 1000,
+            "sponsorship_state": "unknown", "sponsorship_evidence": [], "applicant_count": None,
+            "competition_signals": {"posted_within_72h": True, "limited_syndication": False, "niche_match": True},
+        }
+
+    output = {"summary": "Two leads", "rejected_leads": [], "search_worked": True,
+              "jobs": [lead("Acme", refusing), lead("Bright", partial)]}
+    runner = AgentRunner(service, lambda *a, **kw: output)
+    runner.enqueue("discovery", count=1)
+    runner.pool.shutdown(wait=True)
+    run = service.runs()[0]
+    assert run["state"] == "completed", run["error"]
+    # The refusal was only in the full posting, never in the AI's summary.
+    assert [(item["url"], item["sentence"]) for item in run["result"]["excluded"]] == [
+        (refusing, "We are unable to provide visa sponsorship for this role.")]
+    [saved] = service.w.jobs()
+    assert saved["url"] == partial and saved["description"].endswith("Full posting from the board.")
+
+    # A Lever posting is read from its own feed too; a link on any other site is left to the AI.
+    feeds["https://api.lever.co/v0/postings/bright/abc"] = {
+        "descriptionPlain": "About the role.", "lists": [{"text": "Requirements", "content": "<li>Python</li>"}],
+        "additionalPlain": "This role is not eligible for visa sponsorship."}
+    assert portals.full_text("https://jobs.lever.co/bright/abc/apply") == (
+        "About the role.\n\nRequirements\n- Python\n\nThis role is not eligible for visa sponsorship.")
+    assert portals.full_text("https://careers.bright.example/jobs/abc") is None
+
+
+def test_a_federal_h1b_record_establishes_legal_presence(service, monkeypatch):
+    """Live on 23 Sep: Notion, Torc Robotics and Applied Intuition were turned away because the
+    AI found no registry page. The USCIS H-1B employer list is a federal record of a US employer."""
+    from backend.services import sponsorship
+
+    class FakeIndex:
+        def lookup(self, company, state=""):
+            if company == "Notion":
+                return {"found": True, "matched_name": "NOTION LABS INC", "approvals": 39, "denials": 0,
+                        "years": ["2022", "2023"], "states": ["CA"], "source": "USCIS H-1B Employer Data Hub"}
+            return {"found": False, "matched_name": None, "approvals": 0, "denials": 0, "years": [], "states": [], "source": None}
+
+    monkeypatch.setattr(sponsorship, "index", lambda: FakeIndex())
+    strong = ("Required Python, SQL, Apache Kafka streaming pipelines, Airflow orchestration on AWS Glue and S3, "
+              "data validation and quality checks. Responsibilities include ETL and lakehouse data modeling.")
+
+    def lead(company, url):
+        return {
+            "company": company, "title": "Software Engineer, Early Career", "location": "San Francisco, CA", "url": url,
+            "requisition_id": "", "description": strong, "company_sources": [],
+            "legal_presence": "No independent legal-presence record found.", "verification": "Open on 23 Sep 2026.",
+            "red_flags": [], "size_category": "mid", "employee_min": 500, "employee_max": 1000,
+            "sponsorship_state": "unknown", "sponsorship_evidence": [], "applicant_count": None,
+            "competition_signals": {"posted_within_72h": True, "limited_syndication": False, "niche_match": True},
+        }
+
+    known = "https://jobs.ashbyhq.com/notion/297b4ece-765f-4eea-b1b8-46057cb6501f"
+    unknown = "https://jobs.ashbyhq.com/tinyco/0b1c2d3e-aaaa-4bbb-8ccc-123456789abc"
+    # A strict-schema model fills "excluded" with its own notes; they are not the gate's verdicts.
+    ai_note = {"company": "DoorDash", "title": "Software Engineer I", "url": "https://example.test/dd",
+               "reason": "Graduation window does not match", "sentence": "Graduating between Fall 2026 and Summer 2027."}
+    output = {"summary": "Two leads", "rejected_leads": [], "search_worked": True, "excluded": [ai_note],
+              "jobs": [lead("Notion", known), lead("TinyCo", unknown)]}
+    runner = AgentRunner(service, lambda *a, **kw: output)
+    runner.enqueue("discovery", count=2)
+    runner.pool.shutdown(wait=True)
+    run = service.runs()[0]
+    assert run["state"] == "completed", run["error"]
+    assert [job["url"] for job in service.w.jobs()] == [known]
+    assert any(line.startswith(unknown) and "legitimacy" in line for line in run["result"]["rejected_leads"])
+    assert run["result"]["excluded"] == [] and service.excluded() == []
+    assert any(line.startswith("DoorDash — Software Engineer I: Graduation window") for line in run["result"]["rejected_leads"])
+    with service.w.connect() as db:
+        check = db.execute(
+            "SELECT findings, sources FROM company_checks JOIN companies ON companies.id=company_id "
+            "WHERE companies.display_name='Notion' ORDER BY checked_at DESC LIMIT 1").fetchone()
+    assert "NOTION LABS INC" in check[0] and sponsorship.USCIS_HUB_URL in check[1]
 
 
 def test_email_worker_uses_bounded_incremental_window_after_success(service):

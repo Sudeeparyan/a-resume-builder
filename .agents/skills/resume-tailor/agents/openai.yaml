@@ -1,0 +1,4 @@
+interface:
+  display_name: "Resume Tailor"
+  short_description: "Research one company and tailor Annie's one-page resume to its job"
+  default_prompt: "Use $resume-tailor to tailor Annie's resume to this job description."

@@ -276,7 +276,8 @@ def test_specialists_run_through_the_cli_and_are_schema_checked(tmp_path, monkey
 
 def test_the_hiring_manager_stays_isolated_on_the_local_runtime(tmp_path, monkeypatch):
     seen = {}
-    monkeypatch.setattr(claude_code, "run", lambda prompt, schema, **o: (seen.update(prompt=prompt) or {
+    # The first prompt is the one to check: a schema repair resends it with a correction note.
+    monkeypatch.setattr(claude_code, "run", lambda prompt, schema, **o: (seen.setdefault("prompt", prompt) and {
         "expected_skills": [], "expected_experience": [], "convincing_evidence": [],
         "interview_topics": [], "cannot_promise": "no shortlist"}, {}))
     team = AgentTeam(tmp_path, {"strong": ("claude_code", "sonnet"), "cheap": ("claude_code", "haiku")})
@@ -318,3 +319,24 @@ def test_fresh_start_backs_up_then_clears_jobs_but_keeps_profile_and_settings(se
     assert service.w.activity()[0]["action"] == "workspace_reset"
     # A second run the same day gets its own folder rather than overwriting.
     assert Path(fresh_start(service.w.root, today="2026-09-12")["backup"]).name == "2026-09-12-fresh-start-2"
+
+
+def test_fresh_start_clears_tailored_resume_items(service):
+    # 2 Oct 2026: a tailored job's resume_items rows blocked the delete (foreign key) after
+    # the application folders had already been moved into the backup.
+    from fresh_start import fresh_start
+    from test_career_workspace import add
+
+    job = add(service.w)
+    with service.w.connect() as db:
+        db.execute("INSERT INTO resume_items(id,job_id,section,content,origin,created_at,updated_at) "
+                   "VALUES('r1',?,'skills','Python','verified','2026-10-02','2026-10-02')", (job["id"],))
+    result = fresh_start(service.w.root, today="2026-10-02")
+    assert result["jobs_now"] == 0 and result["cleared"]["resume_items"] == 1
+
+
+def test_fresh_start_covers_every_table_that_points_at_a_job(service):
+    from fresh_start import uncovered_children
+
+    with service.w.connect() as db:
+        assert uncovered_children(db) == []

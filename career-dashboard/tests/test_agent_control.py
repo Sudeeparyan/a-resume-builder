@@ -13,20 +13,25 @@ from backend.services.resume_match import evaluate
 
 
 def test_cache_reuses_stages_and_limits_even_failed_calls(service):
+    # The daily limit is about money: it stops paid calls (API keys, Azure), never her plans.
     cache = AgentCache(service)
     calls = []
     def invoke(*args, **kwargs):
         calls.append(args)
         return {'summary': 'ok', 'report': 'Saved result', 'sources': [], 'limitations': []}
+    paid = {'provider': 'openai', 'model': 'gpt-test', 'action': 'document_review'}
     cache.configure(1)
-    one = cache.execute(invoke, 'public role', REPORT_SCHEMA, web=False)
-    assert cache.execute(invoke, 'public role', REPORT_SCHEMA, web=False) == one
+    one = cache.execute(invoke, 'public role', REPORT_SCHEMA, web=False, **paid)
+    assert cache.execute(invoke, 'public role', REPORT_SCHEMA, web=False, **paid) == one
     assert len(calls) == 1 and cache.stats()['cache_hits'] == 1
-    with pytest.raises(ValueError, match='budget'):
-        cache.execute(invoke, 'changed role', REPORT_SCHEMA, web=False)
+    with pytest.raises(ValueError, match='paid AI limit'):
+        cache.execute(invoke, 'changed role', REPORT_SCHEMA, web=False, **paid)
+    # A free plan (Kimi Code here) is never stopped by the paid limit.
+    free = {'provider': 'kimi_cli', 'model': 'kimi-runtime', 'action': 'document_review'}
+    assert cache.execute(invoke, 'changed role', REPORT_SCHEMA, web=False, **free)['summary'] == 'ok'
     cache.configure(0)
-    assert cache.execute(invoke, 'public role', REPORT_SCHEMA, web=False) == one
-    assert AgentCache(service).stats()['cached_results'] == 1
+    assert cache.execute(invoke, 'public role', REPORT_SCHEMA, web=False, **paid) == one
+    assert AgentCache(service).stats()['cached_results'] == 2
 
 
 def test_concurrent_cache_misses_make_one_call(service):
@@ -105,12 +110,14 @@ def test_build_scores_actual_pdf_and_ai_review_has_only_document(service):
     prompts=[]
     def invoke(prompt,schema,**kwargs):
         prompts.append(prompt)
-        return {'summary':'Review','report':'Review','sources':[],'limitations':[]}
+        # The independent review must return a verdict and its reasons (empty only for a pass).
+        return {'summary':'Review','report':'Review','sources':[],'limitations':[],'verdict':'pass','issues':[]}
     runner=AgentRunner(service,invoke);runner.studio=studio
     runner.enqueue('resume_match',j['id']);runner.pool.shutdown(wait=True)
     assert len(prompts)==1 and 'PRIVATE-' not in prompts[0]
     assert 'resume_text' in prompts[0] and 'job_description' in prompts[0]
     assert service.runs()[0]['result']['profile_access'] is False
+    assert service.runs()[0]['result']['review']['verdict'] == 'pass'
     changed=studio.save(j['id'],d['revision'],fields={'SkillsLanguages':'Python, different skills'})
     assert not changed['match']['current']
     with pytest.raises(ValueError,match='Build'):

@@ -1,0 +1,60 @@
+candidate_revision: 2026-09-18.1
+job_id: f10e2104eb0a0247
+role_eligible: false
+job_snapshot_sha256: 6444c83394e199b2120a7c3f829748d8bfe937ce0191c63823247e5c96c6f001
+supported_requirement_coverage: 0
+requirements: []
+company_problem:
+  statement: Pending review of the saved job description.
+  source_url: https://careers.upstart.com/jobs?gh_jid=7917372
+  published_or_accessed: '2026-10-11'
+  evidence_class: explicit
+  confidence: low
+selected_project_id: 54cee4e2e24a4eecb7f8681939eb2a29
+selected_project_ids:
+- 54cee4e2e24a4eecb7f8681939eb2a29
+- PROJ-P01-IOT
+selected_project_reason: Draft selection by overlap with approved project wording;
+  review the business problem and full job requirements.
+resume_claim_ids:
+- CONTACT-EMAIL-001
+- CONTACT-GITHUB-001
+- CONTACT-PHONE-001
+- CONTACT-PORTFOLIO-001
+- COURSEWORK-MS-001
+- EDU-BE-001
+- EDU-MS-001
+- EXP-INSOPS-001
+- EXP-RA-001
+- EXP-SOLITON-PE-001
+- EXP-TA-001
+- IDENTITY-001
+- METRIC-DRAEGER-94
+- PROJ-P01-IOT
+- SKILL-CLOUD-001
+- SKILL-CV-TOOLS-001
+- SKILL-DATA-TOOLS-001
+- SKILL-DESKTOP-001
+- SKILL-GENAI-001
+- SKILL-LAKEHOUSE-001
+- SKILL-LANGUAGES-001
+- SKILL-ML-001
+- SKILL-STREAMING-001
+- SKILL-TEST-001
+- SKILL-TOUCHED-001
+held_claims_used: []
+studio_review_required: true
+source_evidence_errors:
+- 'Unknown source EVIDENCE ID on line 60: resume_items:37131edd439f4f4f8a74ae9a13f3a8b0'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:a4900eb2e9714e02919eadef4c10ee07'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:ebac104e484141cb9445cd271bf2a8a1'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:ff394591ac6a48459429c989a6b149e5'
+- 'Unknown source EVIDENCE ID on line 68: resume_items:54cee4e2e24a4eecb7f8681939eb2a29'
+- 'Unknown source EVIDENCE ID on line 70: resume_items:54cee4e2e24a4eecb7f8681939eb2a29'
+- 'Unknown source EVIDENCE ID on line 72: resume_items:54cee4e2e24a4eecb7f8681939eb2a29'
+- 'Unknown source EVIDENCE ID on line 74: resume_items:54cee4e2e24a4eecb7f8681939eb2a29'
+- 'Unknown source EVIDENCE ID on line 76: resume_items:54cee4e2e24a4eecb7f8681939eb2a29'
+- 'Unknown source EVIDENCE ID on line 78: resume_items:54cee4e2e24a4eecb7f8681939eb2a29'
+- 'Unknown source EVIDENCE ID on line 170: resume_items:54cee4e2e24a4eecb7f8681939eb2a29'
+- 'Unknown source EVIDENCE ID on line 172: resume_items:54cee4e2e24a4eecb7f8681939eb2a29'
+- 'Unknown source EVIDENCE ID on line 174: resume_items:54cee4e2e24a4eecb7f8681939eb2a29'

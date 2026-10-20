@@ -1,0 +1,188 @@
+% Evidence-grounded one-page US Letter base resume for Annie Prasanna Manoharan.
+% Candidate claims are governed by data/context/evidence.yml. Every content line is
+% preceded by a "% EVIDENCE:" tag naming the registry entries that support it.
+% Track A layout (Data / Analytics Engineering): Education, Skills, Experience, Projects.
+
+\documentclass[letterpaper,10pt]{article}
+
+\usepackage[top=0.5in,bottom=0.5in,left=0.6in,right=0.6in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{titlesec}
+\usepackage{lmodern}
+
+\hypersetup{
+  pdfauthor={Annie Prasanna Manoharan},
+  pdftitle={Annie Prasanna Manoharan - Resume},
+  pdfsubject={Evidence-grounded resume},
+  pdfkeywords={Data Engineer, Machine Learning, Python, SQL, Kafka, Flink, AWS, PyTorch}
+}
+
+\renewcommand{\baselinestretch}{1.0}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+\setlist[itemize]{leftmargin=1.15em,itemsep=2.0pt,topsep=2pt,parsep=0pt,partopsep=0pt}
+\pagestyle{empty}
+\raggedright
+\urlstyle{same}
+
+\titleformat{\section}{\large\scshape}{}{0pt}{}[\vspace{-2pt}\titlerule]
+\titlespacing*{\section}{0pt}{7pt}{4pt}
+
+\newlength{\roleheadingright}
+\newcommand{\roleheading}[4]{%
+  \textbf{#1} \hfill #2\\
+  \settowidth{\roleheadingright}{\textit{#4}}%
+  \parbox[t]{\dimexpr\linewidth-\roleheadingright-1em\relax}{\raggedright\textit{#3}}%
+  \hfill\parbox[t]{\roleheadingright}{\raggedleft\textit{#4}}\vspace{1pt}
+}
+\newcommand{\clientheading}[1]{\textbf{#1}\vspace{1pt}}
+\newenvironment{resumeitems}{\begin{itemize}}{\end{itemize}}
+
+% ---- Header -------------------------------------------------------------
+% EVIDENCE: IDENTITY-001
+\newcommand{\ResumeName}{Annie Prasanna Manoharan}
+% EVIDENCE: CONTACT-PHONE-001 CONTACT-EMAIL-001 CONTACT-PORTFOLIO-001 CONTACT-GITHUB-001
+\newcommand{\ResumeContact}{+1 (479) 301-1366 \textbar{} \href{mailto:annieprm0501@gmail.com}{annieprm0501@gmail.com} \textbar{} \href{https://annie0159.github.io/Portfolio/}{https://annie0159.github.io/Portfolio/} \textbar{} \href{https://github.com/Annie0159}{https://github.com/Annie0159}}
+
+% ---- Skills (one macro per bold category; items ranked per JD by Resume Studio) --
+% EVIDENCE: SKILL-LANGUAGES-001 SKILL-TOUCHED-001
+\newcommand{\SkillsLanguages}{SQL, C++, Python, C}
+% EVIDENCE: SKILL-STREAMING-001 SKILL-CLOUD-001 SKILL-DATA-TOOLS-001 SKILL-LAKEHOUSE-001
+\newcommand{\SkillsData}{Apache Kafka, Apache Flink, PostgreSQL}
+% EVIDENCE: SKILL-ML-001 SKILL-CV-TOOLS-001 SKILL-GENAI-001 SKILL-DATA-TOOLS-001
+\newcommand{\SkillsML}{Flask}
+% EVIDENCE: SKILL-CLOUD-001 SKILL-TOUCHED-001 SKILL-DESKTOP-001 SKILL-TEST-001 SKILL-TOUCHED-001 resume_items:96fb2a8f5baf4686b2c85b4d76e5854c resume_items:36bc11b0f5fc417087f5a36156cedb14 resume_items:d2d12c841a4642598586a3ef1319e28c resume_items:4e3fe8273ef64f79bfe0ab331e4eba7d resume_items:7db8aada74164298a5e7b04a2f7213c6 resume_items:5567592610854acd99b78aa83c6e2c63
+\newcommand{\SkillsCloud}{Graph algorithms, Protocol Buffers, WebSockets, Microservices, REST APIs, Grafana, Docker, Linux, CI/CD, OpenStreetMap}
+
+% ---- Coursework -----------------------------------------------------------
+% EVIDENCE: COURSEWORK-MS-001
+\newcommand{\Coursework}{Algorithms, Database Management Systems, Advanced DBMS, Data Mining, Artificial Intelligence, Machine Learning, Image Processing, Privacy Enhancing Techniques}
+
+% ---- Signature project (first in Projects; unique per company) ------------
+% EVIDENCE: resume_items:3259b26830bf40f48fb2f9b2f0e05e9f
+\newcommand{\SelectedProjectID}{3259b26830bf40f48fb2f9b2f0e05e9f}
+% EVIDENCE: resume_items:3259b26830bf40f48fb2f9b2f0e05e9f
+\newcommand{\SelectedProjectTitle}{Road Network Route Planning Engine}
+% EVIDENCE: resume_items:3259b26830bf40f48fb2f9b2f0e05e9f
+\newcommand{\SelectedProjectContext}{C++, Python, OpenStreetMap}
+% EVIDENCE: resume_items:3259b26830bf40f48fb2f9b2f0e05e9f
+\newcommand{\SelectedProjectBulletOne}{Implemented a road network graph in C++ from OpenStreetMap map extracts, modeling intersections as nodes and road segments as weighted edges}
+% EVIDENCE: resume_items:3259b26830bf40f48fb2f9b2f0e05e9f
+\newcommand{\SelectedProjectBulletTwo}{Built Dijkstra and A* shortest-path search over the graph with heuristics based on geographic distance, and compared runtime behavior across route queries of varying path length}
+% EVIDENCE: resume_items:3259b26830bf40f48fb2f9b2f0e05e9f
+\newcommand{\SelectedProjectBulletThree}{Added a Python benchmarking harness to profile query latency and memory use across different graph sizes}
+
+% ---- Supporting project (may repeat across companies) ----------------------
+% EVIDENCE: PROJ-P10-PACMAN
+\newcommand{\SecondProjectID}{PROJ-P10-PACMAN}
+% EVIDENCE: PROJ-P10-PACMAN
+\newcommand{\SecondProjectTitle}{Pacman Search Algorithms (coursework)}
+% EVIDENCE: PROJ-P10-PACMAN
+\newcommand{\SecondProjectContext}{Python, BFS, A*, admissible heuristics}
+% EVIDENCE: PROJ-P10-PACMAN
+\newcommand{\SecondProjectBulletOne}{Implemented custom problem states, successor functions, goal conditions, and state representations for maze-based environments}
+% EVIDENCE: PROJ-P10-PACMAN
+\newcommand{\SecondProjectBulletTwo}{Implemented BFS and A* with admissible heuristics, and a greedy approximation strategy for large state spaces where optimal search was too expensive}
+
+% EVIDENCE: PROJ-P10-PACMAN
+\newcommand{\SecondProjectBulletThree}{}
+% STUDIO_DENSITY_START
+\clubpenalty=10000
+\widowpenalty=10000
+\renewcommand{\normalsize}{\fontsize{10.5pt}{12.39pt}\selectfont}
+% STUDIO_DENSITY_END
+\begin{document}
+\normalsize
+
+\begin{center}
+  % EVIDENCE: IDENTITY-001
+  {\LARGE\bfseries \ResumeName}\\[3pt]
+  % EVIDENCE: CONTACT-PHONE-001 CONTACT-EMAIL-001 CONTACT-PORTFOLIO-001 CONTACT-GITHUB-001
+  \ResumeContact
+\end{center}
+
+\section{Education}
+
+% EVIDENCE: EDU-MS-001
+\roleheading{University of Arkansas}{Aug 2024 -- May 2026}{Master of Science in Computer Engineering}{Fayetteville, AR}
+% EVIDENCE: COURSEWORK-MS-001
+\textbf{Coursework:} \Coursework
+
+% EVIDENCE: EDU-BE-001
+\roleheading{Sri Ramakrishna Engineering College}{Aug 2019 -- May 2023}{Bachelor of Engineering in Electronics and Communication}{India}
+
+\section{Technical Skills}
+% EVIDENCE: SKILL-CLOUD-001 SKILL-TOUCHED-001 SKILL-DESKTOP-001 SKILL-TEST-001
+\textbf{Cloud and Tools:} \SkillsCloud\\[1pt]
+% EVIDENCE: SKILL-STREAMING-001 SKILL-CLOUD-001 SKILL-DATA-TOOLS-001 SKILL-LAKEHOUSE-001
+\textbf{Data Engineering:} \SkillsData\\[1pt]
+% EVIDENCE: SKILL-LANGUAGES-001 SKILL-TOUCHED-001
+\textbf{Languages:} \SkillsLanguages\\[1pt]
+% EVIDENCE: SKILL-ML-001 SKILL-CV-TOOLS-001 SKILL-GENAI-001 SKILL-DATA-TOOLS-001
+\textbf{Machine Learning and AI:} \SkillsML
+
+\section{Professional Experience}
+
+% EVIDENCE: EXP-INSOPS-001
+\roleheading{Data Engineering Intern}{Jul 2024 -- Present}{InsOps Inc.}{Chicago, Illinois}
+\begin{resumeitems}
+  % EVIDENCE: EXP-INSOPS-001
+  \item Developed data pipelines in AWS using AWS Glue, Lambda, EMR, SQL, and Apache Airflow for orchestration, with S3 cloud storage, for scalable data ingestion, transformation, validation, and analytics
+  % EVIDENCE: EXP-INSOPS-001
+  \item Built data workflows integrating SQL Server, Azure SQL, AWS S3, and cloud databases, preparing structured datasets for downstream data science and analytics
+\end{resumeitems}
+
+% EVIDENCE: EXP-TA-001
+\roleheading{Teaching Assistant}{Sep 2024 -- May 2026}{University of Arkansas, Dept. of Computer Science and Engineering}{Fayetteville, AR}
+\begin{resumeitems}
+  % EVIDENCE: EXP-TA-001
+  \item Supported 100+ students in Programming Foundations through laboratory instruction, debugging assistance, and mentorship in C++ programming fundamentals
+\end{resumeitems}
+
+% EVIDENCE: EXP-RA-001
+\roleheading{Research Assistant}{Sep 2024 -- Jan 2026}{AICV Lab, University of Arkansas}{Fayetteville, AR}
+\begin{resumeitems}
+  % EVIDENCE: EXP-RA-001
+  \item Built reusable preprocessing workflows to segment, organize, and transform raw image/video data into structured inputs for downstream processing and evaluation
+  % EVIDENCE: EXP-RA-001
+  \item Evaluated results using mAP, MOTA, IDF1, PSNR, SSIM, and FID
+\end{resumeitems}
+
+% EVIDENCE: EXP-SOLITON-PE-001
+\roleheading{Project Engineer}{Jun 2023 -- Jun 2024}{Soliton Technologies}{India}
+\begin{resumeitems}
+  % EVIDENCE: EXP-SOLITON-PE-001 METRIC-DRAEGER-94
+  \item Developed customized software solutions for Dr\"ager as the sole developer, automating approximately 94\% of manual test cases while meeting medical-device quality and validation requirements
+  % EVIDENCE: EXP-SOLITON-PE-001
+  \item Designed and developed a C\# WPF desktop application integrating C\#, Python, and LabVIEW-based test workflows to streamline application usage and improve test automation
+\end{resumeitems}
+
+\section{Projects}
+% SELECTED_PROJECT_BLOCK_START
+\textbf{\SelectedProjectTitle} \hfill \textit{\SelectedProjectContext}
+\begin{resumeitems}
+% EVIDENCE: resume_items:3259b26830bf40f48fb2f9b2f0e05e9f
+\item \SelectedProjectBulletOne
+% EVIDENCE: resume_items:3259b26830bf40f48fb2f9b2f0e05e9f
+\item \SelectedProjectBulletTwo
+% EVIDENCE: resume_items:3259b26830bf40f48fb2f9b2f0e05e9f
+\item \SelectedProjectBulletThree
+\end{resumeitems}
+% SELECTED_PROJECT_BLOCK_END
+
+% SECOND_PROJECT_BLOCK_START
+\textbf{\SecondProjectTitle} \hfill \textit{\SecondProjectContext}
+\begin{resumeitems}
+% EVIDENCE: PROJ-P10-PACMAN
+\item \SecondProjectBulletOne
+% EVIDENCE: PROJ-P10-PACMAN
+\item \SecondProjectBulletTwo
+\end{resumeitems}
+% SECOND_PROJECT_BLOCK_END
+
+\end{document}

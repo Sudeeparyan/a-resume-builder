@@ -14,7 +14,32 @@ import {
 import { api, fileUrl, safeUrl } from "../api";
 import { Badge, Empty, Modal, Field, Running } from "../components/UI";
 import { JobList } from "../components/JobList";
-import type { Summary, Mail, Job, CoverLetter, ExcludedJob } from "../types";
+import { RemoveJobDialog } from "./RemoveJob";
+import { CoverLetterView } from "../components/CoverLetterView";
+import type { Summary, Mail, Job, CoverLetter, ExcludedJob, NeedsYouItem } from "../types";
+
+const NEEDS_YOU_PAGES: Record<NeedsYouItem["where"], string> = {
+  profile: "Profile", settings: "Settings", daily: "Daily Search", assurance: "Assurance",
+};
+
+/** What only Annie can do now (backend/services/needs_you.py), each with the page that resolves it. */
+export function NeedsYou({ items, onGo }: { items: NeedsYouItem[]; onGo?: (route: string) => void }) {
+  if (!items.length) return null;
+  return (
+    <section className="card needs-you" aria-label="Needs you">
+      <h3>Needs you</h3>
+      <ul>
+        {items.map((item) => (
+          <li key={item.id}>
+            {item.text}{" "}
+            {item.url && <a href={safeUrl(item.url)} target="_blank" rel="noreferrer">Official page ↗</a>}{" "}
+            {onGo && <button type="button" className="link-button" onClick={() => onGo(item.where)}>Open {NEEDS_YOU_PAGES[item.where]}</button>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 type Props = {
   data: Summary;
   refresh: () => Promise<void>;
@@ -22,6 +47,7 @@ type Props = {
   onJob: (id: string) => void;
   onDaily: () => void;
   onAdd: () => void;
+  onGo?: (route: string) => void;
 };
 export default function Dashboard({
   data,
@@ -30,12 +56,14 @@ export default function Dashboard({
   onJob,
   onDaily,
   onAdd,
+  onGo,
 }: Props) {
   const [mail, setMail] = useState<Mail | null>(null);
   const [section, setSection] = useState("applications");
   const [busy, setBusy] = useState(false);
   const [schedule, setSchedule] = useState<any>(null);
   const [coverLetter, setCoverLetter] = useState<CoverLetter | null>(null);
+  const [removing, setRemoving] = useState<Job | null>(null);
   const running = data.runs.find(
     (r) => r.kind === "email" && ["queued", "running"].includes(r.state),
   );
@@ -88,19 +116,12 @@ export default function Dashboard({
       setBusy(false);
     }
   }
-  async function removeJob(job: Job) {
-    if (
-      !window.confirm(
-        `Remove ${job.company} · ${job.title} from your active job list? Its history and files will be kept.`,
-      )
-    )
-      return;
+  async function removeJob(job: Job, reason: string) {
     try {
-      await api("/v2/jobs/" + job.id, "DELETE", {
-        reason: "Marked not suitable by user",
-      });
+      await api("/v2/jobs/" + job.id, "DELETE", { reason });
+      setRemoving(null);
       await refresh();
-      notify("Unsuitable role removed. You can restore it from Removed roles.");
+      notify("Role removed. You can restore it from Removed roles.");
     } catch (e) {
       notify((e as Error).message, true);
     }
@@ -117,6 +138,7 @@ export default function Dashboard({
           ＋ Save a job
         </button>
       </div>
+      <NeedsYou items={data.needs_you || []} onGo={onGo} />
       <div className="metrics">
         {[
           [BriefcaseBusiness, data.counts.applied, "Applications recorded"],
@@ -286,7 +308,7 @@ export default function Dashboard({
               jobs={data.jobs}
               onSelect={onJob}
               onCoverLetter={generateCoverLetter}
-              onRemove={removeJob}
+              onRemove={setRemoving}
             />
             {!!data.removed_jobs.length && (
               <details className="removed-jobs">
@@ -527,32 +549,13 @@ export default function Dashboard({
           </form>
         </Modal>
       )}
-      {coverLetter && (
-        <Modal
-          title={`${coverLetter.company} · Cover letter`}
-          onClose={() => setCoverLetter(null)}
-        >
-          <div className="callout warning">
-            Draft only. Read it against the job description before sending.
-          </div>
-          <div className="cover-letter-preview">{coverLetter.content}</div>
-          <div className="actions">
-            <button
-              className="secondary"
-              onClick={() => navigator.clipboard.writeText(coverLetter.content)}
-            >
-              Copy letter
-            </button>
-            <a
-              className="primary"
-              href={fileUrl(coverLetter.path)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open saved file ↗
-            </a>
-          </div>
-        </Modal>
+      {coverLetter && <CoverLetterView letter={coverLetter} onClose={() => setCoverLetter(null)} />}
+      {removing && (
+        <RemoveJobDialog
+          job={removing}
+          onCancel={() => setRemoving(null)}
+          onConfirm={(reason) => removeJob(removing, reason)}
+        />
       )}
     </>
   );

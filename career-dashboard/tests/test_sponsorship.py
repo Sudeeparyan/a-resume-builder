@@ -48,7 +48,8 @@ def test_refusals_and_citizenship_requirements_are_excluded_with_the_sentence(se
     result = screen(sentence)
     assert result.verdict == "EXCLUDED", sentence
     assert result.reason in {"no_sponsorship", "cannot_hire"}
-    assert result.sentence and result.sentence in sentence.replace("U.S.", "US")
+    # The posting's own wording, exactly as published (U.S. stays U.S.).
+    assert result.sentence and result.sentence in sentence
 
 
 @pytest.mark.parametrize("sentence", KEPT)

@@ -23,16 +23,26 @@ meta:
 exclude_no_sponsorship:
   - 'no\s+(visa\s+)?sponsorship'
   - 'will\s+not\s+(be\s+able\s+to\s+)?sponsor'
-  - 'unable\s+to\s+(provide\s+|offer\s+)?sponsor'
+  - 'unable\s+to\s+(provide\s+|offer\s+|support\s+)?((US|visa|H-?1B|employment|work|immigration)\s+){0,3}sponsor'
   - 'do(es)?\s+not\s+(offer|provide|support)\s+.{0,25}sponsor'
-  - 'cannot\s+(provide\s+|offer\s+)?sponsor'
+  - 'cannot\s+(provide\s+|offer\s+|support\s+)?((US|visa|H-?1B|employment|work|immigration)\s+){0,3}sponsor'
+  - 'will\s+not\s+(provide|offer|support)\s+((US|visa|H-?1B|employment|work|immigration)\s+){0,3}sponsor'
   - 'sponsorship\s+is\s+not\s+(available|offered|provided)'
   - 'not\s+able\s+to\s+sponsor'
-  - 'without\s+(the\s+need\s+for\s+)?(visa\s+|employer\s+)?sponsorship'
-  - 'now\s+or\s+in\s+the\s+future'
+  - 'without\s+(the\s+need\s+for\s+|requiring\s+)?(visa\s+|employer\s+|employment\s+)?sponsorship'
+  # Retired 2026-10-02: 'now\s+or\s+in\s+the\s+future' on its own (it matched the application
+  # question "Will you now or in the future require sponsorship?") and 'no\s+(C2C|corp\s*to\s*corp|
+  # third[- ]party)' (contractor terms, not visas). The gate skips both even if re-added.
   - 'not\s+considering\s+candidates\s+.{0,30}sponsorship'
-  - 'no\s+(C2C|corp\s*to\s*corp|third[- ]party)'   # staffing shorthand that usually means no sponsorship
-  - 'must\s+not\s+require\s+sponsorship'
+  - 'must\s+not\s+(now\s+or\s+in\s+the\s+future\s+)?require\s+((visa|employer|employment|work|immigration|H-?1B)\s+)?sponsorship'
+  # Added 2026-10-02 (ported from the template edition's live-posting fixes).
+  - 'without\s+(the\s+need\s+for\s+)?(current|present)\s*(or|and|/)\s*future\s+((visa|employer|employment|immigration|work|H-?1B)\s+){0,2}sponsorship'
+  - '(must\s+not\s+require|excludes?)\s+(current|present)\s*(or|and|/)\s*future\s+((visa|employer|employment|immigration|work|H-?1B)\s+){0,2}sponsorship'
+  - 'not\s+eligible\s+for\s+((visa|H-?1B|employment|work|immigration)\s+){0,2}sponsorship'
+  - 'requir\w*\s+[^.;]{0,40}sponsorship[^.;]{0,60}\b(not\s+(be\s+)?(eligible|considered)|ineligible)'
+  - 'sponsorship[^.;]{0,40}\b(is|are|will)\s+not\s+(be\s+)?(available|offered|provided|considered|possible|supported)'
+  - 'not\s+(currently\s+)?(sponsoring|offering\s+(visa\s+)?sponsorship)'
+  - 'do(es)?\s+not\s+(currently\s+)?sponsor\b'
   - 'ineligible\s+for\s+.{0,20}sponsorship'
   # Added 2026-09-18 after testing ten common US phrasings against the list above.
   - 'will\s+not\s+sponsor\s+(H-?1B|visas?|work\s+visas?|employment\s+visas?)'
@@ -40,7 +50,19 @@ exclude_no_sponsorship:
   - 'do(es)?\s+not\s+sponsor\s+(employment|work|immigration)?\s*visas?'
   - 'not\s+(able|eligible|in\s+a\s+position)\s+to\s+(obtain|provide|offer)\s+(visa\s+)?sponsorship'
   - 'sponsorship\s+(will\s+)?not\s+be\s+(provided|offered|available|considered)'
-  - 'candidates\s+(who\s+)?requir(e|ing)\s+(visa\s+)?sponsorship\s+(will\s+not|cannot|are\s+not)'
+  - '(candidates|applicants|individuals)\s+(who\s+)?(requir(e|ing)|need(ing)?)\s+[^.;]{0,40}sponsorship[^.;]{0,50}\b(will\s+not|cannot|are\s+not)'
+  # Added 2026-10-09 after testing thirty-six more US phrasings (thirteen slipped through).
+  - 'not\s+open\s+to\s+(candidates|applicants|individuals|those)\s+[^.;]{0,40}sponsorship'
+  - 'not\s+open\s+to\s+((visa|H-?1B|employment|work|immigration)\s+){0,2}sponsorship'
+  - 'not\s+qualify\s+for\s+((visa|H-?1B|employment|work|immigration)\s+){0,2}sponsorship'
+  - '(unable\s+to|cannot|can\s*not|will\s+not|do\s+not|not\s+able\s+to)\s+consider\s+(candidates|applicants|individuals|anyone)\s+[^.;]{0,50}sponsorship'
+  - 'without\s+((visa|employer|employment|H-?1B|immigration|work)\s+){1,2}sponsorship'
+  - 'sponsorship\s+not\s+(available|offered|provided|possible|supported)'
+  - '\bsponsorship(\s+(available|offered|provided))?\s*:\s*(no|none|not\s+(available|offered|provided))\b'
+  - 'sponsorship[^.;]{0,40}\b(need\s+not|should\s+not|do\s+not|please\s+do\s+not)\s+apply'
+  # Annie is on F-1 OPT: a posting that turns away OPT, CPT, F-1 or H-1B holders turns her away.
+  - '\b(OPT|CPT|F-?1|H-?1B)\b[^.;]{0,40}\b(will\s+not\s+be|are\s+not|is\s+not|cannot\s+be|not)\s+(considered|accepted|eligible)\b'
+  - 'do(es)?\s+not\s+accept\s+[^.;]{0,40}\b(OPT|CPT|F-?1|H-?1B|visas?)\b'
 
 # ------------------------------------------------------------
 # GROUP 2 — cannot lawfully be hired regardless of interview outcome.
@@ -66,6 +88,19 @@ exclude_cannot_hire:
   - '(United\s+States|U\.?S\.?A?\.?)\s+citizenship\s+(is\s+)?required'
   - 'citizenship\s+required\s+due\s+to'
   - '(secret|DoD|DOE|government)\s+clearance'
+  # Added 2026-10-02 (ported from the template edition): verb-first wordings live postings use.
+  - 'requires?\s+(active\s+)?(United\s+States|U\.?S\.?A?\.?)\s+citizenship'
+  - 'only\s+(United\s+States|U\.?S\.?A?\.?)\s+citizens'
+  - 'open\s+only\s+to\s+(United\s+States|U\.?S\.?A?\.?)\s+citizens'
+  # Added 2026-10-02: a job title such as "Software Engineer - Reliability (US Citizen)".
+  - '\((United\s+States|U\.?S\.?A?\.?)\s+citizens?(\s+only)?(\s+required)?\)'
+  # Added 2026-10-09: hyphenated "export-controlled", "must be U.S. persons", and permanent
+  # work authorization (which only citizens and green-card holders have).
+  - 'export[-\s]+control(led)?\b[^.;]{0,80}\b(U\.?S\.?\s+(citizens?|persons?|nationals?)|citizenship|permanent\s+residen)'
+  - 'must\s+be\s+(a\s+)?(United\s+States|U\.?S\.?A?\.?)\s+persons?'
+  - '(must\s+(have|possess|hold)|requires?|required)\s+[^.;]{0,20}permanent\s+(U\.?S\.?\s+|United\s+States\s+)?(work|employment)\s+authori[sz]ation'
+  - 'permanent\s+(U\.?S\.?\s+|United\s+States\s+)?(work|employment)\s+authori[sz]ation\s+(is\s+)?required'
+  - 'authorized\s+to\s+work\s+[^.;]{0,40}\bon\s+a\s+permanent\s+basis'
 
 # ------------------------------------------------------------
 # POSITIVE — explicitly offers sponsorship. Ranks TOP (Tier A).
@@ -117,7 +152,7 @@ do_not_exclude_on:
 # contains a Group 1 / Group 2 phrase. "No security clearance required" and
 # "this role does not require sponsorship" are good news, not refusals.
 negation_guards:
-  - '(does|do|will)\s+not\s+require\s+(a\s+|any\s+)?(security\s+)?(clearance|sponsorship|citizenship)'
+  - '(does|do|will)\s+not\s+require\s+(a\s+|any\s+)?(security\s+|United\s+States\s+|U\.?S\.?A?\.?\s+)?(clearance|sponsorship|citizenship)'
   - 'no\s+(security\s+)?clearance\s+(is\s+)?(required|needed|necessary)'
   - '(clearance|citizenship)\s+(is\s+)?not\s+(required|needed|necessary)'
   - 'without\s+(the\s+need\s+for\s+)?(a\s+)?(security\s+)?clearance'
@@ -127,6 +162,12 @@ negation_guards:
   - '\bno\s+[^.;]{0,100}(sponsorship|work[-\s]?authorization|citizenship|clearance|ITAR|EAR|permanent\s+residency)[^.;]{0,60}\b(language|mention|statement|wording|references?)\b'
   - '(contains?|includes?|mentions?|states?|lists?|makes?)\s+(no|not\s+any)\s+[^.;]{0,100}(sponsorship|work[-\s]?authorization|citizenship|clearance|ITAR|EAR)\s+(language|mention|statement|wording|references?)'
   - '\bno\s+(visa|work[-\s]?authorization|citizenship|clearance|sponsorship)[^.;]{0,40}\b(restrictions?|requirements?)\s+(stated|listed|mentioned|present)'
+  - '(says|mentions|states)\s+nothing\s+about\s+[^.;]{0,60}(sponsorship|citizenship|clearance)'
+  - '\bsilent\s+(on|about|regarding)\s+[^.;]{0,60}(sponsorship|citizenship|clearance)'
+  # The application form's standard question, and notes that report it, ask; they do not refuse.
+  - '\b(will|do|would)\s+you\s+[^.;]{0,80}sponsorship'
+  - '\basks?\s+(about|whether|if|applicants)\s+[^.;]{0,80}sponsorship'
+  - '(does|do)\s+not\s+(state|say|specify|indicate)\s+whether'
 
 # Words that look relevant but are innocent — require a refusal verb nearby,
 # never match the bare noun.
@@ -136,6 +177,10 @@ ambiguous_sponsor_noun:
   - 'project\s+sponsor'
   - 'sponsor\s+a\s+(team|event|conference|meetup)'
   - 'sponsored\s+(content|post|research\s+grant)'
+  # Export-control wording: "authorization to receive ... technology controlled under these
+  # U.S. export laws without sponsorship for an export license" is about an export licence,
+  # not a visa (it hid all 400 Cloudflare postings on 2026-10-02).
+  - 'sponsorship\s+for\s+an?\s+export\s+licen[cs]e'
 
 # ------------------------------------------------------------
 # RANKING TIERS — all shown, best first.

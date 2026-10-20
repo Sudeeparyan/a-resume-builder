@@ -81,7 +81,9 @@ def test_missing_key_files_are_not_an_error(tmp_path):
 def test_every_provider_declares_a_model_for_each_tier():
     for provider_id, spec in catalog.PROVIDERS.items():
         for tier in catalog.TIERS:
-            assert spec["defaults"][tier], f"{provider_id} has no {tier} default"
+            # Azure's model is her own deployment, named in .env, so it has no built-in default.
+            if provider_id != catalog.AZURE:
+                assert spec["defaults"][tier], f"{provider_id} has no {tier} default"
             assert spec["key"] in keys.NAMES
 
 

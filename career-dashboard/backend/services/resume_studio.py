@@ -13,6 +13,7 @@ from pathlib import Path
 from pypdf import PdfReader
 from career import atomic_write, company_key, safe_child, tex_escape
 from validate_resume import extract_zero_argument_macros, inspect_pdf, evidence_ids_from_source
+from backend.ai_marks import clean_pdf, clean_text
 from backend.services.resume_layout import ranked_source, set_density, measure_pages
 
 
@@ -356,7 +357,7 @@ class ResumeStudio:
                 if not version:
                     raise ValueError('Saved version not found')
                 source = version['source']
-            source = before if source is None else source
+            source = before if source is None else clean_text(source)  # hidden characters pasted into the editor
             for name, value in (fields or {}).items():
                 if name not in {'ResumeSummary', 'CoreSkills', 'Coursework'} and not name.startswith(('SelectedProject', 'SecondProject', 'Skills')):
                     raise ValueError('Unknown resume field')
@@ -444,6 +445,7 @@ class ResumeStudio:
                 target = folder / ('preview-' + str(revision))
                 target.mkdir(exist_ok=True)
                 self.write_review_sources(target, draft['source'], job_id)
+                clean_pdf(build / 'resume.pdf')  # only its title and author leave this computer
                 shutil.copy2(build / 'resume.pdf', target / 'resume.pdf')
                 for page in (build / 'pages').glob('*.png'):
                     shutil.copy2(page, target / page.name)
@@ -532,6 +534,7 @@ class ResumeStudio:
                 target = folder / ('preview-' + str(new_revision))
                 target.mkdir(exist_ok=True)
                 self.write_review_sources(target, candidate, job_id)
+                clean_pdf(build / 'resume.pdf')  # only its title and author leave this computer
                 shutil.copy2(build / 'resume.pdf', target / 'resume.pdf')
                 for page in (build / 'pages').glob('*.png'):
                     shutil.copy2(page, target / page.name)
@@ -652,15 +655,20 @@ class ResumeStudio:
         return {**result, 'current': True, 'stale': False, 'revision': draft['revision']}
 
     def download(self, job_id, format):
-        if format not in {'pdf', 'tex'}:
-            raise ValueError('Choose pdf or tex')
+        if format not in {'pdf', 'tex', 'docx'}:
+            raise ValueError('Choose pdf, docx or tex')
         draft = self.get(job_id)
         job = self.w.get_job(job_id)
         preview = draft.get('preview')
-        if format == 'pdf':
+        if format in ('pdf', 'docx'):
             if not preview or not preview.get('current') or preview.get('revision') != draft['revision']:
-                raise ValueError('PDF download is available only for the current successfully compiled revision')
+                raise ValueError(f'{format.upper()} download is available only for the current successfully compiled revision')
             path = safe_child(self.w.root / 'data/output', preview['path'] + '/resume.pdf')
+            if format == 'docx':
+                # The Word copy is made from the same checked revision as the PDF beside it.
+                from backend.services.docx_export import cv_document
+                path = path.with_name('resume.docx')
+                path.write_bytes(cv_document(draft['source'], title=f"Resume for {job['title']} at {job['company']}"))
         else:
             folder = safe_child(self.w.root / 'data/output', draft['file_root'])
             path = folder / 'resume.tex'
@@ -734,7 +742,7 @@ class ResumeStudio:
             }
             try:
                 result = team.run('job_tailor', payload)
-                source, projects, skills = self._apply_tailoring(draft['source'], result, registry, job)
+                source, projects, skills, dropped = self._apply_tailoring(draft['source'], result, registry, job)
             except (AgentError, ValueError) as error:
                 with self.w.connect() as db:
                     self.w.record_event(db, 'studio_tailor_failed', job_id, error=str(error)[:500])
@@ -756,7 +764,8 @@ class ResumeStudio:
                                (company_key(job['company']), projects[0]['evidence_id'], job_id, stamp))
                 self.w.record_event(db, 'studio_tailored', job_id, revision=revision,
                                     verified=sum(1 for item in items if item['origin'] == 'verified'),
-                                    predicted=sum(1 for item in items if item['origin'] == 'predicted'))
+                                    predicted=sum(1 for item in items if item['origin'] == 'predicted'),
+                                    dropped=dropped)
             self.w.export_tracking()
             try:
                 fitted = self.fit(job_id, revision)
@@ -772,7 +781,10 @@ class ResumeStudio:
                 fitted['warnings'] = [*fitted.get('warnings', []),
                                       'Projects and Skills were tailored and saved, but the page could not be fitted automatically: ' + str(error)]
             counts = {origin: sum(1 for item in items if item['origin'] == origin) for origin in ('verified', 'predicted')}
-            return {**fitted, 'tailored': True, 'items': counts}
+            if dropped:
+                fitted['warnings'] = [*fitted.get('warnings', []),
+                                      'Left out ' + str(len(dropped)) + ' suggestion(s) that broke the resume rules: ' + '; '.join(dropped) + '.']
+            return {**fitted, 'tailored': True, 'items': counts, 'dropped': dropped}
 
     @staticmethod
     def _verified_projects(registry):
@@ -802,79 +814,118 @@ class ResumeStudio:
         return pool
 
     @staticmethod
-    def _check_predicted_text(text, contract):
+    def _predicted_problem(text, contract):
+        """Why a predicted item may not reach the resume, or None when it may."""
         for label, pattern in contract.unsafe_patterns.items():
             if re.search(pattern, text):
-                raise ValueError('A predicted item used wording that is never allowed on a resume (' + label + '); the saved draft was left unchanged.')
+                return 'wording that is never allowed on a resume: ' + label
         if re.search(r'\b(?:19|20)\d{2}\b', text):
-            raise ValueError('A predicted item named a date; predicted items never claim dates, so the saved draft was left unchanged.')
+            return 'it names a date'
         if '%' in text:
-            raise ValueError('A predicted item cited a percentage; predicted items never invent metrics, so the saved draft was left unchanged.')
+            return 'it cites a percentage'
+        return None
 
-    def _check_tailored_projects(self, result, registry, job, contract):
-        if not result.projects:
-            raise ValueError('The tailoring came back with no projects; the saved draft was left unchanged.')
-        projects = []
+    @classmethod
+    def _check_predicted_text(cls, text, contract):
+        problem = cls._predicted_problem(text, contract)
+        if problem:
+            raise ValueError('A predicted item was refused (' + problem + '); the saved draft was left unchanged.')
+
+    def _check_tailored_projects(self, result, registry, job, contract, dropped):
+        """The projects to write, signature first. One unusable suggestion is left out and
+        reported in ``dropped``, never printed; the tailoring fails only when nothing usable
+        remains. A verified project always carries the registry's own wording."""
+        projects, used = [], set()
         for entry in result.projects:
             title, context = entry.title.strip(), entry.context.strip()
             bullets = [bullet.strip() for bullet in entry.bullets if bullet.strip()][:3]
-            if not title or not bullets:
-                raise ValueError('A tailored project arrived without a title or bullets; the saved draft was left unchanged.')
             if entry.origin == 'verified':
                 registered = registry.get(entry.evidence_id) or {}
                 content = registered.get('resume_content')
                 if not content or registered.get('status') in {'hold', 'missing'}:
-                    raise ValueError('The tailoring named ' + (entry.evidence_id or 'an unknown project') + ' as verified, but it is not a registered project; the saved draft was left unchanged.')
-                if (title, context, bullets) != (content.get('title', ''), content.get('context', ''), [str(b) for b in content.get('bullets', [])]):
-                    raise ValueError("Verified project '" + title + "' was reworded; verified items must be copied unchanged, so the saved draft was left unchanged.")
+                    dropped.append("project '" + (title or entry.evidence_id or 'untitled') + "' (named as verified, but it is not a registered project)")
+                    continue
+                if entry.evidence_id in used:
+                    continue
+                # Verified items are copied word for word: a reworded copy gets the registered wording back.
+                title, context = content.get('title', ''), content.get('context', '')
+                bullets = [str(b) for b in content.get('bullets', [])][:3]
+                if not title or not bullets:
+                    dropped.append("project '" + entry.evidence_id + "' (its registered entry has no title or bullets)")
+                    continue
+                used.add(entry.evidence_id)
                 projects.append({'row_id': uuid.uuid4().hex, 'section': 'projects',
                                  'content': {'title': title, 'context': context, 'bullets': bullets},
                                  'origin': 'verified', 'evidence_id': entry.evidence_id,
                                  'slot_id': entry.evidence_id, 'evidence_tag': entry.evidence_id})
             else:
-                self._check_predicted_text(' '.join([title, context, *bullets]), contract)
+                if not title or not bullets:
+                    dropped.append("predicted project '" + (title or 'untitled') + "' (no title or bullets)")
+                    continue
+                problem = self._predicted_problem(' '.join([title, context, *bullets]), contract)
+                if problem:
+                    dropped.append("predicted project '" + title + "' (" + problem + ')')
+                    continue
                 row_id = uuid.uuid4().hex
                 projects.append({'row_id': row_id, 'section': 'projects',
                                  'content': {'title': title, 'context': context, 'bullets': bullets},
                                  'origin': 'predicted', 'evidence_id': '',
                                  'slot_id': row_id, 'evidence_tag': 'resume_items:' + row_id})
-        first = projects[0]
-        second = projects[1] if len(projects) > 1 else None
-        if first['origin'] == 'verified':
-            if registry[first['evidence_id']].get('signature_eligible') is False:
-                raise ValueError(first['evidence_id'] + ' is registered as a supporting project only and cannot lead Projects; the saved draft was left unchanged.')
-            with self.w.connect() as db:
-                owner = db.execute('SELECT company_key FROM signature_assignments WHERE project_id=? AND company_key<>?',
-                                   (first['evidence_id'], company_key(job['company']))).fetchone()
-            if owner:
-                raise ValueError(first['evidence_id'] + ' is already the signature project for another company; the saved draft was left unchanged.')
-        if second and first['origin'] == second['origin'] == 'verified' and first['evidence_id'] == second['evidence_id']:
-            raise ValueError('The two project slots must hold distinct projects; the saved draft was left unchanged.')
+        if not projects:
+            raise ValueError('The tailoring came back with no usable projects; the saved draft was left unchanged.'
+                             + (' Left out: ' + '; '.join(dropped) + '.' if dropped else ''))
+        with self.w.connect() as db:
+            owned = {row[0] for row in db.execute('SELECT project_id FROM signature_assignments WHERE company_key<>?',
+                                                  (company_key(job['company']),))}
+
+        def can_lead(project):
+            return project['origin'] == 'predicted' or (
+                registry[project['evidence_id']].get('signature_eligible') is not False and project['evidence_id'] not in owned)
+
+        # The signature slot goes to the first project that may lead; a supporting-only or
+        # already-assigned project can still fill the supporting slot.
+        leader = next((index for index, project in enumerate(projects) if can_lead(project)), None)
+        if leader is None:
+            first = projects[0]['evidence_id']
+            if registry[first].get('signature_eligible') is False:
+                raise ValueError(first + ' is registered as a supporting project only and cannot lead Projects; the saved draft was left unchanged.')
+            raise ValueError(first + ' is already the signature project for another company; the saved draft was left unchanged.')
+        projects.insert(0, projects.pop(leader))
         return projects
 
-    def _check_tailored_skills(self, result, contract):
-        if not result.skills:
-            raise ValueError('The tailoring came back with no skills; the saved draft was left unchanged.')
+    def _check_tailored_skills(self, result, contract, dropped):
         pool = self._verified_skill_pool()
         skills, seen = [], set()
         for entry in result.skills:
             name = ' '.join(entry.name.split())
+            if entry.origin != 'verified':
+                # "Network programming (TCP/IP, sockets)": the gloss in brackets is not the skill.
+                name = ' '.join(re.sub(r'\s*\([^()]*\)', '', name).split())
             key = name.casefold()
             if not name or key in seen:
                 continue
             if ',' in name or ';' in name:
-                raise ValueError("A tailored skill ('" + name + "') contains a list separator; the saved draft was left unchanged.")
-            seen.add(key)
+                dropped.append("skill '" + name + "' (a list, not one skill)")
+                continue
             if entry.origin == 'verified':
                 known = pool.get(key)
                 if not known:
-                    raise ValueError("The tailoring kept '" + name + "' as a verified skill, but it is not in the registered profile; the saved draft was left unchanged.")
+                    dropped.append("skill '" + name + "' (named as verified, but it is not in the registered profile)")
+                    continue
+                seen.add(key)
                 skills.append({'row_id': uuid.uuid4().hex, 'section': 'skills', 'content': known['name'],
                                'origin': 'verified', 'evidence_id': known['evidence_id']})
             else:
-                self._check_predicted_text(name, contract)
+                problem = self._predicted_problem(name, contract)
+                if problem:
+                    dropped.append("predicted skill '" + name + "' (" + problem + ')')
+                    continue
+                seen.add(key)
                 skills.append({'row_id': uuid.uuid4().hex, 'section': 'skills', 'content': name,
                                'origin': 'predicted', 'evidence_id': ''})
+        if not skills:
+            raise ValueError('The tailoring came back with no usable skills; the saved draft was left unchanged.'
+                             + (' Left out: ' + '; '.join(dropped) + '.' if dropped else ''))
         return skills
 
     def _apply_tailoring(self, source, result, registry, job):
@@ -882,8 +933,9 @@ class ResumeStudio:
         from backend.resume_contract import contract_for
         result = TailoringResult.model_validate(result)
         contract = contract_for(self.w.root)
-        projects = self._check_tailored_projects(result, registry, job, contract)
-        skills = self._check_tailored_skills(result, contract)
+        dropped = []
+        projects = self._check_tailored_projects(result, registry, job, contract, dropped)
+        skills = self._check_tailored_skills(result, contract, dropped)
         tailored = self._write_project_slot(source, 'SelectedProject', projects[0])
         if len(projects) > 1 and '% SECOND_PROJECT_BLOCK_START' in tailored:
             tailored = self._write_project_slot(tailored, 'SecondProject', projects[1])
@@ -892,7 +944,7 @@ class ResumeStudio:
         illegal = {name for name in set(old) | set(new) if old.get(name) != new.get(name) and not tailored_macro(name)}
         if illegal:
             raise ValueError('Tailoring may only change Projects and Skills fields, but it also touched: ' + ', '.join(sorted(illegal)))
-        return tailored, projects, skills
+        return tailored, projects, skills, dropped
 
     @staticmethod
     def _write_project_slot(source, slot, project):

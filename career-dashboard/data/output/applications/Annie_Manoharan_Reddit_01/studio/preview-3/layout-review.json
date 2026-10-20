@@ -1,0 +1,46 @@
+{
+  "revision": 3,
+  "source_sha256": "acab3e09e7f0cf8dd375b38367e9c367c746883cb6a8f94b0a6fd67b1569699f",
+  "page_count": 1,
+  "created_at": "2026-10-10T06:26:21+00:00",
+  "path": "applications\\Annie_Manoharan_Reddit_01\\studio\\preview-3",
+  "review_required": true,
+  "layout": {
+    "full_pages": true,
+    "page_count": 1,
+    "target_pages": 1,
+    "paper": "letter",
+    "pages": [
+      {
+        "page": 1,
+        "fill_percent": 98.1,
+        "bottom_blank_mm": 4.9,
+        "largest_internal_gap_mm": 4.6,
+        "paper_ok": true,
+        "words": 478,
+        "within_margins": true
+      }
+    ],
+    "target_fill_percent": 80,
+    "normal_margins_mm": 12.7
+  },
+  "ranking": {
+    "track": "A",
+    "section_order": [
+      "Education",
+      "Technical Skills",
+      "Professional Experience",
+      "Projects"
+    ],
+    "changes": [
+      "Ranked SkillsLanguages items against the JD.",
+      "Ranked SkillsData items against the JD.",
+      "Ranked SkillsCloud items against the JD.",
+      "Ranked skill categories against the JD.",
+      "Track A: section order Education > Technical Skills > Professional Experience > Projects."
+    ],
+    "method": "Deterministic JD relevance ordering of registered evidence; not an ATS score.",
+    "cuts": []
+  },
+  "body_font_pt": 10.0
+}

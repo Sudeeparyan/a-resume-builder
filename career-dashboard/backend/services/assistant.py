@@ -99,6 +99,8 @@ class Stopped(Exception):
 # The agent loop: how many model decisions one message may take, how much of a
 # tool result the model sees, and how many results stay whole in the transcript.
 MAX_TURNS = 14
+# Read-only lookups one decision may add beside its main call (AgentTurn.more_calls).
+MAX_EXTRA_CALLS = 5
 RESULT_CHARS = 3500
 FULL_RESULTS_KEPT = 8
 
@@ -840,6 +842,9 @@ class Assistant:
             "profile_has_unreviewed_edits": summary["profile_dirty"],
             "pending_profile_entries": len(self.s.pending_knowledge()),
             "excluded_count": len(summary["excluded_jobs"]),
+            # What only she can do now, and the Daily Search pipeline's progress.
+            "needs_you": [item["text"] for item in summary.get("needs_you") or []],
+            "daily_search": self.tools.pipeline_brief() if hasattr(self.tools, "pipeline_brief") else None,
         }
 
     def _payload(self, id, transcript, turn_no) -> dict:
@@ -897,6 +902,44 @@ class Assistant:
             out.append(row)
         return out
 
+    def _note_fallback(self, id, team, noted: set) -> None:
+        """The chosen AI failed and another one answered: say so once per message."""
+        from backend.ai import provider_label
+
+        switched = getattr(team, "fell_back", None)
+        if not switched or (switched["from_provider"], switched["to_provider"]) in noted:
+            return
+        noted.add((switched["from_provider"], switched["to_provider"]))
+        detail = (f"{provider_label(switched['from_provider'])} could not answer ({switched['reason'].rstrip('.')}), "
+                  f"so {provider_label(switched['to_provider'])} · {switched['to_model']} did.")
+        self._step(id, "Switched to the backup AI", state="done", detail=detail[:400], agent="orchestrator")
+        if switched.get("recorded"):
+            return  # Auto's router already wrote this switch to the activity log
+        with self.w.connect() as db:
+            self.w.record_event(db, "provider_fallback", None, ai_action="assistant_chat",
+                                from_provider=switched["from_provider"], to_provider=switched["to_provider"],
+                                reason=switched["reason"][:300])
+
+    def _extra_calls(self, id, turn, transcript, data) -> None:
+        """Run the read-only tools a decision listed beside its main call, each as its own step."""
+        for extra in list(getattr(turn, "more_calls", None) or [])[:MAX_EXTRA_CALLS]:
+            self._check_stop(id)
+            try:
+                tool = self.tools.get(extra.tool)
+                arguments = self.tools.coerce(tool, json.loads(extra.arguments or "{}"))
+            except (ValueError, json.JSONDecodeError) as error:
+                transcript.append({"role": "tool", "tool": extra.tool, "error": str(error)[:400]})
+                continue
+            if tool.writes or tool.confirm:
+                transcript.append({"role": "tool", "tool": tool.name, "error": "Not run: more_calls only takes tools that read. "
+                                   "Call a tool that changes something as the main call of its own turn."})
+                continue
+            self._step(id, tool.label, agent=tool.agent)
+            entry = self._run_tool(id, tool, arguments)
+            transcript.append(entry)
+            if entry.get("card"):
+                data.update(entry["card"])
+
     def _agent(self, id, text, transcript=None):
         from backend.ai import any_provider_configured, team_for
         from backend.ai.agents.graph import AgentError
@@ -913,16 +956,24 @@ class Assistant:
             if entry.get("card"):
                 data.update(entry["card"])
         used = sum(1 for e in transcript if e.get("role") == "tool")
+        noted: set = set()
         for turn_no in range(used, used + MAX_TURNS):
             self._step(id, "Thinking", agent="assistant")
             try:
                 turn = team.run("workspace_agent", self._payload(id, transcript, turn_no))
             except (AgentError, ValueError) as error:
                 self._finish_step(id, "failed", str(error)[:300])
+                advice = ("Choose another AI in the menu above the chat, or choose Auto in Settings so the chat "
+                          "moves to your next plan by itself")
                 return "failed", ("I could not reach the AI runtime, so nothing more was changed. " + str(error).rstrip(".")
-                                  + ". The exact commands (say *help*) still work without it."), {**data, "intent": "agent_failed", "trace": self._trace(transcript)}
+                                  + ". " + advice + ". The exact commands (say *help*) still work without it."), {
+                    **data, "intent": "agent_failed", "trace": self._trace(transcript), "suggestions": ["status", "help"]}
             # A decision that arrives after she pressed Stop is dropped: no tool runs, no reply shows.
             self._check_stop(id)
+            if getattr(team, "fell_back", None):
+                self._finish_step(id, "done")
+                self._note_fallback(id, team, noted)
+                self._step(id, "Thinking", agent="assistant")
             thought = " ".join(turn.thought.split())[:200]
             suggestions = [s.strip() for s in turn.suggestions if isinstance(s, str) and 0 < len(s.strip()) <= 80][:4]
             if turn.action == "reply":
@@ -961,5 +1012,6 @@ class Assistant:
             transcript.append(entry)
             if entry.get("card"):
                 data.update(entry["card"])
+            self._extra_calls(id, turn, transcript, data)
         return "failed", (f"I stopped after {MAX_TURNS} steps without finishing. What was done is listed above; "
                           "tell me how to continue, or split the request."), {**data, "intent": "agent_exhausted", "trace": self._trace(transcript)}

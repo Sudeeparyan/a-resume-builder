@@ -81,6 +81,9 @@ def job_url(value):
 
 
 def tex_escape(text):
+    # Hidden characters and look-alike letters never reach resume.tex (backend/ai_marks.py).
+    from backend.ai_marks import clean_text
+
     return "".join(
         {
             "\\": r"\textbackslash{}",
@@ -95,7 +98,7 @@ def tex_escape(text):
             "^": r"\textasciicircum{}",
             "|": r"\textbar{}",
         }.get(c, c)
-        for c in text
+        for c in clean_text(text)
     )
 
 

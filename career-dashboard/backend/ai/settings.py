@@ -7,7 +7,7 @@ values never appear in anything returned here.
 
 from __future__ import annotations
 
-from backend.ai import catalog, claude_code, keys, kimi_cli, models
+from backend.ai import antigravity_cli, catalog, claude_code, codex, keys, kimi_cli, models, router
 from backend.ai.agents.graph import AgentTeam, describe_provider_error
 from backend.ai.agents.specialists import REGISTRY
 
@@ -18,7 +18,7 @@ CODEX = {
     "configured": True,
     "models": ["codex-runtime"],
     "defaults": {"strong": "codex-runtime", "cheap": "codex-runtime"},
-    "note": "Runs through the Codex app on this Mac. No API key and no per-call cost.",
+    "note": "Runs through the Codex app on this machine. No API key and no per-call cost.",
 }
 
 # The same idea on the Claude side: the signed-in Claude Code CLI, on the
@@ -42,23 +42,62 @@ def _kimi_cli_entry() -> dict:
         "id": kimi_cli.ID,
         "label": kimi_cli.LABEL,
         "configured": kimi_cli.available(),
-        "models": list(kimi_cli.MODELS),
+        "models": list(kimi_cli.models()),
         "defaults": dict(kimi_cli.DEFAULTS),
         "note": kimi_cli.NOTE,
     }
 
 
+# And on the Google side: the Antigravity CLI (agy), on the Google account's limits.
+def _antigravity_entry() -> dict:
+    return {
+        "id": antigravity_cli.ID,
+        "label": antigravity_cli.LABEL,
+        "configured": antigravity_cli.available(),
+        "models": list(antigravity_cli.MODELS),
+        "defaults": dict(antigravity_cli.DEFAULTS),
+        "note": antigravity_cli.NOTE,
+    }
+
+
 LOCAL_DEFAULTS = {"codex": CODEX["defaults"], claude_code.ID: claude_code.DEFAULTS,
-                  kimi_cli.ID: kimi_cli.DEFAULTS}
+                  kimi_cli.ID: kimi_cli.DEFAULTS, antigravity_cli.ID: antigravity_cli.DEFAULTS,
+                  router.ID: {"strong": router.ID, "cheap": router.ID}}
+
+
+def _auto_entry(services, gateway=None) -> dict:
+    """Auto (the router) as the page shows it: ready or not, and its route in order."""
+    from backend.ai import paid_gate, ready_providers
+
+    root = services.w.root
+    ready = ready_providers(root)
+    policy = router.policy_from(services.pref("ai_preferences", {}) or {})
+    blocked = paid_gate(services)(catalog.AZURE)
+    return {
+        "id": router.ID, "label": router.LABEL, "kind": "auto", "configured": bool(ready.get(router.ID)),
+        "models": [router.ID], "agent_models": [router.ID], "defaults": {"strong": router.ID, "cheap": router.ID},
+        "capabilities": sorted(gateway.providers[router.ID].capabilities) if gateway is not None else ["structured", "web", "apps"],
+        "note": ("Uses your Kimi, Codex, Claude and Antigravity plans first and moves to the next when one "
+                 "reaches its usage limit. Azure (paid) is used only when all of them are resting or failing."),
+        "route": policy,
+        "endpoints": router.status(root, policy, ready_map=ready, paid={"block": blocked}),
+    }
 
 
 def _preferences(services) -> dict:
+    from backend.ai import main_choice, ready_providers
+
     stored = services.pref("ai_preferences", {}) or {}
     tiers = stored.get("tiers") or {}
     resolved = {}
+    main = None
     for tier in catalog.TIERS:
         chosen = tiers.get(tier) or {}
-        provider = chosen.get("provider") or "openrouter"
+        provider = chosen.get("provider")
+        if not provider:
+            # A tier nobody chose follows the main choice (Auto by default).
+            main = main or main_choice(stored, ready_providers(services.w.root))[0]
+            provider = main if main in LOCAL_DEFAULTS or main in catalog.PROVIDERS else "openrouter"
         fallback = LOCAL_DEFAULTS[provider][tier] if provider in LOCAL_DEFAULTS else catalog.default_model(provider, tier)
         resolved[tier] = {
             "provider": provider,
@@ -96,6 +135,8 @@ def _routes(gateway) -> list:
 
 def overview(services, refresh: bool = False, gateway=None) -> dict:
     """Everything the settings screen needs in one call."""
+    from backend.services.agents import mail_available
+
     root = services.w.root
     providers = []
     for provider_id, spec in catalog.PROVIDERS.items():
@@ -106,23 +147,26 @@ def overview(services, refresh: bool = False, gateway=None) -> dict:
             "kind": "api",
             "configured": listed["configured"],
             "models": listed["models"],
-            "defaults": spec["defaults"],
+            "defaults": catalog.defaults(provider_id, root),
             "key_name": spec["key"],
             "key_source": keys.source(root, spec["key"]),
             "error": listed["error"],
             "fetched_at": listed.get("fetched_at"),
         })
-    providers.append({**CODEX, "kind": "local"})
+    providers.append({**CODEX, "models": list(codex.models()), "kind": "local"})
     providers.append({**_claude_code_entry(), "kind": "local"})
     providers.append({**_kimi_cli_entry(), "kind": "local"})
+    providers.append({**_antigravity_entry(), "kind": "local"})
     if gateway is not None:
         for entry in providers:
             engine = gateway.providers.get(entry["id"])
             entry["capabilities"] = sorted(engine.capabilities) if engine else []
             entry["agent_models"] = list(engine.models) if engine else []
+    providers.insert(0, _auto_entry(services, gateway))
     return {
         "main": gateway.preferences()["default"] if gateway is not None else None,
-        "routes": _routes(gateway) if gateway is not None else [],
+        "routes": [r for r in (_routes(gateway) if gateway is not None else [])
+                   if r["action"] != "email" or mail_available(root, services.pref("gmail", {}))],
         "providers": providers,
         "tiers": {
             "strong": "Writes text you will send: resume wording, cover letters, role review.",
@@ -133,6 +177,7 @@ def overview(services, refresh: bool = False, gateway=None) -> dict:
             for name, agent in sorted(REGISTRY.items())
         ],
         "preferences": _preferences(services),
+        "demo_mode": False,
     }
 
 
@@ -159,14 +204,36 @@ def save(services, values: dict) -> dict:
 
 def test_provider(services, provider_id: str, model: str) -> dict:
     """Make the smallest possible real call, so a bad key fails here not mid-run."""
+    if provider_id == router.ID:
+        # Auto: test the endpoint the route would use next (the first one not resting).
+        from backend.ai import paid_gate, ready_providers
+
+        policy = router.policy_from(services.pref("ai_preferences", {}) or {})
+        blocked = paid_gate(services)(catalog.AZURE)
+        rows = router.status(services.w.root, policy, ready_map=ready_providers(services.w.root))
+        first = next((row for row in rows if row["enabled"] and row["ready"] and not row["resting"]
+                      and not (row["paid"] and blocked)), None)
+        if first is None:
+            return {"ok": False, "provider": provider_id, "model": model,
+                    "detail": "Nothing on the route can run right now: every plan is resting, switched off or not set up."}
+        result = test_provider(services, first["provider"], first["models"]["strong"])
+        return {**result, "provider": provider_id, "model": model,
+                "detail": f"Next on the route: {first['label']} · {first['models']['strong']}. " + result["detail"]}
     if provider_id == "codex":
         from backend.ai import codex
 
         if not codex.available():
             return {"ok": False, "provider": provider_id, "model": model,
-                    "detail": "Codex is not installed on this Mac. Install the ChatGPT app and sign in."}
+                    "detail": "Codex is not installed on this machine. Install the ChatGPT app and sign in."}
+        # A real call: being installed says nothing about sign-in or the plan's usage limit.
+        ping = {"type": "object", "properties": {"word": {"type": "string"}},
+                "required": ["word"], "additionalProperties": False}
+        try:
+            answer = codex.invoke("Reply with the single word: ready", ping, model=model or "codex-runtime")
+        except ValueError as error:
+            return {"ok": False, "provider": provider_id, "model": model, "detail": str(error)}
         return {"ok": True, "provider": provider_id, "model": model,
-                "detail": "The local Codex runtime is used directly and needs no key."}
+                "detail": f"Answered: {str(answer.get('word', ''))[:40]}"}
     if provider_id == claude_code.ID:
         ping = {"type": "object", "properties": {"word": {"type": "string"}},
                 "required": ["word"], "additionalProperties": False}
@@ -187,6 +254,19 @@ def test_provider(services, provider_id: str, model: str) -> dict:
                 "required": ["word"], "additionalProperties": False}
         try:
             answer = kimi_cli.invoke("Reply with the single word: ready", ping, model=model)
+        except ValueError as error:
+            return {"ok": False, "provider": provider_id, "model": model, "detail": str(error)}
+        return {"ok": True, "provider": provider_id, "model": model,
+                "detail": f"Answered: {str(answer.get('word', ''))[:40]}"}
+    if provider_id == antigravity_cli.ID:
+        if not antigravity_cli.available():
+            return {"ok": False, "provider": provider_id, "model": model,
+                    "detail": "Antigravity's CLI (agy) is not installed on this machine. Install Google Antigravity "
+                              "from https://antigravity.google, run `agy install`, then sign in by running `agy` once."}
+        ping = {"type": "object", "properties": {"word": {"type": "string"}},
+                "required": ["word"], "additionalProperties": False}
+        try:
+            answer = antigravity_cli.invoke("Reply with the single word: ready", ping, model=model)
         except ValueError as error:
             return {"ok": False, "provider": provider_id, "model": model, "detail": str(error)}
         return {"ok": True, "provider": provider_id, "model": model,
@@ -213,9 +293,11 @@ def test_provider(services, provider_id: str, model: str) -> dict:
 
 
 def team(services, on_usage=None) -> AgentTeam:
-    from backend.ai import usage_recorder
+    from backend.ai import team_for
 
-    return AgentTeam.from_preferences(services.w.root, _preferences(services), on_usage or usage_recorder(services))
+    # Keep this older entry point on the same saved route and paid gate as the
+    # chat, dashboard, and scheduled search specialists.
+    return team_for(services, on_usage)
 
 
 def choose_main(services, gateway, provider_id: str, model: str) -> dict:
@@ -246,6 +328,32 @@ def choose_main(services, gateway, provider_id: str, model: str) -> dict:
     return overview(services, gateway=gateway)
 
 
+def save_route(services, gateway, values: dict) -> dict:
+    """Save Auto's route: the order, which endpoints are on, and whether it falls back at all."""
+    policy = router.validate(values or {})
+    stored = services.pref("ai_preferences", {}) or {}
+    stored["route"] = policy
+    services.set_pref("ai_preferences", stored)
+    with services.w.connect() as db:
+        services.w.record_event(db, "ai_route_saved", order=policy["order"],
+                                off=[p for p, on in policy["enabled"].items() if not on],
+                                allow_fallbacks=policy["allow_fallbacks"])
+    services.sync_projections()
+    return overview(services, gateway=gateway)
+
+
+def wake(services, gateway, provider_id: str) -> dict:
+    """Clear a plan's rest by hand ("it reset early, try it now")."""
+    from backend.ai import limits
+
+    if provider_id not in router.DEFAULT_ORDER:
+        raise ValueError(f"Unknown AI on the route: {provider_id}")
+    limits.HealthBook(services.w.root).wake(provider_id)
+    with services.w.connect() as db:
+        services.w.record_event(db, "ai_plan_woken", provider=provider_id)
+    return overview(services, gateway=gateway)
+
+
 def save_fallback(services, gateway, provider_id: str, model: str) -> dict:
     """Name the backup provider used when the main one fails a call. Empty clears it."""
     if provider_id:
@@ -263,6 +371,47 @@ def save_fallback(services, gateway, provider_id: str, model: str) -> dict:
         services.w.record_event(db, "ai_fallback_chosen", provider=provider_id or "none", model=model)
     services.sync_projections()
     return overview(services, gateway=gateway)
+
+
+# Where a person gets each key (shown before the first profile exists).
+KEY_PAGES = {"openrouter": "https://openrouter.ai/keys", "openai": "https://platform.openai.com/api-keys",
+             "anthropic": "https://console.anthropic.com/settings/keys", "gemini": "https://aistudio.google.com/apikey",
+             "kimi": "https://platform.moonshot.ai/console/api-keys"}
+
+
+def machine_status() -> dict:
+    """The AI this computer can use before any profile exists. Never a key's value."""
+    from backend.ai import antigravity_cli, claude_code, codex, kimi_cli, provider_label, ready_providers
+    from backend.paths import APP_ROOT
+
+    ready = ready_providers(APP_ROOT)
+    clis = []
+    for module in (claude_code, codex, kimi_cli, antigravity_cli):
+        installed = module.available()
+        clis.append({"id": module.ID, "label": provider_label(module.ID), "kind": "cli", "ready": bool(ready.get(module.ID)),
+                     "installed": installed,
+                     "signed_in": bool(getattr(module, "signed_in", lambda: installed)()) if installed else False})
+    hosted = [{"id": pid, "label": spec["label"], "kind": "api_key", "ready": bool(ready.get(pid)),
+               "key_name": spec["key"], "saved_in": keys.source(APP_ROOT, spec["key"]) or "",
+               "get_key": KEY_PAGES.get(pid, "")}
+              for pid, spec in catalog.PROVIDERS.items() if pid in KEY_PAGES]
+    return {"any_ready": any(ready.values()), "clis": clis, "keys": hosted,
+            "note": "Sign in to one of these AI apps on this computer, or add an API key. Keys stay on this computer."}
+
+
+def save_machine_key(provider_id: str, value: str) -> dict:
+    """Store a key for the whole installation (career-dashboard/.env) and prove it with a model-list call."""
+    from backend.paths import APP_ROOT
+
+    if provider_id not in catalog.PROVIDERS or provider_id not in KEY_PAGES:
+        raise ValueError("This provider does not use an API key")
+    spec = catalog.PROVIDERS[provider_id]
+    keys.save(APP_ROOT, spec["key"], value)
+    listed = catalog.models(APP_ROOT, provider_id, refresh=True)
+    ok = not listed["error"] and bool(listed["models"])
+    return {"provider": provider_id, "ok": ok,
+            "detail": (f"Key saved and working: {len(listed['models'])} models available."
+                       if ok else f"Key saved, but the check failed: {listed['error'] or 'no models were listed'}.")}
 
 
 def save_key(services, provider_id: str, value: str) -> dict:

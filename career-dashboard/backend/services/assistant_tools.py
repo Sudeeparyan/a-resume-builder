@@ -118,11 +118,12 @@ def resume_card(job, draft, fitted=None) -> dict:
 
 
 class Toolbox:
-    def __init__(self, service, studio, runner, quality, chats=None):
+    def __init__(self, service, studio, runner, quality, chats=None, pipeline=None):
         from backend.chat_changes import ChatChangeService
 
         self.s, self.w, self.studio, self.runner, self.quality = service, service.w, studio, runner, quality
         self.chats = chats or ChatChangeService(service, studio)
+        self.pipeline = pipeline  # the Daily Search pipeline (services/pipeline.py), when the app has one
         self.tools: dict[str, Tool] = {}
         self._register()
 
@@ -343,8 +344,11 @@ class Toolbox:
                               "notes": S("Replacement notes")},
             confirm=True, writes=True, group="Jobs", agent="resume_tracker")
         add("remove_job", "Removing the job",
-            "Remove a saved job from the active list (it can be restored).",
-            self.remove_job, {"job_id": S("The job ID", required=True), "reason": S("Why, in a few words")},
+            "Remove a saved job from the active list (it can be restored). Start the reason with one of these labels "
+            "when it fits, because automatic searches learn from them: 'Not this company' or 'This company won't "
+            "sponsor me' (skip every role there), 'Wrong kind of role' (skip this title everywhere), 'Too senior for "
+            "me', 'Wrong location', 'Not suitable'.",
+            self.remove_job, {"job_id": S("The job ID", required=True), "reason": S("A label above, then her words")},
             confirm=True, writes=True, group="Jobs", agent="resume_tracker")
         add("restore_job", "Restoring the job", "Bring a removed job back.",
             self.restore_job, {"job_id": S("The job ID", required=True)}, writes=True, group="Jobs", agent="resume_tracker")
@@ -362,8 +366,35 @@ class Toolbox:
             "Fetch the posting page and record whether it is still live or expired.",
             self.verify_posting, {"job_id": S("The job ID", required=True)}, writes=True, group="Jobs", agent="discovery")
         add("find_jobs", "Starting job discovery",
-            "Queue today's job search through the tracked career pages and portals. Every lead passes the gates before it is saved. Returns a run_id; results take minutes.",
+            "Queue one job-search pass only: it saves the jobs that pass the gates but makes no resumes. For \"find me N jobs\" "
+            "or jobs with resumes, use run_search_pipeline, which also takes each job end to end. Returns a run_id; results take minutes.",
             self.find_jobs, {"preset": S("Search mix", enum=list(DISCOVERY_PRESETS))}, writes=True, group="Jobs", agent="discovery")
+
+        # -- Daily Search pipeline ------------------------------------------------
+        from backend.services.pipeline import STEP_IDS
+        add("run_search_pipeline", "Starting the Daily Search pipeline",
+            "Run the Daily Search pipeline: find count new jobs (1-5), then take each saved job end to end with the "
+            "helpers (" + ", ".join(STEP_IDS) + ") on one AI, ending with the ready-to-submit check. Anything left "
+            "out uses the Daily Search page's saved choice; search_pipeline_status lists the AIs that are ready. "
+            "Takes minutes; returns at once. Nothing is ever submitted.",
+            self.run_search_pipeline, {
+                "count": {"type": "integer", "description": "How many new jobs to find, 1-5"},
+                "provider": S("AI id, e.g. auto, kimi_cli, codex, claude_code, antigravity_cli"),
+                "model": S("A model that AI offers; its first one when omitted"),
+                "steps": {"type": "array", "description": "Helpers to run for each job: any of " + ", ".join(STEP_IDS)},
+                "source": S("Where to look", enum=list(DISCOVERY_PRESETS))},
+            writes=True, group="Search", agent="discovery")
+        add("search_pipeline_status", "Reading the Daily Search progress",
+            "The Daily Search pipeline now: the running (or last) run with each job's steps, the page's saved choices, "
+            "the AIs ready to run it and today's paid-call allowance.",
+            self.search_pipeline_status, group="Search", agent="discovery")
+        add("stop_search_pipeline", "Stopping the Daily Search pipeline",
+            "Stop the running Daily Search pipeline after its current step. Jobs and files already saved stay.",
+            self.stop_search_pipeline, writes=True, group="Search", agent="discovery")
+        add("check_readiness", "Checking the resume is ready to send",
+            "The ready-to-submit check for one job: open posting, sponsorship, fit, one full page, the independent review "
+            "and her Assurance decisions, with a readiness score (not an interview prediction) and what is left to do.",
+            self.check_readiness, {"job_id": S("The job ID", required=True)}, group="Resume", agent="resume")
 
         # -- Resume ----------------------------------------------------------------
         add("build_resume", "Building the one-page resume",
@@ -744,6 +775,88 @@ class Toolbox:
             else:
                 shown[key] = json.dumps(value, default=str)[:2000]
         return {"summary": run["state"], **self._run_brief(run), "result": shown}
+
+    # ---- Daily Search pipeline -------------------------------------------------------
+    def _pipeline(self):
+        if self.pipeline is None:
+            raise ValueError("The Daily Search pipeline is not available here; use find_jobs")
+        return self.pipeline
+
+    def pipeline_brief(self) -> dict | None:
+        """The running or last Daily Search run in a few fields, for the agent's snapshot."""
+        if self.pipeline is None:
+            return None
+        try:
+            status = self.pipeline.status()
+        except Exception:  # noqa: BLE001 - the snapshot must never fail on a side panel
+            return None
+        run = status.get("current") or status.get("last")
+        if not run:
+            return {"state": "never_run"}
+        progress = run.get("progress") or {}
+        config = run.get("config") or {}
+        return {"run_id": run["id"], "state": run["state"], "stage": progress.get("stage"),
+                "ai": f"{config.get('provider')} · {config.get('model')}",
+                "jobs_target": progress.get("jobs_target"), "find": (progress.get("find") or {}).get("note"),
+                "jobs": [{"company": j.get("company"), "title": j.get("title"),
+                          "steps": {k: (v or {}).get("state") for k, v in (j.get("steps") or {}).items()}}
+                         for j in progress.get("jobs") or []],
+                "error": run.get("error"), "finished_at": run.get("finished_at")}
+
+    def run_search_pipeline(self, count=None, provider=None, model=None, steps=None, source=None) -> dict:
+        from backend.services.pipeline import STEP_IDS
+
+        pipeline = self._pipeline()
+        saved = pipeline.preferences()
+        ai = {p["id"]: p for p in pipeline.providers()}
+        provider = provider or saved["provider"]
+        if provider not in ai:
+            ready = [p["id"] for p in ai.values() if p.get("ready")]
+            raise ValueError(f"Unknown AI {provider!r}; ready here: " + ", ".join(ready))
+        listed = [m["id"] for m in ai[provider]["models"]]
+        if not model:
+            model = saved["model"] if provider == saved["provider"] and saved["model"] in listed else (listed[0] if listed else "")
+        if steps:
+            unknown = [step for step in steps if step not in STEP_IDS]
+            if unknown:
+                raise ValueError("Unknown helper(s): " + ", ".join(unknown) + "; choose from " + ", ".join(STEP_IDS))
+            chosen = {step: step in steps for step in STEP_IDS}
+        else:
+            chosen = saved["steps"]
+        run = pipeline.start({"count": int(count or saved["count"]), "source": source or saved["source"],
+                              "provider": provider, "model": model, "steps": chosen})
+        helpers = [step for step in STEP_IDS if chosen.get(step)]
+        return {"summary": f"Started: {run['progress'].get('jobs_target')} job(s) on {ai[provider]['label']} · {model}"
+                           + (" · " + ", ".join(helpers) if helpers else " · find only"),
+                "pipeline_run_id": run["id"], "provider": provider, "model": model, "steps": helpers,
+                "jobs_target": run["progress"].get("jobs_target"),
+                "note": "Takes minutes. Tell her it is running; she can watch Daily Search or ask for progress."}
+
+    def search_pipeline_status(self) -> dict:
+        pipeline = self._pipeline()
+        status = pipeline.status()
+        brief = self.pipeline_brief() or {}
+        ready = [{"provider": p["id"], "label": p["label"], "models": [m["id"] for m in p["models"]][:6]}
+                 for p in pipeline.providers() if p.get("ready")]
+        return {"summary": (str(brief.get("state")) + (f" · {brief['stage']}" if brief.get("stage") else "")) if brief else "unknown",
+                "run": brief, "saved_choices": pipeline.preferences(), "ready_ais": ready,
+                "budget": status.get("budget"), "remaining_today": (status.get("plan") or {}).get("remaining_today")}
+
+    def stop_search_pipeline(self) -> dict:
+        pipeline = self._pipeline()
+        current = pipeline.status().get("current")
+        if not current:
+            return {"summary": "Nothing is running", "stopped": False}
+        pipeline.stop(current["id"])
+        return {"summary": "Stopping after the current step", "stopped": True, "pipeline_run_id": current["id"]}
+
+    def check_readiness(self, job_id) -> dict:
+        from backend.services import readiness
+
+        result = readiness.check(self.s, self.studio, job_id)
+        return {"summary": result["label"] + (f" · {result['score']}/100" if result["score"] is not None else ""),
+                "verdict": result["verdict"], "score": result["score"], "parts": result["parts"],
+                "next": result["next"][:5], "note": result["note"]}
 
     # ---- Profile -------------------------------------------------------------------
     def profile_overview(self) -> dict:

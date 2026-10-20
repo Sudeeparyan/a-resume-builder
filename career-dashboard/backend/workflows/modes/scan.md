@@ -10,7 +10,7 @@ Discover current US roles that pass Annie's sponsorship gate, never-re-apply rul
 | `data/context/01-basics.md` | Work authorization (F-1 OPT, authorized now); sponsorship needed later |
 | `data/context/04-projects.md`, `05-skills.md` | What a good match means: score against what she actually has |
 | `data/config/profile.yml` | Tracks A–D and their signals, `max_years_required: 4`, US hubs |
-| `data/config/portals.yml` | Tracked companies with their ATS (Greenhouse/Lever/Ashby) and search queries |
+| `data/config/portals.yml` | Tracked companies with their ATS (Workday, Greenhouse, Lever, Ashby, SmartRecruiters) and search queries |
 | `data/config/regions.yml` | US hubs and remote wording |
 
 If a preference is still open (see `QUESTIONS-FOR-YOU.md`), ask Annie in plain language and offer to record her answer; do not guess.

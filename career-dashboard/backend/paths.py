@@ -33,6 +33,24 @@ REPO_ROOT = APP_ROOT.parent
 # Annie is in Fayetteville, AR (US Central). Change here, nowhere else.
 TIMEZONE = "America/Chicago"
 
+
+def app_root_for(root) -> Path:
+    """The folder holding code and secrets for a workspace rooted at `root`.
+
+    Annie's workspace is the app itself; a test workspace without a backend/
+    folder uses the app's code.
+    """
+    root = Path(root).resolve()
+    return root if (root / "backend").is_dir() else APP_ROOT
+
+
+def secrets_root_for(root) -> Path:
+    """Where the AI keys (.env, keys.txt) and the AI plans' health file for a workspace live.
+
+    One workspace, one person: always the workspace's own folder (tests keep theirs).
+    """
+    return Path(root).resolve()
+
 APP_ID = "annie-career-workspace"
 APP_TITLE = "Annie Career Workspace"
 # Loopback port for run.py and the Vite dev proxy. 8000 belongs to another

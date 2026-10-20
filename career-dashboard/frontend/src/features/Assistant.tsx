@@ -57,6 +57,9 @@ type Props = {
   refresh: () => Promise<void>;
   notify: (text: string, error?: boolean) => void;
   onJob: (id: string) => void;
+  /** A question another tab handed over ("Ask the assistant"); cleared once taken. */
+  asked?: { text: string; send: boolean; n: number } | null;
+  onAsked?: () => void;
 };
 
 /** What the front page offers: each is a real message the agent understands. */
@@ -251,7 +254,7 @@ function greeting(now: Date = new Date()) {
   return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
 }
 
-export default function Assistant({ data, refresh, notify, onJob }: Props) {
+export default function Assistant({ data, refresh, notify, onJob, asked, onAsked }: Props) {
   const [overview, setOverview] = useState<AssistantOverview>();
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -597,6 +600,18 @@ export default function Assistant({ data, refresh, notify, onJob }: Props) {
     el.style.height = "";
     el.style.height = Math.min(el.scrollHeight, 260) + "px";
   }
+
+  // A question from another tab, taken once the thread has loaded so it lands after it. One
+  // that only reads is sent; one that would start work waits in the box, as does anything
+  // asked while a reply is still being worked on.
+  const askedN = asked?.n;
+  useEffect(() => {
+    if (!asked || !overview) return;
+    onAsked?.();
+    if (asked.send && !working && !sending) void send(asked.text);
+    else prompt(asked.text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askedN, !!overview]);
 
   // Keyboard: Esc closes what is open, ⌘⇧O starts a chat, ⌘K searches, "/" jumps to the box.
   useEffect(() => {

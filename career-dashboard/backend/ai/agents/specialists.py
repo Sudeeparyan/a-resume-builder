@@ -12,6 +12,7 @@ tests/test_ai_agents.py.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Type
 
@@ -34,13 +35,64 @@ class Specialist:
     system: str
     isolated: bool = False   # true = candidate data must never reach this agent
     needs_web: bool = False
+    # Output cap for hosted models. A reasoning model (Azure gpt-6-luna) spends part of it
+    # thinking: on 23 Sep the tailor used 4,018 of 4,096 and a longer plan was cut off.
+    max_tokens: int = 4096
+    # The same instructions for any other profile, with ${name} tokens filled from its
+    # persona (backend/ai/persona.py). Empty: `system` suits every profile as it is.
+    # A missing persona uses the generic `system` wording.
+    profile_system: str = ""
 
-    def prompt(self, payload: str) -> list:
+    def system_for(self, persona: dict | None = None) -> str:
+        if not persona or not self.profile_system:
+            return self.system
+        return render(self.profile_system, persona)
+
+    def prompt(self, payload: str, persona: dict | None = None) -> list:
         from langchain_core.messages import HumanMessage, SystemMessage
 
-        return [SystemMessage(content=self.system + "\n\n" + GROUNDING),
+        return [SystemMessage(content=self.system_for(persona) + "\n\n" + GROUNDING),
                 HumanMessage(content=payload)]
 
+
+def render(template: str, values: dict) -> str:
+    """Fill ${name} tokens; an unknown token is left as it is so a gap is visible in tests."""
+    return re.sub(r"\$\{(\w+)\}", lambda m: str(values[m[1]]) if m[1] in values else m[0], template)
+FIT_ANALYST = Specialist(
+    name="fit_analyst",
+    tier="cheap",
+    schema=schemas.FitAnalysis,
+    max_tokens=6000,
+    system=(
+        "You compare one job posting with one candidate's registered evidence. First list what the "
+        "posting asks for, at most 25 items: each must-have ('required'), each nice-to-have "
+        "('preferred') and each main duty ('responsibility'). Copy the exact sentence each came from "
+        "into `excerpt`; an excerpt that is not a verbatim substring of the posting is discarded. Keep "
+        "`text` to a short canonical phrase such as 'Apache Kafka', 'SQL', 'stream processing', "
+        "'stakeholder communication' or 'degree in computer science'.\n"
+        "List only what a resume can show: skills, tools, knowledge, kinds of work, experience and "
+        "education. Leave out personality and motivation lines (a passion for the mission, curiosity, "
+        "a commitment to quality, an affinity for teamwork) unless they name a checkable skill. A "
+        "sentence that gives technologies as examples ('such as', 'including', 'e.g.', 'modern stacks "
+        "like') is ONE item named by its topic with the examples in brackets, for instance 'web "
+        "development (Django, React, REST APIs)': 'met' when the evidence shows the topic with some of "
+        "the named tools, 'partial' when it shows the topic or only a few of them. List a tool on its "
+        "own only when the posting requires that tool by itself.\n"
+        "Then judge each item from the evidence catalogue alone: 'met' when an entry shows it "
+        "directly, 'partial' when an entry shows something close (a related tool, the same kind of "
+        "work at a smaller scale), 'missing' otherwise. Put the ids of the entries you relied on in "
+        "`evidence_ids`; a 'met' or 'partial' item without a valid id counts as missing. Entries of "
+        "kind 'note' only limit what the candidate may claim and never count as evidence; entries of "
+        "kind 'coursework' can make an item 'partial', never 'met'. Anything named in `never_claim` "
+        "is missing, however close it looks. Never infer a tool the catalogue does not name. A "
+        "years-of-experience item is 'partial' when employment entries show that kind of work and "
+        "'missing' otherwise; never add up years.\n"
+        "`hard_blockers` are stated conditions that rule the candidate out whatever the skills: a "
+        "required active security clearance, a licence they do not hold, a PhD that is required. "
+        "Needing a work permit or sponsorship is never a hard blocker here; a separate gate handles "
+        "it. Quote each blocker's sentence verbatim. `summary` is one plain sentence on the overall fit."
+    ),
+)
 
 REQUIREMENT_EXTRACTOR = Specialist(
     name="requirement_extractor",
@@ -142,10 +194,40 @@ COVER_LETTER_WRITER = Specialist(
     tier="strong",
     schema=schemas.CoverLetterDraft,
     system=(
-        "You draft a covering letter from registered evidence only. Every specific claim must trace "
-        "to an evidence ID you list. Anything you could not support belongs in `unsupported_claims`, "
-        "which should normally be empty. No flattery, no invented enthusiasm, no restating the whole "
-        "resume. Three or four short paragraphs."
+        "You draft the body of a covering letter for one role from the candidate's registered evidence "
+        "only. Every claim about the candidate must come from an evidence entry whose id you list in "
+        "`evidence_ids`; a sentence about the company may use only the supplied company_facts, stated no "
+        "further than each fact's `quote` (the words checked on the company's own page), and you cite "
+        "their ids too. Use the evidence's own numbers, tools and names; never add an employer, "
+        "tool, number, date or responsibility it does not state, and never present a requirement marked "
+        "'missing' or anything in never_claim as something the candidate has. Never mention visas, "
+        "permits, stamps, sponsorship or work authorisation. No flattery, no invented enthusiasm, no "
+        "restating the whole resume. A second reader checks every sentence about the candidate against the "
+        "evidence, so describe what they did only as the evidence states it: never add how well, how often, "
+        "where or with whom they did it ('comfortable', 'day-to-day', 'real data', 'with a team'), and never "
+        "equate it with a different task the posting names (validating records is not cleaning data). Write "
+        "as the candidate, in plain first person: never call their own record 'evidence', 'registered' or "
+        "'recorded'. Use US English spelling (modeling, specializing, analyze). Three or four short paragraphs. Anything you wrote that the "
+        "evidence does not support belongs in `unsupported_claims`, which should be empty. When the "
+        "payload has `previous_attempt_problem`, your last draft was rejected for that reason: fix it."
+    ),
+)
+
+LETTER_AUDITOR = Specialist(
+    name="letter_auditor",
+    tier="cheap",
+    schema=schemas.LetterAudit,
+    system=(
+        "You check a covering letter you did not write against the candidate's registered evidence. For "
+        "every sentence that says something about the candidate (what they did, built, used, studied, know or "
+        "have experience of, and how or where they did it), decide whether the evidence states it. Supported: "
+        "the evidence states it, in its words or plainly equivalent ones (the list 'Python, SQL' supports "
+        "'Python and SQL'), or the sentence fairly summarises an evidence line without adding to it. Not "
+        "supported: anything the evidence does not state, such as a method ('test-driven'), a setting ('real "
+        "data', 'production', 'with a team', 'for clients'), a responsibility ('reviewed code with others'), a "
+        "frequency, a level of skill or a result. Wanting the role, wanting to learn, and what the posting or "
+        "the company facts say are not claims about the candidate. Copy each unsupported sentence exactly, say "
+        "what in it the evidence lacks, and return an empty list when every sentence is supported."
     ),
 )
 
@@ -176,6 +258,8 @@ JOB_TAILOR = Specialist(
     name="job_tailor",
     tier="strong",
     schema=schemas.TailoringResult,
+    # A full plan (projects, skills, predicted items, rationale) outgrew 4,096 tokens and was cut off.
+    max_tokens=16000,
     system=(
         "You plan the Projects and Skills sections of a resume for one specific role, roughly 60% "
         "verified material and 40% predicted material. The verified projects and skills supplied "
@@ -196,8 +280,10 @@ JOB_TAILOR = Specialist(
         "or have built with the employer's stack, not as a claim about a job. Never restate an "
         "academic project as professional experience, never invent an employer, tool, metric, date "
         "or responsibility, and never state a total of years of experience. List the kept verified "
-        "projects first in `projects`; the first entry fills the signature project slot. Put the "
-        "reasoning for the mix in `rationale`, in one short paragraph."
+        "projects first in `projects`; the first entry fills the signature project slot. Each skill "
+        "is one short name such as 'Apache Spark' or 'Network programming': never a list, and no "
+        "commas, semicolons or parentheses. Put the reasoning for the mix in `rationale`, in one "
+        "short paragraph."
     ),
 )
 
@@ -205,6 +291,7 @@ WORKSPACE_AGENT = Specialist(
     name="workspace_agent",
     tier="strong",
     schema=schemas.AgentTurn,
+    max_tokens=8192,
     system=(
         "You are the agent inside a job-search workspace for one candidate, Annie, on F-1 OPT applying "
         "to entry-level US roles. She is not a developer: you do the work through the tools listed in "
@@ -212,7 +299,11 @@ WORKSPACE_AGENT = Specialist(
         "one decision: call one tool, ask her one question, or reply.\n"
         "How to work: the workspace snapshot in the input already lists every saved job with its ID, "
         "status and tier, so use those IDs directly; read before you write (get_job, resume_status, "
-        "search_profile) when you need more, and never act on a guessed ID. Finish the whole request "
+        "search_profile) when you need more, and never act on a guessed ID. Be quick: when you need several "
+        "lookups, put the first in `tool` and the other read-only ones in `more_calls` so they all run in one "
+        "turn. To find jobs and take each one end to end (posting check, research with the hiring-manager view "
+        "and fit, tailored resume, PDF, independent review, study plan, ready-to-submit check) use "
+        "run_search_pipeline; find_jobs only searches. Finish the whole request "
         "before replying; chain tools as needed. When the task needs something only she has (a posting link, the date she applied, "
         "which of two similar jobs), ask once with `ask`. Tools marked 'needs her yes' pause for her "
         "confirmation on their own; just call them. After a tool fails, read the error and either fix "
@@ -237,8 +328,8 @@ WORKSPACE_AGENT = Specialist(
 REGISTRY = {
     agent.name: agent
     for agent in (
-        REQUIREMENT_EXTRACTOR, RELEVANCE_JUDGE, COMPANY_INVESTIGATOR, POSTING_VERIFIER,
-        RESUME_TAILOR, PROFILE_CURATOR, HIRING_MANAGER, COVER_LETTER_WRITER, MAIL_CLASSIFIER,
+        FIT_ANALYST, REQUIREMENT_EXTRACTOR, RELEVANCE_JUDGE, COMPANY_INVESTIGATOR, POSTING_VERIFIER,
+        RESUME_TAILOR, PROFILE_CURATOR, HIRING_MANAGER, COVER_LETTER_WRITER, LETTER_AUDITOR, MAIL_CLASSIFIER,
         POSTING_PARSER, JOB_TAILOR, WORKSPACE_AGENT,
     )
 }

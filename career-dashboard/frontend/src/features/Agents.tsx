@@ -24,13 +24,16 @@ import {
 import { api } from "../api";
 import { Badge, Loading } from "../components/UI";
 import type { Summary } from "../types";
+import { AGENT_LABEL, PROVIDER_LABEL, active, ago, clock, duration, providerText } from "./agentWords";
+import AgentTrace from "./AgentTrace";
 
 // --- what the backend sends ----------------------------------------------------
 
 type TraceEvent = {
   at: string;
-  kind: "stage" | "ai_call" | "completed" | "failed";
+  kind: "stage" | "ai_start" | "ai_call" | "search" | "source" | "check" | "note" | "completed" | "failed";
   label: string;
+  routed?: boolean;
   provider?: string;
   model?: string;
   action?: string;
@@ -63,6 +66,10 @@ type Activity = {
     daily_call_limit: number;
     calls_today: number;
     remaining_calls: number;
+    paid_calls_today?: number;
+    free_calls_today?: number;
+    // False only when runs go to a paid AI by name and today's paid limit is used up.
+    can_start?: boolean;
     cache_hits: number;
     cached_results: number;
   };
@@ -78,27 +85,7 @@ type Activity = {
 
 // --- words shown on the page -----------------------------------------------------
 
-export const PROVIDER_LABEL: Record<string, string> = {
-  claude_code: "Claude Code",
-  codex: "Codex",
-  kimi_cli: "Kimi Code",
-  openai: "OpenAI",
-  anthropic: "Claude API (Anthropic)",
-  openrouter: "OpenRouter",
-  gemini: "Gemini",
-  kimi: "Kimi",
-};
-export const AGENT_LABEL: Record<string, string> = {
-  discovery: "Job search",
-  research: "Company & hiring research",
-  resume_advisor: "Resume advice",
-  resume_build: "Resume build & ATS check",
-  resume_match: "Independent resume review",
-  instruction_interpret: "Resume chat",
-  email: "Gmail sync",
-  job_quality: "Posting check",
-  study_plan: "Study plan",
-};
+export { AGENT_LABEL, PROVIDER_LABEL };
 const OUTPUT_LABEL: Record<string, string> = {
   research: "Company research",
   hiring: "Hiring-manager view",
@@ -183,35 +170,6 @@ const FLOW: Step[] = [
 ];
 
 // --- small helpers ---------------------------------------------------------------
-
-const active = (state?: string) => state === "queued" || state === "running";
-function duration(seconds?: number | null) {
-  if (seconds == null) return "";
-  if (seconds < 1) return "under 1s";
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  const m = Math.floor(seconds / 60);
-  const s = Math.round(seconds % 60);
-  if (m < 60) return `${m}m ${String(s).padStart(2, "0")}s`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
-}
-function ago(iso: string) {
-  const s = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
-  return new Date(iso).toLocaleDateString("en-US", {
-    day: "numeric",
-    month: "short",
-  });
-}
-const clock = (iso: string) =>
-  new Date(iso).toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-const providerText = (p?: string | null, m?: string | null) =>
-  p ? `${PROVIDER_LABEL[p] || p}${m && !["codex-runtime", "kimi-runtime"].includes(m) ? " · " + m : ""}` : "";
 
 function StateIcon({ state, size = 16 }: { state: StepState | string; size?: number }) {
   if (state === "active" || active(state))
@@ -374,6 +332,9 @@ export default function Agents({
   const [filter, setFilter] = useState<"all" | "running" | "failed">("all");
   const [starting, setStarting] = useState("");
   const [view, setView] = useState<"pipeline" | "advanced">("pipeline");
+  // The run whose live record is open in the side panel.
+  const [watch, setWatch] = useState<string | null>(null);
+  const closeWatch = useCallback(() => setWatch(null), []);
 
   const load = useCallback(async () => {
     try {
@@ -421,7 +382,9 @@ export default function Agents({
   const running = activity.runs.filter((r) => active(r.state));
   const failedToday = activity.calls_today.failed;
   const budget = activity.budget;
-  const used = Math.min(100, (budget.calls_today / Math.max(1, budget.daily_call_limit)) * 100);
+  const paidToday = budget.paid_calls_today ?? 0;
+  const used = Math.min(100, (paidToday / Math.max(1, budget.daily_call_limit)) * 100);
+  const cannotStart = budget.can_start === false;
   const discovery = latest("discovery", null);
   // A failure a later run of the same agent on the same job has already fixed.
   const fixed = new Set(
@@ -544,9 +507,9 @@ export default function Agents({
           </small>
         </div>
         <div className="card obs-stat">
-          <span className="eyebrow">AI CALLS TODAY</span>
+          <span className="eyebrow">PAID AI CALLS TODAY</span>
           <strong>
-            {budget.calls_today}
+            {paidToday}
             <small> / {budget.daily_call_limit}</small>
           </strong>
           <div className={"meter" + (used >= 100 ? " full" : used >= 80 ? " high" : "")}>
@@ -554,8 +517,9 @@ export default function Agents({
           </div>
           <small>
             {budget.remaining_calls
-              ? `${budget.remaining_calls} left today`
-              : "Limit reached — raise it in Settings or wait until tomorrow"}
+              ? `${budget.remaining_calls} paid left today`
+              : "Paid limit reached: Azure is skipped until tomorrow"}
+            {budget.free_calls_today !== undefined && ` · ${budget.free_calls_today} on your plans`}
           </small>
         </div>
         <div className="card obs-stat">
@@ -689,10 +653,10 @@ export default function Agents({
                           {canRun && (
                             <button
                               className="obs-run"
-                              disabled={!!starting || budget.remaining_calls === 0}
+                              disabled={!!starting || cannotStart}
                               title={
-                                budget.remaining_calls === 0
-                                  ? "Daily AI limit reached"
+                                cannotStart
+                                  ? "Today's paid AI limit is used up; choose Auto or a free plan in Settings"
                                   : `Start ${AGENT_LABEL[s.run!]} for ${job.company}`
                               }
                               onClick={() => start(s.run!, job.id)}
@@ -745,13 +709,17 @@ export default function Agents({
                     ? () => start(r.kind, r.job_id!)
                     : undefined
                 }
-                retryDisabled={!!starting || budget.remaining_calls === 0}
+                retryDisabled={!!starting || cannotStart}
+                onWatch={() => setWatch(r.id)}
               />
             ))}
           </div>
         )}
       </section>
         </>
+      )}
+      {watch && (
+        <AgentTrace runId={watch} runs={activity.runs} onClose={closeWatch} onJob={onJob} onSelect={setWatch} />
       )}
     </>
   );
@@ -764,6 +732,7 @@ function RunRow({
   onToggle,
   onRetry,
   retryDisabled,
+  onWatch,
 }: {
   run: ActivityRun;
   fixed: boolean;
@@ -771,6 +740,7 @@ function RunRow({
   onToggle: () => void;
   onRetry?: () => void;
   retryDisabled: boolean;
+  onWatch?: () => void;
 }) {
   const calls = run.events.filter((e) => e.kind === "ai_call");
   const fresh = calls.filter((e) => e.fresh).length;
@@ -825,7 +795,7 @@ function RunRow({
                           <>
                             <span>
                               {e.fresh ? "AI call" : "Reused a saved result"} ·{" "}
-                              {providerText(e.provider, e.model)}
+                              {providerText(e.provider, e.model, e.routed)}
                               {e.web && e.fresh ? " · with web search" : ""}
                               {" · "}
                               {duration(e.seconds)}
@@ -867,11 +837,18 @@ function RunRow({
               <span>{run.error}</span>
             </div>
           )}
-          {onRetry && (
+          {(onRetry || onWatch) && (
             <div className="actions">
-              <button className="secondary" disabled={retryDisabled} onClick={onRetry}>
-                <RefreshCw size={15} /> Run again
-              </button>
+              {onWatch && (
+                <button className="secondary" onClick={onWatch}>
+                  <ScanSearch size={15} /> See what it did
+                </button>
+              )}
+              {onRetry && (
+                <button className="secondary" disabled={retryDisabled} onClick={onRetry}>
+                  <RefreshCw size={15} /> Run again
+                </button>
+              )}
             </div>
           )}
         </div>

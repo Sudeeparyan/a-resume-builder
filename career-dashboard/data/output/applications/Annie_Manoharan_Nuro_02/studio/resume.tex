@@ -1,0 +1,190 @@
+% Evidence-grounded one-page US Letter base resume for Annie Prasanna Manoharan.
+% Candidate claims are governed by data/context/evidence.yml. Every content line is
+% preceded by a "% EVIDENCE:" tag naming the registry entries that support it.
+% Track A layout (Data / Analytics Engineering): Education, Skills, Experience, Projects.
+
+\documentclass[letterpaper,10pt]{article}
+
+\usepackage[top=0.5in,bottom=0.5in,left=0.6in,right=0.6in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{titlesec}
+\usepackage{lmodern}
+
+\hypersetup{
+  pdfauthor={Annie Prasanna Manoharan},
+  pdftitle={Annie Prasanna Manoharan - Resume},
+  pdfsubject={Evidence-grounded resume},
+  pdfkeywords={Data Engineer, Machine Learning, Python, SQL, Kafka, Flink, AWS, PyTorch}
+}
+
+\renewcommand{\baselinestretch}{1.0}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+\setlist[itemize]{leftmargin=1.15em,itemsep=2.0pt,topsep=2pt,parsep=0pt,partopsep=0pt}
+\pagestyle{empty}
+\raggedright
+\urlstyle{same}
+
+\titleformat{\section}{\large\scshape}{}{0pt}{}[\vspace{-2pt}\titlerule]
+\titlespacing*{\section}{0pt}{7pt}{4pt}
+
+\newlength{\roleheadingright}
+\newcommand{\roleheading}[4]{%
+  \textbf{#1} \hfill #2\\
+  \settowidth{\roleheadingright}{\textit{#4}}%
+  \parbox[t]{\dimexpr\linewidth-\roleheadingright-1em\relax}{\raggedright\textit{#3}}%
+  \hfill\parbox[t]{\roleheadingright}{\raggedleft\textit{#4}}\vspace{1pt}
+}
+\newcommand{\clientheading}[1]{\textbf{#1}\vspace{1pt}}
+\newenvironment{resumeitems}{\begin{itemize}}{\end{itemize}}
+
+% ---- Header -------------------------------------------------------------
+% EVIDENCE: IDENTITY-001
+\newcommand{\ResumeName}{Annie Prasanna Manoharan}
+% EVIDENCE: CONTACT-PHONE-001 CONTACT-EMAIL-001 CONTACT-PORTFOLIO-001 CONTACT-GITHUB-001
+\newcommand{\ResumeContact}{+1 (479) 301-1366 \textbar{} \href{mailto:annieprm0501@gmail.com}{annieprm0501@gmail.com} \textbar{} \href{https://annie0159.github.io/Portfolio/}{https://annie0159.github.io/Portfolio/} \textbar{} \href{https://github.com/Annie0159}{https://github.com/Annie0159}}
+
+% ---- Skills (one macro per bold category; items ranked per JD by Resume Studio) --
+% EVIDENCE: SKILL-LANGUAGES-001 SKILL-TOUCHED-001
+\newcommand{\SkillsLanguages}{C++, Python, C}
+% EVIDENCE: SKILL-STREAMING-001 SKILL-CLOUD-001 SKILL-DATA-TOOLS-001 SKILL-LAKEHOUSE-001
+\newcommand{\SkillsData}{}
+% EVIDENCE: SKILL-ML-001 SKILL-CV-TOOLS-001 SKILL-GENAI-001 SKILL-DATA-TOOLS-001
+\newcommand{\SkillsML}{}
+% EVIDENCE: SKILL-CLOUD-001 SKILL-TOUCHED-001 SKILL-DESKTOP-001 SKILL-TEST-001 SKILL-EMBEDDED-001 SKILL-TOUCHED-001 SKILL-TOUCHED-001 SKILL-EMBEDDED-001 SKILL-TOUCHED-001 SKILL-EMBEDDED-001 SKILL-EMBEDDED-001 SKILL-EMBEDDED-001 SKILL-EMBEDDED-TOOLS-001 resume_items:89d28b6ba3b149d6a0b0ee10818ebc97 resume_items:7d81ee444dc64053b4e22158c869ea61 resume_items:fa4a3e177daa47fba6dd7c49636275e3
+\newcommand{\SkillsCloud}{Embedded C, Performance profiling, Verilog, Linux, Docker, Git, Multithreading, SPI/I2C/UART, AXI, FreeRTOS, Xilinx Vivado, Vitis, MicroBlaze, ROS 2, CUDA}
+
+% ---- Coursework -----------------------------------------------------------
+% EVIDENCE: COURSEWORK-MS-001
+\newcommand{\Coursework}{Algorithms, Database Management Systems, Advanced DBMS, Data Mining, Artificial Intelligence, Machine Learning, Image Processing, Privacy Enhancing Techniques}
+
+% ---- Signature project (first in Projects; unique per company) ------------
+% EVIDENCE: resume_items:3bdeae2d833247f8a35481ccd7399062
+\newcommand{\SelectedProjectID}{3bdeae2d833247f8a35481ccd7399062}
+% EVIDENCE: resume_items:3bdeae2d833247f8a35481ccd7399062
+\newcommand{\SelectedProjectTitle}{Multithreaded Sensor Data Pipeline}
+% EVIDENCE: resume_items:3bdeae2d833247f8a35481ccd7399062
+\newcommand{\SelectedProjectContext}{C++, CMake, Linux, multithreading}
+% EVIDENCE: resume_items:3bdeae2d833247f8a35481ccd7399062
+\newcommand{\SelectedProjectBulletOne}{Designed a multithreaded C++ pipeline simulating concurrent sensor producers and consumers exchanging data through lock-free ring buffers and message queues}
+% EVIDENCE: resume_items:3bdeae2d833247f8a35481ccd7399062
+\newcommand{\SelectedProjectBulletTwo}{Implemented an inter-device protocol layer with binary framing and checksum validation over serial-style byte streams}
+% EVIDENCE: resume_items:3bdeae2d833247f8a35481ccd7399062
+\newcommand{\SelectedProjectBulletThree}{Profiled throughput and latency under varying thread counts to study contention and scheduling effects on Linux}
+
+% ---- Supporting project (may repeat across companies) ----------------------
+% EVIDENCE: PROJ-P07-FPGA
+\newcommand{\SecondProjectID}{PROJ-P07-FPGA}
+% EVIDENCE: PROJ-P07-FPGA
+\newcommand{\SecondProjectTitle}{FPGA-Based Autonomous Vehicle}
+% EVIDENCE: PROJ-P07-FPGA
+\newcommand{\SecondProjectContext}{Xilinx Arty FPGA, MicroBlaze, Vivado, Vitis, AXI, C}
+% EVIDENCE: PROJ-P07-FPGA
+\newcommand{\SecondProjectBulletOne}{Built an autonomous line-following vehicle on a Xilinx Arty FPGA with a custom MicroBlaze-based SoC, integrating IR line sensors, ultrasonic sensors, and motor drivers through AXI IP cores in Vivado}
+% EVIDENCE: PROJ-P07-FPGA
+\newcommand{\SecondProjectBulletTwo}{Wrote embedded firmware in C using Vitis for line tracking, obstacle detection, sensor processing, and motor control}
+
+% EVIDENCE: PROJ-P07-FPGA
+\newcommand{\SecondProjectBulletThree}{Implemented Quad-SPI flash boot with an SREC bootloader enabling autonomous startup after power-up}
+% STUDIO_DENSITY_START
+\clubpenalty=10000
+\widowpenalty=10000
+\renewcommand{\normalsize}{\fontsize{10.0pt}{11.8pt}\selectfont}
+% STUDIO_DENSITY_END
+\begin{document}
+\normalsize
+
+\begin{center}
+  % EVIDENCE: IDENTITY-001
+  {\LARGE\bfseries \ResumeName}\\[3pt]
+  % EVIDENCE: CONTACT-PHONE-001 CONTACT-EMAIL-001 CONTACT-PORTFOLIO-001 CONTACT-GITHUB-001
+  \ResumeContact
+\end{center}
+
+\section{Education}
+
+% EVIDENCE: EDU-MS-001
+\roleheading{University of Arkansas}{Aug 2024 -- May 2026}{Master of Science in Computer Engineering}{Fayetteville, AR}
+% EVIDENCE: COURSEWORK-MS-001
+\textbf{Coursework:} \Coursework
+
+% EVIDENCE: EDU-BE-001
+\roleheading{Sri Ramakrishna Engineering College}{Aug 2019 -- May 2023}{Bachelor of Engineering in Electronics and Communication}{India}
+
+\section{Technical Skills}
+% EVIDENCE: SKILL-CLOUD-001 SKILL-TOUCHED-001 SKILL-DESKTOP-001 SKILL-TEST-001
+\textbf{Cloud and Tools:} \SkillsCloud\\[1pt]
+% EVIDENCE: SKILL-LANGUAGES-001 SKILL-TOUCHED-001
+\textbf{Languages:} \SkillsLanguages\\[1pt]
+% EVIDENCE: SKILL-ML-001 SKILL-CV-TOOLS-001 SKILL-GENAI-001 SKILL-DATA-TOOLS-001
+\textbf{Machine Learning and AI:} \SkillsML\\[1pt]
+% EVIDENCE: SKILL-STREAMING-001 SKILL-CLOUD-001 SKILL-DATA-TOOLS-001 SKILL-LAKEHOUSE-001
+\textbf{Data Engineering:} \SkillsData
+
+\section{Professional Experience}
+
+% EVIDENCE: EXP-INSOPS-001
+\roleheading{Data Engineering Intern}{Jul 2024 -- Present}{InsOps Inc.}{Chicago, Illinois}
+\begin{resumeitems}
+  % EVIDENCE: EXP-INSOPS-001
+  \item Developed data pipelines in AWS using AWS Glue, Lambda, EMR, SQL, and Apache Airflow for orchestration, with S3 cloud storage, for scalable data ingestion, transformation, validation, and analytics
+  % EVIDENCE: EXP-INSOPS-001
+  \item Built data workflows integrating SQL Server, Azure SQL, AWS S3, and cloud databases, preparing structured datasets for downstream data science and analytics
+\end{resumeitems}
+
+% EVIDENCE: EXP-TA-001
+\roleheading{Teaching Assistant}{Sep 2024 -- May 2026}{University of Arkansas, Dept. of Computer Science and Engineering}{Fayetteville, AR}
+\begin{resumeitems}
+  % EVIDENCE: EXP-TA-001
+  \item Supported 100+ students in Programming Foundations through laboratory instruction, debugging assistance, and mentorship in C++ programming fundamentals
+\end{resumeitems}
+
+% EVIDENCE: EXP-RA-001
+\roleheading{Research Assistant}{Sep 2024 -- Jan 2026}{AICV Lab, University of Arkansas}{Fayetteville, AR}
+\begin{resumeitems}
+  % EVIDENCE: EXP-RA-001
+  \item Built reusable preprocessing workflows to segment, organize, and transform raw image/video data into structured inputs for downstream processing and evaluation
+  % EVIDENCE: EXP-RA-001
+  \item Evaluated results using mAP, MOTA, IDF1, PSNR, SSIM, and FID
+\end{resumeitems}
+
+% EVIDENCE: EXP-SOLITON-PE-001
+\roleheading{Project Engineer}{Jun 2023 -- Jun 2024}{Soliton Technologies}{India}
+\begin{resumeitems}
+  % EVIDENCE: EXP-SOLITON-PE-001
+  \item Designed and developed a C\# WPF desktop application integrating C\#, Python, and LabVIEW-based test workflows to streamline application usage and improve test automation
+  % EVIDENCE: EXP-SOLITON-PE-001 METRIC-DRAEGER-94
+  \item Developed customized software solutions for Dr\"ager as the sole developer, automating approximately 94\% of manual test cases while meeting medical-device quality and validation requirements
+\end{resumeitems}
+
+\section{Projects}
+% SELECTED_PROJECT_BLOCK_START
+\textbf{\SelectedProjectTitle} \hfill \textit{\SelectedProjectContext}
+\begin{resumeitems}
+% EVIDENCE: resume_items:3bdeae2d833247f8a35481ccd7399062
+\item \SelectedProjectBulletOne
+% EVIDENCE: resume_items:3bdeae2d833247f8a35481ccd7399062
+\item \SelectedProjectBulletTwo
+% EVIDENCE: resume_items:3bdeae2d833247f8a35481ccd7399062
+\item \SelectedProjectBulletThree
+\end{resumeitems}
+% SELECTED_PROJECT_BLOCK_END
+
+% SECOND_PROJECT_BLOCK_START
+\textbf{\SecondProjectTitle} \hfill \textit{\SecondProjectContext}
+\begin{resumeitems}
+% EVIDENCE: PROJ-P07-FPGA
+\item \SecondProjectBulletOne
+% EVIDENCE: PROJ-P07-FPGA
+\item \SecondProjectBulletTwo
+% EVIDENCE: PROJ-P07-FPGA
+\item \SecondProjectBulletThree
+\end{resumeitems}
+% SECOND_PROJECT_BLOCK_END
+
+\end{document}

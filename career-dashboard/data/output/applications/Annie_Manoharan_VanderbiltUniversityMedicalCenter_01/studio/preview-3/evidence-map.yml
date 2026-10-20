@@ -1,0 +1,61 @@
+candidate_revision: 2026-09-18.1
+job_id: de3fbce44a063d5c
+role_eligible: false
+job_snapshot_sha256: 99950f404b256dbe9e30b520d830557ce5b12591ac0b48716784ef5172e1af49
+supported_requirement_coverage: 0
+requirements: []
+company_problem:
+  statement: Pending review of the saved job description.
+  source_url: https://vumc.wd1.myworkdayjobs.com/vumccareers/job/Nashville-TN/Data-Engineer---Platform-Administrator--Azure-Databricks-_R-69089
+  published_or_accessed: '2026-10-05'
+  evidence_class: explicit
+  confidence: low
+selected_project_id: 93d1e606187a4d77900a4d9617c64480
+selected_project_ids:
+- 93d1e606187a4d77900a4d9617c64480
+- PROJ-P01-IOT
+selected_project_reason: Draft selection by overlap with approved project wording;
+  review the business problem and full job requirements.
+resume_claim_ids:
+- CONTACT-EMAIL-001
+- CONTACT-GITHUB-001
+- CONTACT-PHONE-001
+- CONTACT-PORTFOLIO-001
+- COURSEWORK-MS-001
+- EDU-BE-001
+- EDU-MS-001
+- EXP-INSOPS-001
+- EXP-RA-001
+- EXP-SOLITON-PE-001
+- EXP-TA-001
+- IDENTITY-001
+- METRIC-DRAEGER-94
+- PROJ-P01-IOT
+- SKILL-CLOUD-001
+- SKILL-CV-TOOLS-001
+- SKILL-DATA-TOOLS-001
+- SKILL-DESKTOP-001
+- SKILL-GENAI-001
+- SKILL-LAKEHOUSE-001
+- SKILL-LANGUAGES-001
+- SKILL-ML-001
+- SKILL-STREAMING-001
+- SKILL-TEST-001
+- SKILL-TOUCHED-001
+held_claims_used: []
+studio_review_required: true
+source_evidence_errors:
+- 'Unknown source EVIDENCE ID on line 60: resume_items:36a23f8a04104e3489152c934ba50725'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:dcf1bca1dbeb4396ae4b095d7dd55ef2'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:dbaad908db794054aafb86603db42018'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:6b82986902ec40cc861b72fae6002719'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:8bdd849277fc465fb6e6e8de3aefe10b'
+- 'Unknown source EVIDENCE ID on line 68: resume_items:93d1e606187a4d77900a4d9617c64480'
+- 'Unknown source EVIDENCE ID on line 70: resume_items:93d1e606187a4d77900a4d9617c64480'
+- 'Unknown source EVIDENCE ID on line 72: resume_items:93d1e606187a4d77900a4d9617c64480'
+- 'Unknown source EVIDENCE ID on line 74: resume_items:93d1e606187a4d77900a4d9617c64480'
+- 'Unknown source EVIDENCE ID on line 76: resume_items:93d1e606187a4d77900a4d9617c64480'
+- 'Unknown source EVIDENCE ID on line 78: resume_items:93d1e606187a4d77900a4d9617c64480'
+- 'Unknown source EVIDENCE ID on line 170: resume_items:93d1e606187a4d77900a4d9617c64480'
+- 'Unknown source EVIDENCE ID on line 172: resume_items:93d1e606187a4d77900a4d9617c64480'
+- 'Unknown source EVIDENCE ID on line 174: resume_items:93d1e606187a4d77900a4d9617c64480'

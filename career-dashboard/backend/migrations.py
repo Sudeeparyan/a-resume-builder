@@ -188,6 +188,71 @@ MIGRATIONS: tuple[tuple[int, str, str], ...] = (
         CREATE INDEX IF NOT EXISTS idx_ai_calls_day ON ai_calls(day)
         """,
     ),
+    (
+        8,
+        "sponsorship_tracker",
+        """
+        CREATE TABLE IF NOT EXISTS market_postings(
+            key TEXT PRIMARY KEY,
+            company TEXT NOT NULL,
+            title TEXT NOT NULL,
+            location TEXT NOT NULL DEFAULT '',
+            url TEXT NOT NULL DEFAULT '',
+            source TEXT NOT NULL DEFAULT '',
+            posted_at TEXT NOT NULL DEFAULT '',
+            statement TEXT NOT NULL DEFAULT 'silent',
+            sentence TEXT NOT NULL DEFAULT '',
+            tier TEXT NOT NULL DEFAULT 'C',
+            cap_exempt INTEGER NOT NULL DEFAULT 0,
+            everify INTEGER NOT NULL DEFAULT 0,
+            h1b_approvals INTEGER NOT NULL DEFAULT 0,
+            h1b_denials INTEGER NOT NULL DEFAULT 0,
+            h1b_years TEXT NOT NULL DEFAULT '',
+            h1b_name TEXT NOT NULL DEFAULT '',
+            pay_min INTEGER,
+            pay_max INTEGER,
+            pay_text TEXT NOT NULL DEFAULT '',
+            fit_score INTEGER,
+            outcome TEXT NOT NULL DEFAULT 'read',
+            outcome_reason TEXT NOT NULL DEFAULT '',
+            job_id TEXT,
+            description TEXT NOT NULL DEFAULT '',
+            first_seen TEXT NOT NULL,
+            last_seen TEXT NOT NULL,
+            times_seen INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE INDEX IF NOT EXISTS idx_market_postings_seen ON market_postings(last_seen DESC);
+        CREATE INDEX IF NOT EXISTS idx_market_postings_company ON market_postings(company);
+        CREATE TABLE IF NOT EXISTS sponsor_board_reads(
+            board TEXT PRIMARY KEY,
+            last_read TEXT NOT NULL,
+            postings INTEGER NOT NULL DEFAULT 0,
+            error TEXT NOT NULL DEFAULT '',
+            gone_until TEXT
+        )
+        """,
+    ),
+    (
+        9,
+        "job_fit_matrix",
+        # One verified requirement matrix per job (backend/services/fit.py): what the posting
+        # asks for and which registered evidence shows it. Reused by the fit score, the tailor,
+        # resume coverage, readiness and the study plan; recomputed when the posting or evidence changes.
+        """
+        CREATE TABLE IF NOT EXISTS job_fit(
+            job_id TEXT PRIMARY KEY REFERENCES jobs(id),
+            jd_hash TEXT NOT NULL,
+            evidence_hash TEXT NOT NULL,
+            fit_version TEXT NOT NULL,
+            method TEXT NOT NULL CHECK(method IN ('ai','rules')),
+            provider TEXT NOT NULL DEFAULT '',
+            model TEXT NOT NULL DEFAULT '',
+            matrix TEXT NOT NULL,
+            score INTEGER,
+            created_at TEXT NOT NULL
+        )
+        """,
+    ),
 )
 
 

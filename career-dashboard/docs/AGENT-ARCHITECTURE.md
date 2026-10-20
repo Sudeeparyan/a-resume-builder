@@ -39,7 +39,7 @@ flowchart TD
 |---|---|---|---|
 | Sponsorship gate (`services/sponsorship.py`) | Posting text, company, URL, location, quoted restriction | Tier S/A/B/C or EXCLUDED with the exact sentence; H-1B history from the USCIS index | None |
 | Re-apply rules (`services/reapply.py`) | Company, title, job history, excluded log, archived history | Blocked (`same_role`, `rejected_180`, `ghosted_90`) or clear; hourly ghosting after 21 quiet days | None |
-| Tracked career pages (`services/portals.py`) | `data/config/portals.yml` | Greenhouse/Lever/Ashby postings through the same gates | None |
+| Tracked career pages (`services/portals.py`) | `data/config/portals.yml` | Workday, Greenhouse, Lever, Ashby and SmartRecruiters postings through the same gates; every eligible match is saved (up to 60 a pass), spread across employers | None |
 | Posting sweep (`job_quality.verify_due`) | Saved postings | Active/expired/needs review; live wording re-gated | None |
 | Main orchestrator | Job ID, draft revision, worker states | Queued/running/completed/failed runs with progress | None |
 | Assistant agent (`services/assistant.py`, tools in `services/assistant_tools.py`) | One message thread for the whole workspace: the snapshot, the tool catalogue and the task transcript | A pasted posting → gate, save, draft, one-page fit, score, PDF without a model; any other request → an agent loop (one structured decision per turn: call a tool, ask, or reply) over tools that wrap every feature, pausing for her yes before anything hard to undo | None for postings and shortcuts; one cheap call to read an unlabelled posting; one strong call per agent turn (at most 14 per message), on Claude Code, Codex or a keyed provider |
@@ -53,7 +53,7 @@ flowchart TD
 | Email reviewer | Scoped Gmail read tools | Application evidence | Live, budgeted |
 | Release validator | Source, registry, evidence map, PDF, preview | Hard pass/fail gates | None |
 
-AI workers run as fresh Claude Code, Codex or Kimi Code CLI processes in temporary directories with shell tools disabled, or through an API provider chosen in Settings. Codex's structured output is strict, so every schema reaches it in closed form (`backend/ai/codex.py: strict_schema`: objects closed, every property required); a failed `codex exec` reports its last error line rather than a generic hint. One choice covers everything: the chat's tiers follow the main provider unless Settings set them apart, and a run the chat starts is enqueued on the chat's engine when that runtime can do the work. The hiring manager never receives candidate context.
+AI workers run as fresh Claude Code, Codex, Antigravity (`agy`) or Kimi Code CLI processes in temporary directories with shell tools disabled, or through an API provider chosen in Settings. Codex's structured output is strict, so every schema reaches it in closed form (`backend/ai/codex.py: strict_schema`: objects closed, every property required); a failed `codex exec` reports its last error line rather than a generic hint. One choice covers everything: the chat's tiers follow the main provider unless Settings set them apart, and a run the chat starts is enqueued on the chat's engine when that runtime can do the work. The hiring manager never receives candidate context.
 
 ## How to use the workflow
 
@@ -103,7 +103,7 @@ The fitter accepts exactly one US Letter page with at least 80% measured fill, b
 |---|---|
 | `backend/services/sponsorship.py` | The gate, tiers, cap-exempt signals, USCIS index |
 | `backend/services/reapply.py` | Never-re-apply rules and ghosting |
-| `backend/services/portals.py` | Greenhouse/Lever/Ashby feed reader |
+| `backend/services/portals.py` | Workday, Greenhouse, Lever, Ashby and SmartRecruiters feed reader (only entry-level titles in her tracks are opened on Workday/SmartRecruiters) |
 | `backend/resume_contract.py` | The one-page US Letter contract every validator and the fitter read |
 | `backend/services/agents.py` | Orchestrator, discovery loop, study-plan worker, scheduler |
 | `backend/services/workspace_v2.py` | add_posting (gate → duplicates → re-apply → save), excluded log, restore, Profile, goals, email |

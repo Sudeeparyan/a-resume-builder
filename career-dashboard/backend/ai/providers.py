@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from backend.ai import claude_code, kimi_cli
+from backend.ai import antigravity_cli, catalog, claude_code, codex, kimi_cli, router
 
 
 ACTIONS = {
@@ -23,7 +24,9 @@ ACTIONS = {
 
 
 def _project_env(root: Path) -> dict[str, str]:
-    path = root / ".env"
+    from backend.paths import secrets_root_for
+
+    path = secrets_root_for(root) / ".env"
     values: dict[str, str] = {}
     if not path.exists():
         return values
@@ -41,7 +44,9 @@ def _secret(root: Path, name: str) -> str:
     # (where keys typed on that page go), then the root .env and keys.txt.
     from backend.ai import keys
 
-    return os.environ.get(name) or _project_env(root).get(name, "") or keys.secret(root, name)
+    value = os.environ.get(name) or _project_env(root).get(name, "") or keys.secret(root, name)
+    # An Azure key filed as OPENAI_API_KEY belongs to Azure OpenAI, never api.openai.com.
+    return "" if name == "OPENAI_API_KEY" and keys.AZURE_KEY.fullmatch(value) else value
 
 
 def _json_request(url: str, payload: dict, headers: dict, timeout: int = 90) -> dict:
@@ -77,6 +82,10 @@ class OpenAIProvider:
         if web:
             payload["tools"] = [{"type": "web_search"}]
         data = self.transport("https://api.openai.com/v1/responses", payload, {"Authorization": "Bearer " + key})
+        from backend import telemetry
+
+        usage = data.get("usage") or {}
+        telemetry.record_usage(usage.get("input_tokens"), usage.get("output_tokens"))
         text = data.get("output_text")
         if not text:
             for output in data.get("output", []):
@@ -92,7 +101,8 @@ class OpenAIProvider:
 
 class AnthropicProvider:
     id = "anthropic"
-    models = ("claude-sonnet-4-6", "claude-haiku-4-5")
+    models = (catalog.ANTHROPIC_MODELS["strong"], catalog.ANTHROPIC_MODELS["cheap"], catalog.ANTHROPIC_MODELS["best"],
+              *catalog.ANTHROPIC_EARLIER)
     capabilities = {"structured"}
 
     def __init__(self, root: Path, transport=_json_request):
@@ -108,10 +118,15 @@ class AnthropicProvider:
             raise ValueError("Claude is not configured on the server")
         if web:
             raise ValueError("Claude is not enabled for actions requiring built-in web access")
+        model = catalog.ANTHROPIC_ALIASES.get(model, model)
         if model not in self.models:
             raise ValueError("Unsupported Claude model")
         payload = {"model": model, "max_tokens": 4096, "messages": [{"role": "user", "content": prompt}], "output_config": {"format": {"type": "json_schema", "schema": schema}}}
         data = self.transport("https://api.anthropic.com/v1/messages", payload, {"x-api-key": key, "anthropic-version": "2023-06-01"})
+        from backend import telemetry
+
+        usage = data.get("usage") or {}
+        telemetry.record_usage(usage.get("input_tokens"), usage.get("output_tokens"))
         text = "".join(item.get("text", "") for item in data.get("content", []) if item.get("type") == "text")
         try:
             return json.loads(text)
@@ -121,7 +136,6 @@ class AnthropicProvider:
 
 class CodexProvider:
     id = "codex"
-    models = ("codex-runtime",)
     capabilities = {"structured", "web", "apps"}
 
     def __init__(self, invoke):
@@ -131,10 +145,18 @@ class CodexProvider:
     def configured(self) -> bool:
         return True
 
+    @property
+    def models(self) -> tuple:
+        # "codex-runtime" (Codex's own default) plus the models her plan lists.
+        return codex.models()
+
     def generate(self, prompt: str, schema: dict, *, model="codex-runtime", **options) -> dict:
         if model not in self.models:
             raise ValueError("Unsupported Codex model")
-        return self.invoke(prompt, schema, **{key: options[key] for key in ("web", "apps") if key in options})
+        chosen = {key: options[key] for key in ("web", "apps") if key in options}
+        if model not in codex.MODELS:  # a named plan model; the default needs no flag
+            chosen["model"] = model
+        return self.invoke(prompt, schema, **chosen)
 
 
 class ClaudeCodeProvider:
@@ -172,7 +194,6 @@ class KimiCliProvider:
     """
 
     id = kimi_cli.ID
-    models = kimi_cli.MODELS
     capabilities = {"structured", "web"}
 
     def __init__(self, invoke=kimi_cli.invoke):
@@ -182,6 +203,11 @@ class KimiCliProvider:
     def configured(self) -> bool:
         return kimi_cli.available()
 
+    @property
+    def models(self) -> tuple:
+        # "kimi-runtime" (the CLI's default) plus the models in its config.toml.
+        return kimi_cli.models()
+
     # Same convention as the Codex runtime: the web is on unless an action
     # (hiring review, resume chat) switches it off.
     def generate(self, prompt: str, schema: dict, *, model="kimi-runtime", web=True, **_options) -> dict:
@@ -190,12 +216,38 @@ class KimiCliProvider:
         return self.invoke(prompt, schema, model=model, web=web)
 
 
+class AntigravityCliProvider:
+    """The local Google Antigravity CLI (agy), signed in to the user's Google account.
+
+    Mirrors KimiCliProvider: no key, calls count against the account's Antigravity
+    usage limits. Web search comes from the CLI's built-in tools; it has no Gmail
+    access, so the mailbox worker stays on Codex.
+    """
+
+    id = antigravity_cli.ID
+    models = antigravity_cli.MODELS
+    capabilities = {"structured", "web"}
+
+    def __init__(self, invoke=antigravity_cli.invoke):
+        self.invoke = invoke
+
+    @property
+    def configured(self) -> bool:
+        return antigravity_cli.available()
+
+    def generate(self, prompt: str, schema: dict, *, model=antigravity_cli.RUNTIME, web=True, **_options) -> dict:
+        if model not in self.models:
+            raise ValueError("Unsupported Antigravity model")
+        return self.invoke(prompt, schema, model=model, web=web)
+
+
 class HostedProvider:
     """Any other provider in the Settings catalogue, reached through LangChain.
 
     Adding a key on the Settings page is enough to make OpenRouter, Gemini or
     Kimi run the agents. These APIs have no built-in web search here, so the
-    gateway sends research and discovery to a provider that has one.
+    gateway sends research and discovery to a provider that has one (Azure
+    OpenAI has one: see AzureOpenAIProvider).
     """
 
     capabilities = {"structured"}
@@ -207,6 +259,10 @@ class HostedProvider:
 
     @property
     def configured(self) -> bool:
+        from backend.ai import catalog
+
+        if self.id == catalog.AZURE:
+            return bool(_secret(self.root, self.spec["key"])) and not catalog.azure_settings(self.root)["missing"]
         return bool(_secret(self.root, self.spec["key"]))
 
     @property
@@ -214,6 +270,8 @@ class HostedProvider:
         # The cached live list, never a network call: resolve() runs on every request.
         from backend.ai import catalog
 
+        if self.id == catalog.AZURE:
+            return tuple(catalog.azure_deployments(self.root))
         listed = (catalog._read_cache(self.root).get(self.id) or {}).get("models") or []
         return tuple(dict.fromkeys([*self.spec["defaults"].values(), *listed]))
 
@@ -237,8 +295,172 @@ class HostedProvider:
         return result
 
 
+class AzureOpenAIProvider(HostedProvider):
+    """Azure OpenAI: a hosted API that can also search the web.
+
+    Azure's Responses API carries the same built-in ``web_search`` tool as
+    OpenAI's, so job search and company research call it directly, with the
+    schema enforced by the API. Every call without the web keeps the LangChain
+    path. Web is on unless the action switches it off, the same convention as
+    the local runtimes.
+    """
+
+    capabilities = {"structured", "web"}
+    TIMEOUT = 600  # a web research turn searches several times before it answers
+
+    def __init__(self, root: Path, transport=None):
+        from backend.ai import catalog
+
+        super().__init__(root, catalog.AZURE)
+        self.transport = transport or _azure_request
+
+    def generate(self, prompt: str, schema: dict, *, model: str, web=True, **options) -> dict:
+        from backend.ai import catalog
+
+        if not web:
+            return super().generate(prompt, schema, model=model, **options)
+        key = _secret(self.root, self.spec["key"])
+        azure = catalog.azure_settings(self.root)
+        if not key or azure["missing"]:
+            raise ValueError("Azure OpenAI is not configured: add "
+                             + " and ".join(["AZURE_OPENAI_API_KEY"] * (not key) + azure["missing"])
+                             + " to career-dashboard/.env")
+        if model not in self.models:
+            raise ValueError(f"Unsupported {self.spec['label']} model")
+        payload = {
+            "model": model, "input": prompt, "tools": [{"type": "web_search"}],
+            "text": {"format": {"type": "json_schema", "name": "career_result",
+                                "schema": codex.strict_schema(schema), "strict": True}},
+        }
+        data = self.transport(azure["base_url"] + "responses", payload, {"api-key": key}, self.TIMEOUT)
+        from backend import telemetry
+
+        usage = data.get("usage") or {}
+        telemetry.record_usage(usage.get("input_tokens"), usage.get("output_tokens"))
+        if data.get("status") == "incomplete":
+            reason = (data.get("incomplete_details") or {}).get("reason") or "unknown"
+            raise ValueError(f"Azure OpenAI stopped before finishing ({reason}). Retry, or pick fewer jobs.")
+        text = data.get("output_text") or next(
+            (part.get("text") for item in data.get("output") or [] for part in item.get("content") or []
+             if part.get("type") == "output_text"), "")
+        try:
+            result = json.loads(text or "")
+        except json.JSONDecodeError:
+            raise ValueError("Azure OpenAI returned output that did not match the requested schema") from None
+        if not isinstance(result, dict):
+            raise ValueError("Azure OpenAI returned output that did not match the requested schema")
+        return result
+
+
+# Azure meters tokens per minute, and a web search re-reads every page it opened, so a
+# second call within the same minute (research straight after finding jobs) is often
+# refused with 429. Azure says how long to wait; waiting beats failing the whole run.
+RATE_LIMIT_RETRIES = 4
+RATE_LIMIT_MAX_WAIT = 60
+# Azure often says "retry after 1 s" when a deployment's tokens-per-minute budget is spent,
+# but that budget refills over a 60 s window, and one web-search job search can use most
+# of it. On 23 Sep four quick retries all failed within 51 s; waits now grow to at least
+# 15, 30, 45 and 60 s, about two and a half minutes of patience in all.
+RATE_LIMIT_FLOOR = 15
+
+
+def _retry_after(headers, attempt: int) -> float:
+    hinted = 0.0
+    for name, scale in (("retry-after-ms", 0.001), ("retry-after", 1),
+                        ("x-ratelimit-reset-tokens", 1), ("x-ratelimit-reset-requests", 1)):
+        try:
+            hinted = max(hinted, float((headers or {}).get(name)) * scale)
+        except (TypeError, ValueError):
+            continue
+    return min(max(hinted + 1, RATE_LIMIT_FLOOR * (attempt + 1)), RATE_LIMIT_MAX_WAIT)
+
+
+def _azure_request(url: str, payload: dict, headers: dict, timeout: int, sleep=time.sleep) -> dict:
+    """POST to Azure, keeping Azure's own error message (it names the fix: a quota, a bad deployment)."""
+    request = Request(url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json", **headers})
+    for attempt in range(RATE_LIMIT_RETRIES + 1):
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            if exc.code == 429 and attempt < RATE_LIMIT_RETRIES:
+                sleep(_retry_after(exc.headers, attempt))
+                continue
+            try:
+                message = json.loads(exc.read().decode("utf-8", "replace")).get("error", {}).get("message", "")
+            except (ValueError, AttributeError, OSError):
+                message = ""
+            detail = " ".join(str(message).split())[:300]
+            raise ValueError(f"Azure OpenAI returned HTTP {exc.code}" + (f": {detail}" if detail else "")) from None
+        except (URLError, TimeoutError):
+            raise ValueError("Azure OpenAI could not be reached before the timeout") from None
+
+
 # Where a web- or Gmail-needing action goes when the chosen provider cannot do it.
-CAPABLE_ORDER = ("claude_code", "codex", "kimi_cli", "openai")
+CAPABLE_ORDER = ("claude_code", "codex", "antigravity_cli", "kimi_cli", "openai", "azure_openai")
+
+# Which of each plan's models an action runs on under Auto: reading and sorting on
+# the lighter one, everything that writes or researches on the best one.
+ACTION_TIER = {"requirement_extraction": "cheap", "email": "cheap"}
+
+
+class RouterProvider:
+    """Auto: the router as one more provider (backend/ai/router.py).
+
+    Each call walks the saved route (Kimi, Codex, Claude, then Azure) over the
+    gateway's own endpoint objects, so every runtime keeps its usual command.
+    `served()` names the endpoint that answered the last call on this thread.
+    """
+
+    id = router.ID
+    models = (router.ID,)
+    capabilities = {"structured", "web", "apps"}
+
+    def __init__(self, gateway: "AIGateway"):
+        from backend.context_local import ContextLocal
+
+        self.gateway = gateway
+        # Which endpoint answered, and whether this run may only use free plans: context-local,
+        # so a graph's parallel nodes keep the run's free-only rule.
+        self.local = ContextLocal("router-call")
+
+    @property
+    def configured(self) -> bool:
+        return router.ready(self.gateway.s.w.root)
+
+    def served(self) -> tuple | None:
+        return getattr(self.local, "served", None)
+
+    def route(self, action: str, prompt: str, schema: dict, **options) -> dict:
+        from backend.ai import paid_gate, switch_recorder
+
+        needs = ACTIONS.get(action) or {}
+        wanted = {"web": bool(needs.get("web")) and options.get("web", True) is not False,
+                  "apps": bool(needs.get("apps") or options.get("apps"))}
+        services = self.gateway.s
+        preferences = services.pref("ai_preferences", {}) or {}
+        self.local.served = None
+
+        def attempt(provider_id, model):
+            self.local.served = (provider_id, model)  # the last endpoint tried, until one answers
+            return self.gateway.invoke_endpoint(self.gateway.providers[provider_id], model,
+                                                action, prompt, schema, **options)
+
+        policy = router.policy_from(preferences)
+        # A run started by an unattended search (services/hunt.py) never reaches a paid
+        # endpoint unless the person allowed it; AgentRunner sets this for that run's thread.
+        if getattr(self.local, "free_only", False):
+            policy = router.free_only(policy)
+        result, served = router.route(
+            services.w.root, tier=ACTION_TIER.get(action, "strong"), needs=wanted,
+            policy=policy, attempt=attempt,
+            paid_gate=paid_gate(services), on_switch=switch_recorder(services, action),
+        )
+        self.local.served = served
+        return result
+
+    def generate(self, prompt: str, schema: dict, *, model=router.ID, **options) -> dict:
+        return self.route(options.pop("action", "document_review"), prompt, schema, **options)
 
 
 class AIGateway:
@@ -246,15 +468,22 @@ class AIGateway:
         from backend.ai import catalog
 
         self.s = service
-        self.providers = {provider.id: provider for provider in (OpenAIProvider(service.w.root), AnthropicProvider(service.w.root), CodexProvider(codex_invoke), ClaudeCodeProvider(), KimiCliProvider())}
+        self.providers = {provider.id: provider for provider in (OpenAIProvider(service.w.root), AnthropicProvider(service.w.root), CodexProvider(codex_invoke), ClaudeCodeProvider(), KimiCliProvider(), AntigravityCliProvider(), AzureOpenAIProvider(service.w.root))}
         for provider_id in catalog.PROVIDERS:
             self.providers.setdefault(provider_id, HostedProvider(service.w.root, provider_id))
+        self.providers[router.ID] = RouterProvider(self)
+
+    def _builtin_default(self) -> str:
+        # Auto when any plan on its route can run here; the older built-in otherwise.
+        if router.DEFAULT_WHEN_UNSET and self.providers[router.ID].configured:
+            return router.ID
+        return "openai" if self.providers["openai"].configured else "codex"
 
     def preferences(self) -> dict:
         # The Settings tab keeps its tier choices under the same key, so read
         # only this gateway's part of it and fill in what is missing.
-        configured_default = "openai" if self.providers["openai"].configured else "codex"
         stored = self.s.pref("ai_preferences", {}) or {}
+        configured_default = None if stored.get("default") else self._builtin_default()
         return {
             "default": stored.get("default") or {"provider": configured_default, "model": self.providers[configured_default].models[0]},
             "actions": stored.get("actions") or {},
@@ -309,6 +538,8 @@ class AIGateway:
                     provider, provider_id, model = other, candidate, other.models[0]
                     break
         model = model or choice.get("model") or provider.models[0]
+        if provider_id == "anthropic":
+            model = catalog.ANTHROPIC_ALIASES.get(model, model)
         if model not in provider.models:
             raise ValueError("This model is not available for the selected provider")
         needs = ACTIONS[action]
@@ -321,8 +552,17 @@ class AIGateway:
 
     def generate(self, action: str, prompt: str, schema: dict, *, provider=None, model=None, **options) -> dict:
         selected, model = self.resolve(action, provider, model)
+        auto = self.providers.get(router.ID)
+        free_only = bool(getattr(getattr(auto, "local", None), "free_only", False))
+        if selected.id == router.ID:
+            # Auto falls back through its whole route; the single backup below is not needed.
+            return selected.route(action, prompt, schema, **options)
+        if free_only and router.is_paid(selected.id):
+            raise ValueError('This unattended run does not permit paid AI. Choose a free plan or explicitly allow paid AI for the hunt.')
+        # Budget reservations happen at the actual endpoint so Auto and named
+        # fallback calls share the same atomic limit.
         try:
-            return selected.generate(prompt, schema, model=model, **options)
+            return self.invoke_endpoint(selected, model, action, prompt, schema, **options)
         except ValueError as error:
             # Graceful fallback: the Settings page can name a backup provider.
             # One retry, recorded, and the UI surfaces that it happened.
@@ -334,8 +574,14 @@ class AIGateway:
                 backup, backup_model = self.resolve(action, fallback_id, fallback.get("model"))
             except ValueError:
                 raise error from None
+            if free_only and router.is_paid(backup.id):
+                raise error from None  # this run's permission also governs named backups
+            from backend.ai import paid_gate
+
+            if router.is_paid(backup.id) and paid_gate(self.s)(backup.id):
+                raise error  # today's paid limit is used up: no paid backup either
             try:
-                result = backup.generate(prompt, schema, model=backup_model, **options)
+                result = self.invoke_endpoint(backup, backup_model, action, prompt, schema, **options)
             except ValueError:
                 raise error from None
             with self.s.w.connect() as db:
@@ -344,4 +590,34 @@ class AIGateway:
                     from_provider=selected.id, to_provider=backup.id,
                     reason=str(error)[:300],
                 )
+            return result
+
+    def invoke_endpoint(self, provider, model, action, prompt, schema, **options):
+        from backend import telemetry
+        from backend.services.agent_cache import paid_invocation
+        from backend.services.task_execution import invocation_slot
+
+        tier = ACTION_TIER.get(action, "strong")
+        # A named fallback can itself be Auto; let it resolve an actual endpoint.
+        if provider.id == router.ID:
+            with telemetry.span("ai.route", **{"career.ai.action": action, "career.ai.tier": tier}):
+                return provider.route(action, prompt, schema, **options)
+        web = bool(options.get("web", (ACTIONS.get(action) or {}).get("web")))
+        with telemetry.span(f"chat {model}", **{
+                "gen_ai.operation.name": "chat", "gen_ai.provider.name": provider.id, "gen_ai.request.model": model,
+                "openinference.span.kind": "LLM", "llm.provider": provider.id, "llm.model_name": model,
+                "career.ai.action": action, "career.ai.tier": tier, "career.ai.paid": router.is_paid(provider.id),
+                "career.ai.web": web, "career.ai.prompt_chars": len(prompt or "")}) as current:
+            asked = time.monotonic()
+            with invocation_slot(provider.id):
+                # Time spent queued behind other AI calls, separate from the call itself.
+                telemetry.event("slot_acquired", wait_ms=round((time.monotonic() - asked) * 1000))
+                with paid_invocation(self.s, provider.id, model, action):
+                    try:
+                        result = provider.generate(prompt, schema, model=model, **options)
+                    except Exception as error:
+                        router.note_direct(self.s.w.root, provider.id, False, str(error))
+                        raise
+            router.note_direct(self.s.w.root, provider.id, True)
+            telemetry.set_attributes(current, **{"career.ai.response_chars": len(json.dumps(result, default=str))})
             return result

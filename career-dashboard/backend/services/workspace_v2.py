@@ -162,6 +162,27 @@ def agent_switch_label(kind):
     return str(kind).replace("_", " ")
 
 
+RUN_JOBS_KEPT = 200
+
+
+def compact_run_result(result):
+    """A discovery run's posting list without the posting texts.
+
+    A feed pass reads hundreds of full postings; saved jobs keep their own text in the
+    jobs table, so the run record keeps only who, what and where. Before 2026-10-02 the
+    full texts were stored, which grew workspace-state.json to 91 MB and every
+    /api/v2/agents poll to tens of MB; older rows are compacted here when read.
+    """
+    if not isinstance(result, dict) or not isinstance(result.get("jobs"), list):
+        return result
+    jobs = result["jobs"]
+    if not any(isinstance(job, dict) and "description" in job for job in jobs) and len(jobs) <= RUN_JOBS_KEPT:
+        return result
+    brief = [{key: job.get(key, "") for key in ("company", "title", "url", "location")}
+             for job in jobs[:RUN_JOBS_KEPT] if isinstance(job, dict)]
+    return {**result, "jobs": brief, "jobs_read": result.get("jobs_read", len(jobs))}
+
+
 class CareerServices:
     def __init__(self, workspace):
         self.w = workspace
@@ -680,6 +701,13 @@ class CareerServices:
             record = self.record_excluded(values, verdict, source)
             return {"excluded": True, "job": None, "duplicate": False, "reason": verdict.screen.reason,
                     "reason_label": verdict.screen.reason_label, "sentence": verdict.screen.sentence, "record": record}
+        # US only: a stated location outside the US is never saved (a blank one cannot be judged).
+        from backend.job_quality import is_us_location, remote_outside_us
+        where = str(values.get("location") or "").strip()
+        if where and not is_us_location(where) and not (
+                where.casefold() == "remote" and not remote_outside_us(values.get("description", ""))):
+            return {"blocked": True, "job": None, "duplicate": False, "rule": "outside_us",
+                    "note": f"This role is in {where}, outside the United States. Annie's search is US-only."}
         clean = canonical_url(values["url"])
         keys = {
             posting_key(clean, values["company"], values.get("requisition_id", "")),
@@ -700,7 +728,8 @@ class CareerServices:
             for job in self.w.jobs()
         )
         gate = {"blocked": False, "note": ""} if upgrading else reapply.check(
-            values["company"], title, self.reapply_memory(), self.excluded(), self.w.profile()
+            values["company"], title, self.reapply_memory(), self.excluded(), self.w.profile(),
+            learn=source == "discovery",  # a job Annie saves herself is never blocked by a removal lesson
         )
         if gate["blocked"]:
             return {"blocked": True, "job": None, "duplicate": False, "rule": gate["rule"], "note": gate["note"]}
@@ -815,7 +844,9 @@ class CareerServices:
         self.store_sponsorship(job_id, verdict)
         return {"excluded": False, "job": self.w.get_job(job_id)}
 
-    def record_excluded(self, values, verdict, source="manual"):
+    def record_excluded(self, values, verdict, source="manual", sync=True):
+        """Log an excluded posting with its sentence. ``sync=False`` inside a discovery pass,
+        which exports the projections once at its end."""
         clean = canonical_url(values["url"]) if values.get("url") else ""
         record = {
             "id": hashlib.sha256((clean or values["company"] + values.get("title", "")).encode()).hexdigest()[:16],
@@ -838,7 +869,8 @@ class CareerServices:
                 record,
             )
             self.w.record_event(db, "posting_excluded", None, company=record["company"], title=record["title"], url=record["url"], reason=record["reason"], sentence=record["sentence"], source=source)
-        self.w.export_tracking()
+        if sync:
+            self.w.export_tracking()
         return {k: v for k, v in record.items() if k != "description"}
 
     def reapply_memory(self):
@@ -1226,152 +1258,16 @@ class CareerServices:
         root.mkdir(parents=True, exist_ok=True)
         return root
 
-    def generate_cover_letter(self, job_id):
-        from career import atomic_write
+    def generate_cover_letter(self, job_id, team=None):
+        """Write, check and save a new version of this job's cover letter (services/cover_letters.py).
 
-        job = self.w.get_job(job_id)
-        if job.get("deleted_at"):
-            raise ValueError("Restore this removed role before generating documents")
-        if job.get("record_source") == "gmail":
-            raise ValueError(
-                "Add the original posting and full job description before generating a cover letter"
-            )
-        if self.profile_dirty():
-            raise ValueError(
-                "Open Profile and confirm the pending entries before generating a cover letter"
-            )
-        active_projects = {
-            item["id"]
-            for item in self.knowledge()
-            if item["kind"] == "project" and item["review_state"] == "registered"
-        }
-        ranked = [
-            project
-            for project in self.w.rank_projects(
-                job["title"] + " " + job["description"]
-            )
-            if project["id"] in active_projects
-        ]
-        if len(ranked) < 2:
-            raise ValueError("Two registered evidence examples are required")
-        first, second = ranked[:2]
-        focus = list(dict.fromkeys(first["matched_terms"] + second["matched_terms"]))[:4]
-        focus_text = (
-            " The role's focus on " + ", ".join(focus) + " aligns with evidence from my work and projects."
-            if focus
-            else ""
-        )
-        profile = self.w.profile()
-        candidate = profile["candidate"]
-        headline = (profile.get("narrative") or {}).get("headline", "").strip().rstrip(".")
-        # Contact block mirrors the resume header: no city (none of her resumes prints one).
-        contact = [candidate["full_name"], candidate["email"], candidate["phone"]]
-        for key in ("portfolio_url", "github"):
-            if candidate.get(key):
-                contact.append(candidate[key])
-        opening = (
-            f"I am writing to apply for the {job['title']} role at {job['company']}. "
-            f"I am a {headline[0].lower() + headline[1:] if headline else 'Computer Engineering graduate'}, "
-            f"and I completed my MS in Computer Engineering at the University of Arkansas in May 2026.{focus_text}"
-        )
-        letter = "\n".join(
-            [
-                *contact,
-                "",
-                self.today(),
-                "",
-                "Hiring Team",
-                job["company"],
-                "",
-                f"Re: {job['title']}",
-                "",
-                "Dear Hiring Team,",
-                "",
-                opening,
-                "",
-                f"A relevant example is {first['title']}. {first['bullets'][0]} {first['bullets'][1] if len(first['bullets']) > 1 else ''}".strip(),
-                "",
-                f"I can also bring experience from {second['title']}. {second['bullets'][0]}".strip(),
-                "",
-                f"I would welcome the opportunity to discuss how this work could support the {job['title']} team at {job['company']}. Thank you for considering my application.",
-                "",
-                "Sincerely,",
-                candidate["full_name"],
-            ]
-        )
-        with self.w.connect() as db:
-            db.execute("BEGIN IMMEDIATE")
-            version = (
-                db.execute(
-                    "SELECT COALESCE(MAX(version),0)+1 FROM cover_letters WHERE job_id=?",
-                    (job_id,),
-                ).fetchone()[0]
-            )
-            root = self._document_root(job)
-            path = root / f"cover-letter-v{version}.md"
-            atomic_write(path, letter + "\n")
-            atomic_write(
-                root / f"cover-letter-v{version}.json",
-                json.dumps(
-                    {
-                        "job_id": job_id,
-                        "company": job["company"],
-                        "title": job["title"],
-                        "candidate_revision": self.w.evidence()[
-                            "candidate_revision"
-                        ],
-                        "evidence_ids": [
-                            "IDENTITY-001",
-                            "CONTACT-EMAIL-001",
-                            "CONTACT-PHONE-001",
-                            "CONTACT-PORTFOLIO-001",
-                            "CONTACT-GITHUB-001",
-                            "EDU-MS-001",
-                            first["id"],
-                            second["id"],
-                        ],
-                        "review_required": True,
-                    },
-                    indent=2,
-                    ensure_ascii=False,
-                )
-                + "\n",
-            )
-            relative = str(path.relative_to(self.w.root / "data/output"))
-            stamp = self.now()
-            db.execute(
-                "INSERT INTO cover_letters VALUES(?,?,?,?,?,?)",
-                (
-                    job_id,
-                    version,
-                    letter,
-                    relative,
-                    stamp,
-                    self.w.evidence()["candidate_revision"],
-                ),
-            )
-            self.w.record_event(
-                db,
-                "cover_letter_generated",
-                job_id,
-                company=job["company"],
-                title=job["title"],
-                version=version,
-                path=relative,
-                review_required=True,
-            )
-        self.w.export_tracking()
-        self.export_state()
-        return {
-            "job_id": job_id,
-            "company": job["company"],
-            "title": job["title"],
-            "version": version,
-            "content": letter,
-            "path": relative,
-            "created_at": stamp,
-            "review_required": True,
-        }
+        Drafted by an AI from registered evidence only, checked word by word and audited by a
+        second AI; without an AI, or after two failed drafts, it is built from her registered
+        sentences. A Word copy is saved beside the Markdown. Nothing is ever sent.
+        """
+        from backend.services import cover_letters
+
+        return cover_letters.generate(self, job_id, team=team if team is not None else cover_letters.writer_team(self))
 
     def documents(self):
         documents = []
@@ -1465,7 +1361,7 @@ class CareerServices:
                 "SELECT id,kind,job_id,state,result,error,created_at,updated_at,provider,model,preset FROM agent_runs ORDER BY created_at DESC LIMIT 100"
             ).fetchall()
         return [
-            {**dict(r), "result": json.loads(r["result"]) if r["result"] else None}
+            {**dict(r), "result": compact_run_result(json.loads(r["result"])) if r["result"] else None}
             for r in rows
         ]
 
@@ -1508,4 +1404,14 @@ class CareerServices:
                 "ghosted": sum(j["status"] == "ghosted" for j in jobs),
             },
             "activity": self.w.activity(15),
+            "needs_you": self.needs_you(),
         }
+
+    def needs_you(self):
+        """What only Annie can do now (services/needs_you.py); never stops the Dashboard loading."""
+        from backend.services import needs_you
+
+        try:
+            return needs_you.items(self)
+        except Exception:  # noqa: BLE001 - a convenience list; the rest of the summary still loads
+            return []

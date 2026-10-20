@@ -1,0 +1,748 @@
+{
+ "built_at": "2026-10-09T07:40:38+00:00",
+ "results": {
+  "UBER TECHNOLOGIES INC": {
+   "status": "resolved",
+   "legal_name": "UBER TECHNOLOGIES INC",
+   "ats": "smartrecruiters",
+   "token": "uber",
+   "board_name": "Uber",
+   "postings": 1,
+   "us_postings": 1,
+   "target_postings": 0,
+   "accepted": true,
+   "reason": "board name: Uber (exact); a US posting is in San Francisco, CA",
+   "match": "exact",
+   "tried": [
+    "greenhouse:uber",
+    "lever:uber",
+    "ashby:uber",
+    "smartrecruiters:uber"
+   ],
+   "h1b_approvals": 2123
+  },
+  "IRIS SOFTWARE INC": {
+   "status": "resolved",
+   "legal_name": "IRIS SOFTWARE INC",
+   "ats": "smartrecruiters",
+   "token": "irissoftware",
+   "board_name": "IRIS Software",
+   "postings": 3,
+   "us_postings": 3,
+   "target_postings": 0,
+   "accepted": true,
+   "reason": "board name: IRIS Software (exact); a US posting is in Edison, NJ",
+   "match": "exact",
+   "tried": [
+    "greenhouse:iris",
+    "lever:iris",
+    "ashby:iris",
+    "smartrecruiters:iris",
+    "greenhouse:irissoftware",
+    "lever:irissoftware",
+    "ashby:irissoftware",
+    "smartrecruiters:irissoftware"
+   ],
+   "h1b_approvals": 685
+  },
+  "ROBINHOOD MARKETS INC": {
+   "status": "resolved",
+   "legal_name": "ROBINHOOD MARKETS INC",
+   "ats": "greenhouse",
+   "token": "robinhood",
+   "board_name": "Robinhood",
+   "postings": 171,
+   "us_postings": 135,
+   "target_postings": 4,
+   "accepted": true,
+   "reason": "board name: Robinhood (brand); a US posting is in Menlo Park, CA",
+   "match": "brand",
+   "tried": [
+    "greenhouse:robinhood"
+   ],
+   "h1b_approvals": 540
+  },
+  "TELADOC HEALTH INC": {
+   "status": "resolved",
+   "legal_name": "TELADOC HEALTH INC",
+   "ats": "smartrecruiters",
+   "token": "teladochealth",
+   "board_name": "Teladoc Health",
+   "postings": 2,
+   "us_postings": 2,
+   "target_postings": 0,
+   "accepted": true,
+   "reason": "board name: Teladoc Health (exact); a US posting is in Purchase, NY",
+   "match": "exact",
+   "tried": [
+    "greenhouse:teladoc",
+    "lever:teladoc",
+    "ashby:teladoc",
+    "smartrecruiters:teladoc",
+    "greenhouse:teladochealth",
+    "lever:teladochealth",
+    "ashby:teladochealth",
+    "smartrecruiters:teladochealth"
+   ],
+   "h1b_approvals": 401
+  },
+  "GODADDY COM LLC": {
+   "status": "resolved",
+   "legal_name": "GODADDY COM LLC",
+   "ats": "greenhouse",
+   "token": "godaddy",
+   "board_name": "GoDaddy",
+   "postings": 30,
+   "us_postings": 16,
+   "target_postings": 1,
+   "accepted": true,
+   "reason": "board name: GoDaddy (brand); a US posting is in Gilbert, AZ",
+   "match": "brand",
+   "tried": [
+    "greenhouse:godaddy"
+   ],
+   "h1b_approvals": 339
+  },
+  "NISUM TECHNOLOGIES INC": {
+   "status": "resolved",
+   "legal_name": "NISUM TECHNOLOGIES INC",
+   "ats": "smartrecruiters",
+   "token": "nisum",
+   "board_name": "Nisum",
+   "postings": 1,
+   "us_postings": 1,
+   "target_postings": 0,
+   "accepted": true,
+   "reason": "board name: Nisum (exact); a US posting is in Brea, CA",
+   "match": "exact",
+   "tried": [
+    "greenhouse:nisum",
+    "lever:nisum",
+    "ashby:nisum",
+    "smartrecruiters:nisum"
+   ],
+   "h1b_approvals": 275
+  },
+  "ARISTA NETWORKS INC": {
+   "status": "resolved",
+   "legal_name": "ARISTA NETWORKS INC",
+   "ats": "smartrecruiters",
+   "token": "aristanetworks",
+   "board_name": "Arista Networks",
+   "postings": 100,
+   "us_postings": 100,
+   "target_postings": 20,
+   "accepted": true,
+   "reason": "board name: Arista Networks (exact); a US posting is in Santa Clara, CA",
+   "match": "exact",
+   "tried": [
+    "greenhouse:arista",
+    "lever:arista",
+    "ashby:arista",
+    "smartrecruiters:arista",
+    "greenhouse:aristanetworks",
+    "lever:aristanetworks",
+    "ashby:aristanetworks",
+    "smartrecruiters:aristanetworks"
+   ],
+   "h1b_approvals": 264
+  },
+  "MICROCHIP TECHNOLOGY INC": {
+   "status": "unresolved",
+   "legal_name": "MICROCHIP TECHNOLOGY INC",
+   "tried": [
+    "greenhouse:microchip",
+    "lever:microchip",
+    "ashby:microchip",
+    "smartrecruiters:microchip"
+   ],
+   "refused": [
+    {
+     "ats": "smartrecruiters",
+     "token": "microchip",
+     "board_name": "Microchip",
+     "postings": 9,
+     "us_postings": 9,
+     "target_postings": 0,
+     "accepted": false,
+     "reason": "board name: Microchip (exact), but the name is one common word and no US posting is in Chandler, AZ, where USCIS records this employer"
+    }
+   ],
+   "h1b_approvals": 244
+  },
+  "BILL COM": {
+   "status": "resolved",
+   "legal_name": "BILL COM",
+   "ats": "greenhouse",
+   "token": "billcom",
+   "board_name": "BILL",
+   "postings": 39,
+   "us_postings": 39,
+   "target_postings": 2,
+   "accepted": true,
+   "reason": "board name: BILL (brand); a US posting is in Palo Alto, CA",
+   "match": "brand",
+   "tried": [
+    "greenhouse:bill",
+    "lever:bill",
+    "ashby:bill",
+    "smartrecruiters:bill",
+    "greenhouse:billcom"
+   ],
+   "h1b_approvals": 230
+  },
+  "UPSTART NETWORK INC": {
+   "status": "resolved",
+   "legal_name": "UPSTART NETWORK INC",
+   "ats": "greenhouse",
+   "token": "upstart",
+   "board_name": "Upstart",
+   "postings": 85,
+   "us_postings": 85,
+   "target_postings": 11,
+   "accepted": true,
+   "reason": "board name: Upstart (brand); a US posting is in San Mateo, CA",
+   "match": "brand",
+   "tried": [
+    "greenhouse:upstart"
+   ],
+   "h1b_approvals": 222
+  },
+  "INOVALON HOLDINGS INC": {
+   "status": "unresolved",
+   "legal_name": "INOVALON HOLDINGS INC",
+   "tried": [
+    "greenhouse:inovalon",
+    "lever:inovalon",
+    "ashby:inovalon",
+    "smartrecruiters:inovalon"
+   ],
+   "refused": [
+    {
+     "ats": "ashby",
+     "token": "inovalon",
+     "board_name": "",
+     "postings": 83,
+     "us_postings": 61,
+     "target_postings": 1,
+     "accepted": false,
+     "reason": "a US posting's own text names the employer, but the name is one common word and no US posting is in Columbia, MD, where USCIS records this employer"
+    }
+   ],
+   "h1b_approvals": 216
+  },
+  "INTELLIGRATED SERVICES LLC": {
+   "status": "unresolved",
+   "legal_name": "INTELLIGRATED SERVICES LLC",
+   "tried": [
+    "greenhouse:intelligrated",
+    "lever:intelligrated",
+    "ashby:intelligrated",
+    "smartrecruiters:intelligrated"
+   ],
+   "refused": [
+    {
+     "ats": "smartrecruiters",
+     "token": "intelligrated",
+     "board_name": "Intelligrated",
+     "postings": 62,
+     "us_postings": 62,
+     "target_postings": 0,
+     "accepted": false,
+     "reason": "board name: Intelligrated (exact), but the name is one common word and no US posting is in Morris Plains, NJ, where USCIS records this employer"
+    }
+   ],
+   "h1b_approvals": 208
+  },
+  "TWITCH INTERACTIVE INC": {
+   "status": "resolved",
+   "legal_name": "TWITCH INTERACTIVE INC",
+   "ats": "greenhouse",
+   "token": "twitch",
+   "board_name": "Twitch",
+   "postings": 50,
+   "us_postings": 48,
+   "target_postings": 8,
+   "accepted": true,
+   "reason": "board name: Twitch (brand); a US posting is in Seattle, WA",
+   "match": "brand",
+   "tried": [
+    "greenhouse:twitch"
+   ],
+   "h1b_approvals": 208
+  },
+  "COMMVAULT SYSTEMS INC": {
+   "status": "resolved",
+   "legal_name": "COMMVAULT SYSTEMS INC",
+   "ats": "greenhouse",
+   "token": "commvault",
+   "board_name": "Commvault",
+   "postings": 58,
+   "us_postings": 20,
+   "target_postings": 0,
+   "accepted": true,
+   "reason": "board name: Commvault (exact); a US posting is in Tinton Falls, NJ",
+   "match": "exact",
+   "tried": [
+    "greenhouse:commvault"
+   ],
+   "h1b_approvals": 196
+  },
+  "PELOTON INTERACTIVE INC": {
+   "status": "resolved",
+   "legal_name": "PELOTON INTERACTIVE INC",
+   "ats": "greenhouse",
+   "token": "peloton",
+   "board_name": "Peloton",
+   "postings": 55,
+   "us_postings": 43,
+   "target_postings": 0,
+   "accepted": true,
+   "reason": "board name: Peloton (brand); a US posting is in New York, NY",
+   "match": "brand",
+   "tried": [
+    "greenhouse:peloton"
+   ],
+   "h1b_approvals": 191
+  },
+  "CHIME FINANCIAL INC": {
+   "status": "resolved",
+   "legal_name": "CHIME FINANCIAL INC",
+   "ats": "greenhouse",
+   "token": "chime",
+   "board_name": "Chime Financial, Inc",
+   "postings": 71,
+   "us_postings": 71,
+   "target_postings": 11,
+   "accepted": true,
+   "reason": "board name: Chime Financial, Inc (exact); a US posting is in San Francisco, CA",
+   "match": "exact",
+   "tried": [
+    "greenhouse:chime"
+   ],
+   "h1b_approvals": 181
+  },
+  "DGN TECHNOLOGIES INC": {
+   "status": "resolved",
+   "legal_name": "DGN TECHNOLOGIES INC",
+   "ats": "smartrecruiters",
+   "token": "dgn",
+   "board_name": "DGN",
+   "postings": 1,
+   "us_postings": 1,
+   "target_postings": 0,
+   "accepted": true,
+   "reason": "board name: DGN (exact); a US posting is in Fremont, CA",
+   "match": "exact",
+   "tried": [
+    "greenhouse:dgn",
+    "lever:dgn",
+    "ashby:dgn",
+    "smartrecruiters:dgn"
+   ],
+   "h1b_approvals": 139
+  },
+  "COUPA SOFTWARE INC": {
+   "status": "resolved",
+   "legal_name": "COUPA SOFTWARE INC",
+   "ats": "lever",
+   "token": "coupa",
+   "board_name": "",
+   "postings": 33,
+   "us_postings": 8,
+   "target_postings": 0,
+   "accepted": true,
+   "reason": "a US posting's own text names the employer; a US posting is in San Mateo, CA",
+   "match": "text",
+   "tried": [
+    "greenhouse:coupa",
+    "lever:coupa"
+   ],
+   "h1b_approvals": 132
+  },
+  "ZOOMINFO TECHNOLOGIES LLC": {
+   "status": "resolved",
+   "legal_name": "ZOOMINFO TECHNOLOGIES LLC",
+   "ats": "greenhouse",
+   "token": "zoominfo",
+   "board_name": "ZoomInfo Technologies LLC",
+   "postings": 98,
+   "us_postings": 56,
+   "target_postings": 4,
+   "accepted": true,
+   "reason": "board name: ZoomInfo Technologies LLC (exact); a US posting is in Vancouver, WA",
+   "match": "exact",
+   "tried": [
+    "greenhouse:zoominfo"
+   ],
+   "h1b_approvals": 130
+  },
+  "ALTEN TECHNOLOGY USA INC": {
+   "status": "resolved",
+   "legal_name": "ALTEN TECHNOLOGY USA INC",
+   "ats": "smartrecruiters",
+   "token": "alten",
+   "board_name": "ALTEN",
+   "postings": 3,
+   "us_postings": 3,
+   "target_postings": 0,
+   "accepted": true,
+   "reason": "board name: ALTEN (exact); a US posting is in Troy, MI",
+   "match": "exact",
+   "tried": [
+    "greenhouse:alten",
+    "lever:alten",
+    "ashby:alten",
+    "smartrecruiters:alten"
+   ],
+   "h1b_approvals": 117
+  },
+  "MYGO CONSULTING INC": {
+   "status": "resolved",
+   "legal_name": "MYGO CONSULTING INC",
+   "ats": "smartrecruiters",
+   "token": "mygoconsulting",
+   "board_name": "MYGO Consulting",
+   "postings": 6,
+   "us_postings": 6,
+   "target_postings": 0,
+   "accepted": true,
+   "reason": "board name: MYGO Consulting (exact); a US posting is in Naperville, IL",
+   "match": "exact",
+   "tried": [
+    "greenhouse:mygo",
+    "lever:mygo",
+    "ashby:mygo",
+    "smartrecruiters:mygo",
+    "greenhouse:mygoconsulting",
+    "lever:mygoconsulting",
+    "ashby:mygoconsulting",
+    "smartrecruiters:mygoconsulting"
+   ],
+   "h1b_approvals": 107
+  },
+  "ASM AMERICA INC": {
+   "status": "resolved",
+   "legal_name": "ASM AMERICA INC",
+   "ats": "greenhouse",
+   "token": "asm",
+   "board_name": "ASM",
+   "postings": 476,
+   "us_postings": 193,
+   "target_postings": 2,
+   "accepted": true,
+   "reason": "board name: ASM (exact); a US posting is in Phoenix, AZ",
+   "match": "exact",
+   "tried": [
+    "greenhouse:asm"
+   ],
+   "h1b_approvals": 106
+  },
+  "CDK GLOBAL LLC": {
+   "status": "unresolved",
+   "legal_name": "CDK GLOBAL LLC",
+   "tried": [
+    "greenhouse:cdkglobal",
+    "lever:cdkglobal",
+    "ashby:cdkglobal",
+    "smartrecruiters:cdkglobal",
+    "greenhouse:cdk-global",
+    "lever:cdk-global",
+    "ashby:cdk-global",
+    "smartrecruiters:cdk-global"
+   ],
+   "refused": [
+    {
+     "ats": "smartrecruiters",
+     "token": "cdkglobal",
+     "board_name": "CDK Global",
+     "postings": 9,
+     "us_postings": 9,
+     "target_postings": 0,
+     "accepted": false,
+     "reason": "board name: CDK Global (exact), but the name is one common word and no US posting is in Hoffman Est, IL, where USCIS records this employer"
+    }
+   ],
+   "h1b_approvals": 104
+  },
+  "MAXIMA CONSULTING INC": {
+   "status": "unresolved",
+   "legal_name": "MAXIMA CONSULTING INC",
+   "tried": [
+    "greenhouse:maxima",
+    "lever:maxima",
+    "ashby:maxima",
+    "smartrecruiters:maxima",
+    "greenhouse:maximaconsulting",
+    "lever:maximaconsulting",
+    "ashby:maximaconsulting",
+    "smartrecruiters:maximaconsulting"
+   ],
+   "refused": [
+    {
+     "ats": "ashby",
+     "token": "maxima",
+     "board_name": "",
+     "postings": 17,
+     "us_postings": 9,
+     "target_postings": 3,
+     "accepted": false,
+     "reason": "a US posting's own text names the employer, but the name is one common word and no US posting is in Wakefield, MA, where USCIS records this employer"
+    }
+   ],
+   "h1b_approvals": 102
+  },
+  "AMEYA GLOBAL INC": {
+   "status": "resolved",
+   "legal_name": "AMEYA GLOBAL INC",
+   "ats": "smartrecruiters",
+   "token": "ameyaglobal",
+   "board_name": "Ameya Global",
+   "postings": 5,
+   "us_postings": 5,
+   "target_postings": 0,
+   "accepted": true,
+   "reason": "board name: Ameya Global (exact); a US posting is in Farmingtn Hls, MI",
+   "match": "exact",
+   "tried": [
+    "greenhouse:ameya",
+    "lever:ameya",
+    "ashby:ameya",
+    "smartrecruiters:ameya",
+    "greenhouse:ameyaglobal",
+    "lever:ameyaglobal",
+    "ashby:ameyaglobal",
+    "smartrecruiters:ameyaglobal"
+   ],
+   "h1b_approvals": 96
+  },
+  "MERCURY SYSTEMS INC": {
+   "status": "unresolved",
+   "legal_name": "MERCURY SYSTEMS INC",
+   "tried": [
+    "greenhouse:mercury",
+    "lever:mercury",
+    "ashby:mercury",
+    "smartrecruiters:mercury"
+   ],
+   "refused": [
+    {
+     "ats": "greenhouse",
+     "token": "mercury",
+     "board_name": "Mercury",
+     "postings": 65,
+     "us_postings": 65,
+     "target_postings": 2,
+     "accepted": false,
+     "reason": "board name: Mercury (exact), but the name is one common word and no US posting is in Princeton, NJ, where USCIS records this employer"
+    },
+    {
+     "ats": "ashby",
+     "token": "mercury",
+     "board_name": "",
+     "postings": 0,
+     "us_postings": 0,
+     "target_postings": 0,
+     "accepted": false,
+     "reason": "no current posting in the United States"
+    }
+   ],
+   "h1b_approvals": 95
+  },
+  "BLEND LABS INC": {
+   "status": "unresolved",
+   "legal_name": "BLEND LABS INC",
+   "tried": [
+    "greenhouse:blend",
+    "lever:blend",
+    "ashby:blend",
+    "smartrecruiters:blend"
+   ],
+   "refused": [
+    {
+     "ats": "greenhouse",
+     "token": "blend",
+     "board_name": "Blend",
+     "postings": 14,
+     "us_postings": 14,
+     "target_postings": 4,
+     "accepted": false,
+     "reason": "board name: Blend (exact), but the name is one common word and no US posting is in San Francisco, CA, where USCIS records this employer"
+    }
+   ],
+   "h1b_approvals": 92
+  },
+  "RAVEN SOFTWARE SOLUTIONS INC": {
+   "status": "unresolved",
+   "legal_name": "RAVEN SOFTWARE SOLUTIONS INC",
+   "tried": [
+    "greenhouse:raven",
+    "lever:raven",
+    "ashby:raven",
+    "smartrecruiters:raven",
+    "greenhouse:ravensoftware",
+    "lever:ravensoftware",
+    "ashby:ravensoftware",
+    "smartrecruiters:ravensoftware"
+   ],
+   "refused": [
+    {
+     "ats": "greenhouse",
+     "token": "raven",
+     "board_name": "Raven",
+     "postings": 1,
+     "us_postings": 1,
+     "target_postings": 0,
+     "accepted": false,
+     "reason": "board name: Raven (brand), but the name is one common word and no US posting is in Irving, TX, where USCIS records this employer"
+    }
+   ],
+   "h1b_approvals": 88
+  },
+  "DOTS TECHNOLOGIES INC": {
+   "status": "unresolved",
+   "legal_name": "DOTS TECHNOLOGIES INC",
+   "tried": [
+    "greenhouse:dots",
+    "lever:dots",
+    "ashby:dots",
+    "smartrecruiters:dots"
+   ],
+   "refused": [
+    {
+     "ats": "greenhouse",
+     "token": "dots",
+     "board_name": "Dots",
+     "postings": 1,
+     "us_postings": 1,
+     "target_postings": 0,
+     "accepted": false,
+     "reason": "board name: Dots (exact), but the name is one common word and no US posting is in Piscataway, NJ, where USCIS records this employer"
+    }
+   ],
+   "h1b_approvals": 87
+  },
+  "IFLOWSOFT SOLUTIONS INC": {
+   "status": "resolved",
+   "legal_name": "IFLOWSOFT SOLUTIONS INC",
+   "ats": "smartrecruiters",
+   "token": "iflowsoft",
+   "board_name": "Iflowsoft",
+   "postings": 1,
+   "us_postings": 1,
+   "target_postings": 0,
+   "accepted": true,
+   "reason": "board name: Iflowsoft (exact); a US posting is in Iselin, NJ",
+   "match": "exact",
+   "tried": [
+    "greenhouse:iflowsoft",
+    "lever:iflowsoft",
+    "ashby:iflowsoft",
+    "smartrecruiters:iflowsoft"
+   ],
+   "h1b_approvals": 85
+  },
+  "AKUNA CAPITAL LLC": {
+   "status": "resolved",
+   "legal_name": "AKUNA CAPITAL LLC",
+   "ats": "greenhouse",
+   "token": "akunacapital",
+   "board_name": "Akuna Capital",
+   "postings": 41,
+   "us_postings": 29,
+   "target_postings": 6,
+   "accepted": true,
+   "reason": "board name: Akuna Capital (exact); a US posting is in Chicago, IL",
+   "match": "exact",
+   "tried": [
+    "greenhouse:akuna",
+    "lever:akuna",
+    "ashby:akuna",
+    "smartrecruiters:akuna",
+    "greenhouse:akunacapital"
+   ],
+   "h1b_approvals": 84
+  },
+  "ORCHESTRA TECHNOLOGY INC": {
+   "status": "unresolved",
+   "legal_name": "ORCHESTRA TECHNOLOGY INC",
+   "tried": [
+    "greenhouse:orchestra",
+    "lever:orchestra",
+    "ashby:orchestra",
+    "smartrecruiters:orchestra"
+   ],
+   "refused": [
+    {
+     "ats": "greenhouse",
+     "token": "orchestra",
+     "board_name": "Orchestra",
+     "postings": 39,
+     "us_postings": 36,
+     "target_postings": 0,
+     "accepted": false,
+     "reason": "board name: Orchestra (exact), but the name is one common word and no US posting is in Richardson, TX, where USCIS records this employer"
+    }
+   ],
+   "h1b_approvals": 81
+  },
+  "COUPANG GLOBAL LLC": {
+   "status": "resolved",
+   "legal_name": "COUPANG GLOBAL LLC",
+   "ats": "greenhouse",
+   "token": "coupang",
+   "board_name": "Coupang",
+   "postings": 668,
+   "us_postings": 53,
+   "target_postings": 1,
+   "accepted": true,
+   "reason": "board name: Coupang (brand); a US posting is in Mountain View, CA",
+   "match": "brand",
+   "tried": [
+    "greenhouse:coupang"
+   ],
+   "h1b_approvals": 79
+  },
+  "RIPPLE LABS INC": {
+   "status": "resolved",
+   "legal_name": "RIPPLE LABS INC",
+   "ats": "greenhouse",
+   "token": "ripple",
+   "board_name": "Ripple",
+   "postings": 119,
+   "us_postings": 80,
+   "target_postings": 1,
+   "accepted": true,
+   "reason": "board name: Ripple (exact); a US posting is in San Francisco, CA",
+   "match": "exact",
+   "tried": [
+    "greenhouse:ripple"
+   ],
+   "h1b_approvals": 79
+  },
+  "JADE GLOBAL INC": {
+   "status": "resolved",
+   "legal_name": "JADE GLOBAL INC",
+   "ats": "smartrecruiters",
+   "token": "jadeglobal",
+   "board_name": "Jade Global",
+   "postings": 6,
+   "us_postings": 6,
+   "target_postings": 0,
+   "accepted": true,
+   "reason": "board name: Jade Global (exact); a US posting is in San Jose, CA",
+   "match": "exact",
+   "tried": [
+    "greenhouse:jade",
+    "lever:jade",
+    "ashby:jade",
+    "smartrecruiters:jade",
+    "greenhouse:jadeglobal",
+    "lever:jadeglobal",
+    "ashby:jadeglobal",
+    "smartrecruiters:jadeglobal"
+   ],
+   "h1b_approvals": 77
+  }
+ }
+}

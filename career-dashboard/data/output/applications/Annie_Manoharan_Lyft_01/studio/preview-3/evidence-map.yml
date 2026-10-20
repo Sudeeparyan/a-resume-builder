@@ -1,0 +1,63 @@
+candidate_revision: 2026-09-18.1
+job_id: 4670420e930a8bbc
+role_eligible: false
+job_snapshot_sha256: 8e660d0c4d7fccef98c8253a7c996674d19967af189010774bad2a031c154c16
+supported_requirement_coverage: 0
+requirements: []
+company_problem:
+  statement: Pending review of the saved job description.
+  source_url: https://app.careerpuck.com/job-board/lyft/job/8689127002?gh_jid=8689127002
+  published_or_accessed: '2026-10-07'
+  evidence_class: explicit
+  confidence: low
+selected_project_id: d4bfa8da43af4ac486f016cd9a0116ae
+selected_project_ids:
+- d4bfa8da43af4ac486f016cd9a0116ae
+- PROJ-P02-MIGA
+selected_project_reason: Draft selection by overlap with approved project wording;
+  review the business problem and full job requirements.
+resume_claim_ids:
+- CONTACT-EMAIL-001
+- CONTACT-GITHUB-001
+- CONTACT-PHONE-001
+- CONTACT-PORTFOLIO-001
+- COURSEWORK-MS-001
+- EDU-BE-001
+- EDU-MS-001
+- EXP-INSOPS-001
+- EXP-RA-001
+- EXP-SOLITON-PE-001
+- EXP-TA-001
+- IDENTITY-001
+- METRIC-DRAEGER-94
+- PROJ-P02-MIGA
+- SKILL-CLOUD-001
+- SKILL-CV-TOOLS-001
+- SKILL-DATA-TOOLS-001
+- SKILL-DESKTOP-001
+- SKILL-GENAI-001
+- SKILL-LAKEHOUSE-001
+- SKILL-LANGUAGES-001
+- SKILL-ML-001
+- SKILL-STREAMING-001
+- SKILL-TEST-001
+- SKILL-TOUCHED-001
+held_claims_used: []
+studio_review_required: true
+source_evidence_errors:
+- 'Unknown source EVIDENCE ID on line 60: resume_items:780b6e2e2173484693bc789df0840222'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:634d868200104922a8003810e2286446'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:2745f34c2ec64746bcbffe2a25893163'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:21ad034d2fdd4ede8c09dd00ffd791d1'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:bfb8dacc1bfb4c6f945f8eee7792be53'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:d5b5bdd3926f40a09264c051f730b3b4'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:5c7a078f79544199a148047ab152bea3'
+- 'Unknown source EVIDENCE ID on line 68: resume_items:d4bfa8da43af4ac486f016cd9a0116ae'
+- 'Unknown source EVIDENCE ID on line 70: resume_items:d4bfa8da43af4ac486f016cd9a0116ae'
+- 'Unknown source EVIDENCE ID on line 72: resume_items:d4bfa8da43af4ac486f016cd9a0116ae'
+- 'Unknown source EVIDENCE ID on line 74: resume_items:d4bfa8da43af4ac486f016cd9a0116ae'
+- 'Unknown source EVIDENCE ID on line 76: resume_items:d4bfa8da43af4ac486f016cd9a0116ae'
+- 'Unknown source EVIDENCE ID on line 78: resume_items:d4bfa8da43af4ac486f016cd9a0116ae'
+- 'Unknown source EVIDENCE ID on line 134: resume_items:d4bfa8da43af4ac486f016cd9a0116ae'
+- 'Unknown source EVIDENCE ID on line 136: resume_items:d4bfa8da43af4ac486f016cd9a0116ae'
+- 'Unknown source EVIDENCE ID on line 138: resume_items:d4bfa8da43af4ac486f016cd9a0116ae'

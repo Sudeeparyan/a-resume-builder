@@ -1,0 +1,90 @@
+employer,legal_name,employer_key,ats,token,h1b_approvals,h1b_denials,fiscal_years,us_postings,target_postings,name_check,verified_on
+Atos-Syntel,ATOS SYNTEL INC,atos syntel,smartrecruiters,atos-syntel,2289,51,2021;2022;2023,1,0,board name: Atos-Syntel (exact),2026-10-09
+Uber,UBER TECHNOLOGIES INC,uber,smartrecruiters,uber,2123,40,2021;2022;2023,1,0,"board name: Uber (exact); a US posting is in San Francisco, CA",2026-10-09
+Wayfair,WAYFAIR LLC,wayfair,smartrecruiters,wayfair,1480,42,2021;2022;2023,1,0,board name: Wayfair (exact),2026-10-09
+IRIS Software,IRIS SOFTWARE INC,iris software,smartrecruiters,irissoftware,685,11,2021;2022;2023,3,0,"board name: IRIS Software (exact); a US posting is in Edison, NJ",2026-10-09
+Stripe,STRIPE INC,stripe,greenhouse,stripe,664,12,2021;2022;2023,337,23,board name: Stripe (exact),2026-10-09
+Robinhood,ROBINHOOD MARKETS INC,robinhood markets,greenhouse,robinhood,540,12,2021;2022;2023,135,4,"board name: Robinhood (brand); a US posting is in Menlo Park, CA",2026-10-09
+AbbVie,ABBVIE INC,abbvie,smartrecruiters,abbvie,502,10,2021;2022;2023,100,1,board name: AbbVie (exact),2026-10-09
+Roku,ROKU INC,roku,greenhouse,roku,452,2,2021;2022;2023,106,6,board name: Roku (exact),2026-10-09
+Block,BLOCK INC,block,greenhouse,block,433,5,2022;2023,156,7,board name: Block (exact),2026-10-09
+Teladoc Health,TELADOC HEALTH INC,teladoc health,smartrecruiters,teladochealth,401,10,2021;2022;2023,2,0,"board name: Teladoc Health (exact); a US posting is in Purchase, NY",2026-10-09
+GoDaddy,GODADDY COM LLC,godaddy com,greenhouse,godaddy,339,3,2021;2022;2023,16,1,"board name: GoDaddy (brand); a US posting is in Gilbert, AZ",2026-10-09
+Nisum,NISUM TECHNOLOGIES INC,nisum,smartrecruiters,nisum,275,9,2021;2022;2023,1,0,"board name: Nisum (exact); a US posting is in Brea, CA",2026-10-09
+Roblox,ROBLOX CORPORATION,roblox,greenhouse,roblox,268,4,2021;2022;2023,236,14,board name: Roblox (exact),2026-10-09
+Arista Networks,ARISTA NETWORKS INC,arista networks,smartrecruiters,aristanetworks,264,4,2021;2022;2023,100,20,"board name: Arista Networks (exact); a US posting is in Santa Clara, CA",2026-10-09
+Motional,MOTIONAL AD INC,motional ad,greenhouse,motional,251,3,2021;2022;2023,65,2,board name: Motional (similar),2026-10-09
+Samsung Semiconductor,SAMSUNG SEMICONDUCTOR INC,samsung semiconductor,greenhouse,samsungsemiconductor,245,4,2021;2022;2023,63,0,board name: Samsung Semiconductor (exact),2026-10-09
+Zscaler,ZSCALER INC,zscaler,greenhouse,zscaler,237,3,2021;2022;2023,156,0,board name: Zscaler (exact),2026-10-09
+Unicon Pharma,UNICON PHARMA INC,unicon pharma,smartrecruiters,uniconpharma,231,7,2021;2022;2023,1,0,board name: Unicon Pharma (exact),2026-10-09
+BILL,BILL COM,bill com,greenhouse,billcom,230,2,2021;2022;2023,39,2,"board name: BILL (brand); a US posting is in Palo Alto, CA",2026-10-09
+Upstart,UPSTART NETWORK INC,upstart network,greenhouse,upstart,222,2,2021;2022;2023,85,11,"board name: Upstart (brand); a US posting is in San Mateo, CA",2026-10-09
+Social Finance,SOCIAL FINANCE INC,social finance,greenhouse,socialfinance,208,2,2021;2022;2023,5,0,board name: Social Finance (exact),2026-10-09
+Twitch,TWITCH INTERACTIVE INC,twitch interactive,greenhouse,twitch,208,4,2021;2022;2023,48,8,"board name: Twitch (brand); a US posting is in Seattle, WA",2026-10-09
+Commvault,COMMVAULT SYSTEMS INC,commvault,greenhouse,commvault,196,0,2021;2022;2023,20,0,"board name: Commvault (exact); a US posting is in Tinton Falls, NJ",2026-10-09
+Peloton,PELOTON INTERACTIVE INC,peloton interactive,greenhouse,peloton,191,4,2021;2022;2023,43,0,"board name: Peloton (brand); a US posting is in New York, NY",2026-10-09
+Qualtrics,QUALTRICS LLC,qualtrics,greenhouse,qualtrics,190,3,2021;2022;2023,37,0,board name: Qualtrics (exact),2026-10-09
+Western Union,WESTERN UNION LLC,western union,greenhouse,westernunion,184,4,2021;2022;2023,1,0,board name: Western Union (exact),2026-10-09
+Softworld,SOFTWORLD INC,softworld,lever,softworld,183,6,2021;2022;2023,8,0,a US posting's own text names the employer,2026-10-09
+"Chime Financial, Inc",CHIME FINANCIAL INC,chime financial,greenhouse,chime,181,1,2021;2022;2023,71,11,"board name: Chime Financial, Inc (exact); a US posting is in San Francisco, CA",2026-10-09
+Netskope,NETSKOPE INC,netskope,greenhouse,netskope,181,3,2021;2022;2023,61,0,board name: Netskope (exact),2026-10-09
+OneTrust,ONETRUST LLC,onetrust,greenhouse,onetrust,181,2,2021;2022;2023,45,2,board name: OneTrust (exact),2026-10-09
+Flexport,FLEXPORT INC,flexport,greenhouse,flexport,168,4,2021;2022;2023,80,0,board name: Flexport (exact),2026-10-09
+Riot Games,RIOT GAMES INC,riot games,greenhouse,riotgames,168,3,2021;2022;2023,78,1,board name: Riot Games (exact),2026-10-09
+Thoughtworks,THOUGHTWORKS INC,thoughtworks,greenhouse,thoughtworks,167,6,2021;2022;2023,1,0,board name: Thoughtworks (exact),2026-10-09
+Saviynt,SAVIYNT INC,saviynt,lever,saviynt,160,2,2021;2022;2023,35,0,a US posting's own text names the employer,2026-10-09
+Asana,ASANA INC,asana,greenhouse,asana,158,7,2021;2022;2023,49,2,board name: Asana (exact),2026-10-09
+Anaplan,ANAPLAN INC,anaplan,greenhouse,anaplan,150,0,2021;2022;2023,38,0,board name: Anaplan (exact),2026-10-09
+M3BI,M3BI LLC,m3bi,smartrecruiters,m3bi,150,6,2021;2022;2023,5,0,board name: M3BI (exact),2026-10-09
+Activision Publishing,ACTIVISION PUBLISHING INC,activision publishing,smartrecruiters,activisionpublishing,149,1,2021;2022;2023,1,0,board name: Activision Publishing (exact),2026-10-09
+Reddit,REDDIT INC,reddit,greenhouse,reddit,147,5,2021;2022;2023,124,9,board name: Reddit (exact),2026-10-09
+AlixPartners,ALIXPARTNERS LLC,alixpartners,greenhouse,alixpartners,140,2,2021;2022;2023,29,0,board name: AlixPartners (exact),2026-10-09
+Oportun,OPORTUN INC,oportun,greenhouse,oportun,140,4,2021;2022;2023,27,0,board name: Oportun (exact),2026-10-09
+DGN,DGN TECHNOLOGIES INC,dgn,smartrecruiters,dgn,139,6,2021;2022;2023,1,0,"board name: DGN (exact); a US posting is in Fremont, CA",2026-10-09
+United Pharma,UNITED PHARMA TECHNOLOGIES INC,united pharma,smartrecruiters,unitedpharma,139,5,2021;2022;2023,4,2,board name: United Pharma (exact),2026-10-09
+Econtenti,ECONTENTI INC,econtenti,smartrecruiters,econtenti,135,27,2021;2022;2023,1,0,board name: Econtenti (exact),2026-10-09
+Coupa Software,COUPA SOFTWARE INC,coupa software,lever,coupa,132,1,2021;2022;2023,8,0,"a US posting's own text names the employer; a US posting is in San Mateo, CA",2026-10-09
+Zuora,ZUORA INC,zuora,greenhouse,zuora,132,2,2021;2022;2023,14,0,board name: Zuora (exact),2026-10-09
+Carvana,CARVANA LLC,carvana,greenhouse,carvana,131,3,2021;2022;2023,1773,1,board name: Carvana (exact),2026-10-09
+ZoomInfo Technologies LLC,ZOOMINFO TECHNOLOGIES LLC,zoominfo,greenhouse,zoominfo,130,2,2022;2023,56,4,"board name: ZoomInfo Technologies LLC (exact); a US posting is in Vancouver, WA",2026-10-09
+Xenon Infotek,XENON INFOTEK INC,xenon infotek,smartrecruiters,xenoninfotek,129,39,2021;2022;2023,3,0,board name: Xenon Infotek (exact),2026-10-09
+Plaid,PLAID INC,plaid,ashby,plaid,126,1,2021;2022;2023,118,6,a US posting's own text names the employer,2026-10-09
+Renesas Electronics,RENESAS ELECTRONICS AMERICA INC,renesas electronics,smartrecruiters,renesaselectronics,124,3,2021;2022;2023,100,2,board name: Renesas Electronics (exact),2026-10-09
+ALTEN,ALTEN TECHNOLOGY USA INC,alten,smartrecruiters,alten,117,2,2021;2022;2023,3,0,"board name: ALTEN (exact); a US posting is in Troy, MI",2026-10-09
+Centraprise,CENTRAPRISE CORP,centraprise,smartrecruiters,centraprise,117,1,2021;2022;2023,7,0,board name: Centraprise (exact),2026-10-09
+Brex,BREX INC,brex,greenhouse,brex,112,1,2021;2022;2023,236,7,board name: Brex (exact),2026-10-09
+Turner & Townsend,TURNER TOWNSEND INC,turner townsend,smartrecruiters,turnertownsend,112,1,2021;2022;2023,100,0,board name: Turner & Townsend (similar),2026-10-09
+ipivot,IPIVOT LLC,ipivot,smartrecruiters,ipivot,112,2,2021;2022;2023,6,0,board name: ipivot (exact),2026-10-09
+Point72,POINT72 LP,point72,greenhouse,point72,110,6,2021;2022;2023,114,18,board name: Point72 (exact),2026-10-09
+OpenLogix,OPENLOGIX CORPORATION,openlogix,smartrecruiters,openlogix,108,2,2021;2022;2023,6,0,board name: OpenLogix (exact),2026-10-09
+MYGO Consulting,MYGO CONSULTING INC,mygo consulting,smartrecruiters,mygoconsulting,107,2,2021;2022;2023,6,0,"board name: MYGO Consulting (exact); a US posting is in Naperville, IL",2026-10-09
+ASM,ASM AMERICA INC,asm,greenhouse,asm,106,6,2021;2022;2023,193,2,"board name: ASM (exact); a US posting is in Phoenix, AZ",2026-10-09
+Groupon,GROUPON INC,groupon,greenhouse,groupon,106,0,2021;2022;2023,8,0,board name: Groupon (exact),2026-10-09
+Zen3 Infosolutions,ZEN3 INFOSOLUTIONS AMERICA INC,zen3 infosolutions,smartrecruiters,zen3infosolutions,104,4,2021;2022;2023,3,0,board name: Zen3 Infosolutions (exact),2026-10-09
+Continental Automotive,CONTINENTAL AUTOMOTIVE SYSTEMS INC,continental automotive,smartrecruiters,continentalautomotive,103,0,2021;2022;2023,1,0,board name: Continental Automotive (exact),2026-10-09
+Raasinfotek,RAAS INFOTEK LLC,raas infotek,smartrecruiters,raasinfotek,99,0,2021;2022;2023,7,0,board name: Raasinfotek (exact),2026-10-09
+Smartsheet,SMARTSHEET INC,smartsheet,greenhouse,smartsheet,99,1,2021;2022;2023,53,1,board name: Smartsheet (exact),2026-10-09
+Tripadvisor,TRIPADVISOR LLC,tripadvisor,greenhouse,tripadvisor,99,3,2021;2022;2023,7,0,board name: Tripadvisor (exact),2026-10-09
+ServiceTitan,SERVICETITAN INC,servicetitan,smartrecruiters,servicetitan,98,3,2021;2022;2023,8,0,board name: ServiceTitan (exact),2026-10-09
+Ameya Global,AMEYA GLOBAL INC,ameya global,smartrecruiters,ameyaglobal,96,11,2021;2022;2023,5,0,"board name: Ameya Global (exact); a US posting is in Farmingtn Hls, MI",2026-10-09
+Uipath,UIPATH INC,uipath,ashby,uipath,96,1,2021;2022;2023,36,0,a US posting's own text names the employer,2026-10-09
+Weee! Inc,WEEE INC,weee,greenhouse,weee,93,1,2021;2022;2023,18,0,board name: Weee! Inc (exact),2026-10-09
+Sophos,SOPHOS INC,sophos,lever,sophos,92,2,2021;2022;2023,15,0,a US posting's own text names the employer,2026-10-09
+Acumen,ACUMEN LLC,acumen,greenhouse,acumen,91,1,2021;2022;2023,2,0,board name: Acumen (exact),2026-10-09
+Katalyst Healthcares & Life Sciences,KATALYST HEALTHCARES LIFE SCIENCES,katalyst healthcares life sciences,smartrecruiters,katalysthealthcareslifesciences,88,4,2021;2022;2023,10,3,board name: Katalyst Healthcares & Life Sciences (similar),2026-10-09
+Jane Street,JANE STREET GROUP LLC,jane street,greenhouse,janestreet,86,0,2021;2022;2023,100,17,board name: Jane Street (exact),2026-10-09
+Talent IT,TALENT IT SERVICES INC,talent it,smartrecruiters,talentit,86,0,2021;2022;2023,1,0,board name: Talent IT (exact),2026-10-09
+Iflowsoft,IFLOWSOFT SOLUTIONS INC,iflowsoft,smartrecruiters,iflowsoft,85,1,2021;2022;2023,1,0,"board name: Iflowsoft (exact); a US posting is in Iselin, NJ",2026-10-09
+Toast,TOAST INC,toast,greenhouse,toast,85,5,2021;2022;2023,236,0,board name: Toast (exact),2026-10-09
+Akuna Capital,AKUNA CAPITAL LLC,akuna capital,greenhouse,akunacapital,84,1,2021;2022;2023,29,6,"board name: Akuna Capital (exact); a US posting is in Chicago, IL",2026-10-09
+Houzz,HOUZZ INC,houzz,lever,houzz,83,0,2021;2022;2023,2,0,a US posting's own text names the employer,2026-10-09
+sydata,SYDATA INC,sydata,smartrecruiters,sydata,82,3,2021;2022;2023,10,1,board name: sydata (exact),2026-10-09
+Turner Construction,TURNER CONSTRUCTION,turner construction,smartrecruiters,turnerconstruction,81,2,2021;2022;2023,1,0,board name: Turner Construction (exact),2026-10-09
+LendingTree,LENDINGTREE LLC,lendingtree,greenhouse,lendingtree,80,1,2021;2022;2023,14,0,board name: LendingTree (exact),2026-10-09
+WorldQuant,WORLDQUANT LLC,worldquant,greenhouse,worldquant,80,3,2021;2022;2023,13,2,board name: WorldQuant (exact),2026-10-09
+Coupang,COUPANG GLOBAL LLC,coupang global,greenhouse,coupang,79,3,2022;2023,53,1,"board name: Coupang (brand); a US posting is in Mountain View, CA",2026-10-09
+Ripple,RIPPLE LABS INC,ripple,greenhouse,ripple,79,0,2021;2022;2023,80,1,"board name: Ripple (exact); a US posting is in San Francisco, CA",2026-10-09
+itechstack,ITECHSTACK INC,itechstack,smartrecruiters,itechstack,79,2,2021;2022;2023,4,0,board name: itechstack (exact),2026-10-09
+CarGurus,CARGURUS INC,cargurus,greenhouse,cargurus,78,0,2021;2022;2023,38,1,board name: CarGurus (exact),2026-10-09
+Ginkgo Bioworks Inc.,GINKGO BIOWORKS INC,ginkgo bioworks,greenhouse,ginkgobioworks,78,1,2021;2022;2023,20,4,board name: Ginkgo Bioworks Inc. (exact),2026-10-09
+Jade Global,JADE GLOBAL INC,jade global,smartrecruiters,jadeglobal,77,2,2021;2022;2023,6,0,"board name: Jade Global (exact); a US posting is in San Jose, CA",2026-10-09

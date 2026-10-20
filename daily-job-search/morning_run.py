@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Annie's morning run: find up to 5 new eligible jobs and tailor a resume for each.
+"""Annie's morning run: list every new eligible job, then prepare resumes for the best five.
 
 Started by the "Annie Daily Job Search" scheduled task at 07:00 (installed by
 Install-MorningTask.ps1) so everything is ready by 9 AM. It can also be run by hand:
@@ -9,11 +9,16 @@ Install-MorningTask.ps1) so everything is ready by 9 AM. It can also be run by h
 What it does, in order:
   1. Starts the dashboard server on http://127.0.0.1:8010 if it is not running.
   2. Ages quiet applications (the ghosted rule).
-  3. Runs discovery: tracked career pages (no AI), then one AI web-research pass.
-     Both respect the sponsorship gate, the never-re-apply rules and the weekly
-     goal, and save at most 5 ranked jobs linked to today's search run.
-  4. For each new job: Resume Studio AI tailor (predicted items stay pending in
-     the Assurance tab), an AI study plan, and a compiled, validated one-page PDF.
+  3. Runs discovery: the tracked employers' own job feeds (no AI; every eligible
+     match is saved, spread across employers), then one AI web-research pass
+     (at most 5, within the weekly goal). Both respect the sponsorship gate and
+     the never-re-apply rules.
+  4. Picks up to 5 saved, unprepared jobs (best fit first, one per company, none
+     for a company that already has 3 resumes waiting) and, for each: Resume Studio
+     AI tailor (predicted items stay pending in the Assurance tab), an AI study plan,
+     and a compiled, validated one-page PDF. If the AI is signed out or out of
+     allowance, the rest of the run skips AI steps, still builds the standard
+     one-page draft, and says so under "Needs you" in the report.
   5. Regenerates the dashboard projections and writes MORNING-REPORT.md under
      daily-job-search/<date>/.
 
@@ -156,6 +161,68 @@ def usage_limited(error):
     return "usage limit" in str(error).lower()
 
 
+# Resumes prepared per morning, and how many unapplied resumes one company may have
+# waiting before the run moves on to other employers (fourteen Snowflake folders in a
+# row is not a job search). Saved jobs that are held back stay on the dashboard.
+PREPARE_PER_DAY = 5
+MAX_WAITING_PER_COMPANY = 3
+WAITING_STATUSES = {"saved", "prepared"}
+
+
+def ai_blocker(error):
+    """A failure only Annie can fix (sign-in, install, today's budget), in her words; else None.
+
+    Once one AI step fails this way, every later AI step would fail the same way, so the
+    run stops calling the AI and still delivers the no-AI one-page draft for each job.
+    """
+    text = str(error).lower()
+    if any(term in text for term in ("not signed in", "kimi login", "sign-in", "not installed",
+                                     "no ai provider", "no provider is ready")):
+        return ("The AI app on this computer is signed out, so today's tailoring and study plans were skipped "
+                "(each job still has its standard one-page resume). Sign in again — open Kimi Code, or run "
+                "`kimi login` — then press Tailor on each job in Resume Studio.")
+    if usage_limited(error):
+        return ("The AI plan's usage limit was reached, so the remaining tailoring and study plans were skipped. "
+                "Press Tailor in Resume Studio later today, after the limit resets.")
+    if "daily ai call budget reached" in text:
+        return ("Today's AI call budget is used up, so the remaining tailoring and study plans were skipped. "
+                "Raise it in Agents → Advanced, or press Tailor tomorrow.")
+    return None
+
+
+def _company(job):
+    return "".join(ch for ch in str(job.get("company", "")).casefold() if ch.isalnum())
+
+
+def choose_jobs_to_prepare(all_jobs, new_ids, limit=PREPARE_PER_DAY, per_company=MAX_WAITING_PER_COMPANY):
+    """(chosen, held): unprepared saved jobs, best fit first, at most one per company per
+    morning and none for a company that already has ``per_company`` resumes waiting."""
+    waiting = {}
+    for job in all_jobs:
+        if job.get("folder") and job.get("status") in WAITING_STATUSES:
+            waiting[_company(job)] = waiting.get(_company(job), 0) + 1
+    pool = [job for job in all_jobs
+            if job.get("status") == "saved" and not job.get("folder")
+            or job["id"] in new_ids and not job.get("folder")]
+    pool.sort(key=lambda job: (-(job.get("fit_score") or 0), job["id"] not in new_ids, job.get("created_at", "")))
+    chosen, held, today = [], [], set()
+    for job in pool:
+        key = _company(job)
+        if len(chosen) >= limit or key in today or waiting.get(key, 0) >= per_company:
+            held.append(job)
+            continue
+        chosen.append(job)
+        today.add(key)
+    return chosen, held
+
+
+def ensure_draft(job_id):
+    """The no-AI one-page draft: open the job in Resume Studio, then fit it to one page."""
+    draft = api("POST", f"/api/v2/studio/{job_id}/open", timeout=300)
+    revision = int(draft.get("revision") or 1)
+    api("POST", f"/api/v2/studio/{job_id}/fill", {"revision": revision}, timeout=600)
+
+
 def list_jobs():
     output = subprocess.run(
         [str(VENV_PY), str(SCRIPTS / "career.py"), "jobs"],
@@ -231,10 +298,12 @@ def main():
     before = {job["id"] for job in list_jobs()}
     failures = []
     discovery_notes = []
+    needs_you = []  # problems only Annie can fix, shown first in the report
+    blocked = None  # set once the AI cannot be used for the rest of this run
 
     goal_met = False
-    for preset, minutes in (("portals", 15), ("balanced_five", 25)):
-        if goal_met:
+    for preset, minutes in (("portals", 30), ("balanced_five", 25)):
+        if goal_met or (blocked and preset != "portals"):
             break
         try:
             record = run_agent("discovery", preset=preset, timeout_minutes=minutes)
@@ -256,7 +325,11 @@ def main():
                 continue
             log(f"Discovery ({preset}) did not complete: {error}")
             failures.append(f"Discovery ({preset}): {error}")
-            if preset == "balanced_five" and usage_limited(error):
+            if preset != "portals" and not usage_limited(error) and ai_blocker(error):
+                blocked = ai_blocker(error)
+                needs_you.append(blocked)
+                log("The AI cannot be used this morning; continuing without it.")
+            elif preset == "balanced_five" and usage_limited(error):
                 log("The AI usage limit is reached; waiting 20 minutes and trying once more.")
                 time.sleep(20 * 60)
                 try:
@@ -264,39 +337,57 @@ def main():
                     failures.pop()
                 except ApiError as retry:
                     log("Retry also failed: " + str(retry))
+                    blocked = ai_blocker(retry)
+                    if blocked:
+                        needs_you.append(blocked)
 
-    new_ids = {job["id"] for job in list_jobs() if job["id"] not in before}
+    all_jobs = list_jobs()
+    new_ids = {job["id"] for job in all_jobs if job["id"] not in before}
     if not new_ids:
         log("No new jobs were discovered today.")
-    # Also pick up discovered jobs that were never prepared (e.g. an earlier run stopped midway).
-    jobs = [
-        job for job in list_jobs()
-        if job["id"] in new_ids or (job.get("status") == "saved" and not job.get("folder"))
-    ][:5]
-    log(f"{len(jobs)} new job(s) to tailor: " + (", ".join(j["company"] for j in jobs) or "none"))
+    # Saved jobs never prepared (found today or on an earlier morning) are the queue;
+    # the best fits are prepared first, spread across employers.
+    jobs, held = choose_jobs_to_prepare(all_jobs, new_ids)
+    log(f"{len(jobs)} job(s) to prepare: " + (", ".join(j["company"] for j in jobs) or "none")
+        + (f"; {len(held)} more saved on the dashboard for later mornings" if held else ""))
 
     results = []
     for job in jobs:
         job_id = job["id"]
         entry = {"job": job, "tailored": None, "study_plan": False, "pdf": False, "notes": []}
         log(f"--- {job['company']} — {job['title']} ---")
-        try:
-            tailored = api("POST", f"/api/v2/studio/{job_id}/tailor", timeout=1800)
-            counts = tailored.get("items", {})
-            entry["tailored"] = counts
-            log(f"Tailored: {counts.get('verified', 0)} verified + {counts.get('predicted', 0)} predicted items (review in Assurance).")
-        except ApiError as error:
-            entry["notes"].append("Tailoring failed; the deterministic draft is still in the folder. " + str(error))
-            log("Tailoring failed: " + str(error))
-            if usage_limited(error):
-                entry["notes"].append("AI usage limit reached; re-run Tailor from the dashboard later.")
-        try:
-            run_agent("study_plan", job_id=job_id, timeout_minutes=20)
-            entry["study_plan"] = True
-            log("Study plan written.")
-        except ApiError as error:
-            entry["notes"].append("Study plan failed: " + str(error))
-            log("Study plan failed: " + str(error))
+        if not blocked:
+            try:
+                tailored = api("POST", f"/api/v2/studio/{job_id}/tailor", timeout=1800)
+                counts = tailored.get("items", {})
+                entry["tailored"] = counts
+                log(f"Tailored: {counts.get('verified', 0)} verified + {counts.get('predicted', 0)} predicted items (review in Assurance).")
+            except ApiError as error:
+                log("Tailoring failed: " + str(error))
+                blocked = ai_blocker(error)
+                if blocked:
+                    needs_you.append(blocked)
+                    log("The AI cannot be used this morning; the remaining jobs get the standard draft.")
+                else:
+                    entry["notes"].append("Tailoring failed; the standard one-page draft is in the folder. " + str(error))
+        if not entry["tailored"]:
+            try:
+                ensure_draft(job_id)
+            except ApiError as error:
+                entry["notes"].append("The standard draft could not be prepared: " + str(error))
+                log("Draft failed: " + str(error))
+        if not blocked:
+            try:
+                run_agent("study_plan", job_id=job_id, timeout_minutes=20)
+                entry["study_plan"] = True
+                log("Study plan written.")
+            except ApiError as error:
+                log("Study plan failed: " + str(error))
+                blocked = ai_blocker(error)
+                if blocked:
+                    needs_you.append(blocked)
+                else:
+                    entry["notes"].append("Study plan failed: " + str(error))
         job = next((j for j in list_jobs() if j["id"] == job_id), job)
         entry["job"] = job
         if job.get("folder"):
@@ -334,8 +425,16 @@ def main():
                                  "prepared", job.get("folder", "")])
 
     lines = [f"# Morning report — {TODAY}", ""]
+    if needs_you:
+        lines += ["## Needs you", ""] + [f"- {item}" for item in dict.fromkeys(needs_you)] + [""]
+    if held:
+        companies = sorted({job["company"] for job in held})
+        lines += [f"{len(held)} more matching job(s) are saved on the dashboard for later mornings "
+                  f"({', '.join(companies[:8])}{' and others' if len(companies) > 8 else ''}). "
+                  f"Each morning prepares the best fits, at most one per company, and skips a company "
+                  f"that already has {MAX_WAITING_PER_COMPANY} resumes waiting for you.", ""]
     if not results:
-        lines += ["No new jobs were saved today.", ""]
+        lines += ["No resumes were prepared today.", ""]
         for note in discovery_notes:
             lines.append(f"- {note}")
         lines += ["",

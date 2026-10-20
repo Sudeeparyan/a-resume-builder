@@ -330,7 +330,7 @@ def test_tiers_move_to_a_runtime_that_is_ready_here(tmp_path):
 
 def test_strict_schema_closes_every_object_and_requires_every_field():
     schema = codex.strict_schema(schemas.AgentTurn.model_json_schema())
-    assert schema["additionalProperties"] is False and schema["required"] == ["thought", "action", "tool", "arguments", "reply", "suggestions"]
+    assert schema["additionalProperties"] is False and schema["required"] == ["thought", "action", "tool", "arguments", "reply", "suggestions", "more_calls"]
     assert "default" not in schema["properties"]["tool"] and schema["properties"]["action"]["enum"] == ["call", "ask", "reply"]
 
 
@@ -366,7 +366,7 @@ CODEX_SCHEMA_ERROR = ('OpenAI Codex v0.154.0\n--------\nmodel: gpt-6\n--------\n
 def test_codex_failures_name_the_real_reason_not_the_banner():
     assert codex.failure_reason(CODEX_SCHEMA_ERROR) == "Invalid schema for response_format: Missing excluded."
     assert codex.failure_reason("OpenAI Codex v0.154.0\nworkdir: /x\nERROR: You are not logged in") == \
-        "Codex is not signed in on this Mac: open the ChatGPT app and sign in, then retry."
+        "Codex is not signed in on this machine: open the ChatGPT app and sign in, then retry."
     assert codex.failure_reason("OpenAI Codex v0.154.0\nworkdir: /x\nmodel: gpt-6") == ""
 
 
@@ -538,3 +538,22 @@ def test_the_trace_is_kept_with_the_message(assistant, monkeypatch):
     overview = assistant.overview()
     saved = next(m for m in overview["messages"] if m["id"] == "t1")
     assert saved["data"]["trace"][0]["tool"] == "list_jobs"
+
+
+def test_more_calls_run_read_only_tools_in_the_same_turn_and_refuse_writers(assistant, monkeypatch):
+    job = seed_job(assistant, monkeypatch)
+    turn = schemas.AgentTurn(
+        thought="Reading both at once.", action="call", tool="list_jobs", arguments=json.dumps({"query": "acme"}),
+        more_calls=[schemas.ToolCall(tool="get_job", arguments=json.dumps({"job_id": job["id"]})),
+                    schemas.ToolCall(tool="remove_job", arguments=json.dumps({"job_id": job["id"]}))],
+    )
+    team = ScriptedTeam(turn, lambda payload: reply(f"Read {len(payload['task'])} things."))
+    use_team(monkeypatch, team)
+    done = assistant.send("tell me about the acme job", "more1")
+    assert done["state"] == "done"
+    second = team.calls[1]["task"]
+    assert [e.get("tool") for e in second[1:]] == ["list_jobs", "get_job", "remove_job"]
+    assert "result" in second[2] and "Not run" in second[3]["error"]
+    # A tool that changes something never rides along in more_calls: the job is untouched.
+    assert [j["id"] for j in assistant.w.jobs()] == [job["id"]]
+    assert assistant.w.get_job(job["id"])["status"] == job["status"]

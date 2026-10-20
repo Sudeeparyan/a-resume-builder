@@ -40,34 +40,96 @@ US_LOCATION = re.compile(
     r"|\b(?:" + _ABBR + r")\s+\d{5}\b"
 )
 # Countries, regions and cities with no US namesake: only a strong US marker outweighs them.
-_FOREIGN_STRONG = re.compile(
-    r"(?i)\b(?:ireland|united kingdom|uk|canada|toronto|india|bangalore|bengaluru|hyderabad|chennai|pune|germany|france|"
-    r"netherlands|spain|poland|singapore|australia|sydney|mexico|brazil|emea|apac|latam|europe)\b"
+# The cities matter where a feed writes the country as a code that is also a US state
+# ("Mumbai, IN", "Munich, DE", "Tel Aviv, IL", "Montreal, CA", "Bogota, CO", "Jakarta, ID").
+_FOREIGN_PLACES = (
+    r"ireland|united kingdom|uk|england|scotland|wales|canada|toronto|montreal|montréal|ottawa|calgary|edmonton|"
+    r"mississauga|markham|kitchener|winnipeg|quebec|québec|british columbia|alberta|"
+    r"india|bangalore|bengaluru|hyderabad|chennai|pune|mumbai|bombay|new delhi|noida|gurgaon|gurugram|kolkata|"
+    r"ahmedabad|coimbatore|kochi|cochin|trivandrum|thiruvananthapuram|jaipur|indore|chandigarh|mysore|mysuru|nagpur|"
+    r"germany|munich|münchen|frankfurt|düsseldorf|dusseldorf|"
+    r"israel|tel aviv|herzliya|haifa|jerusalem|petah tikva|ra'?anana|netanya|yokneam|"
+    r"france|netherlands|rotterdam|eindhoven|spain|barcelona|portugal|lisbon|italy|switzerland|zurich|"
+    r"zürich|austria|belgium|brussels|sweden|stockholm|norway|oslo|denmark|copenhagen|finland|helsinki|"
+    r"poland|warszawa|krakow|kraków|wroclaw|wrocław|czech|prague|romania|bucharest|cluj|hungary|budapest|ukraine|kyiv|"
+    r"kiev|lviv|estonia|tallinn|lithuania|vilnius|latvia|riga|greece|turkey|istanbul|serbia|belgrade|croatia|bulgaria|"
+    r"sofia|tbilisi|batumi|armenia|yerevan|"
+    r"singapore|australia|sydney|melbourne|brisbane|new zealand|auckland|japan|tokyo|osaka|china|beijing|shanghai|"
+    r"shenzhen|hangzhou|hong kong|taiwan|taipei|korea|seoul|vietnam|hanoi|ho chi minh|philippines|manila|cebu|"
+    r"malaysia|kuala lumpur|thailand|bangkok|indonesia|jakarta|pakistan|karachi|lahore|islamabad|bangladesh|dhaka|"
+    r"sri lanka|nepal|kathmandu|uae|dubai|abu dhabi|saudi|riyadh|qatar|doha|egypt|cairo|nigeria|lagos|kenya|nairobi|"
+    r"south africa|cape town|johannesburg|"
+    r"mexico|guadalajara|monterrey|brazil|são paulo|sao paulo|rio de janeiro|argentina|buenos aires|colombia|bogota|"
+    r"bogotá|medellin|medellín|chile|santiago|uruguay|montevideo|costa rica|"
+    r"emea|apac|latam|europe|asia"
 )
+_FOREIGN_STRONG = re.compile(r"(?i)\b(?:" + _FOREIGN_PLACES + r")\b")
 # Cities that also exist in the US (Dublin OH/CA, London KY, Vancouver WA, Paris TX, Berlin NH, Amsterdam NY).
-_FOREIGN_TWIN = re.compile(r"(?i)\b(?:dublin|london|vancouver|paris|berlin|amsterdam)\b")
+_FOREIGN_TWIN = re.compile(r"(?i)\b(?:dublin|london|vancouver|paris|berlin|amsterdam|ontario|geneva|milan|madrid|delhi|"
+                           r"hamburg|stuttgart|cologne|peru|warsaw|athens|rome|lima)\b")
 _US_STRONG = re.compile(
     r"(?i)\b(?:united states|u\.s\.a?\.?|usa|us[- ]remote|remote[- ,(]*(?:us|usa|united states)|" + _STATES + r")\b|\b\d{5}(?:-\d{4})?\b"
 )
 # A trailing two-letter US state. DE and IN are left out: in job feeds they almost always mean Germany and India.
 _US_STATE_SUFFIX = re.compile(r",\s*(?:" + "|".join(a for a in _ABBR.split("|") if a not in {"DE", "IN"}) + r")\b")
+# So a trailing IN or DE with no other US marker counts only after a known Indiana or
+# Delaware city: "Vellore, IN" and "Leipzig, DE" are not American.
+_IN_DE_SUFFIX = re.compile(r"(?i),\s*(?:IN|DE)\s*(?:\d{5})?\s*$")
+_IN_DE_CITIES = re.compile(
+    r"(?i)\b(?:indianapolis|fort wayne|evansville|south bend|carmel|fishers|bloomington|west lafayette|lafayette|"
+    r"hammond|gary|muncie|terre haute|noblesville|kokomo|columbus|elkhart|mishawaka|anderson|greenwood|westfield|"
+    r"zionsville|plainfield|warsaw|jeffersonville|new albany|valparaiso|merrillville|richmond|goshen|crown point|avon|"
+    r"brownsburg|franklin|batesville|jasper|seymour|notre dame|whitestown|lebanon|greenfield|michigan city|portage|"
+    r"wilmington|dover|newark|middletown|lewes|georgetown|milford|smyrna|new castle|hockessin|seaford)\b"
+)
+# One posting can list several places ("San Francisco, CA; Toronto, ON" or "Austin, TX or Remote, Canada").
+_PLACE_SEPARATOR = re.compile(r"\s*(?:;|\||\s/\s)\s*|\s+or\s+")
+
+
+def _is_us_place(location: str) -> bool:
+    if not US_LOCATION.search(location):
+        return False
+    us_words = {match.group().casefold() for match in _US_STRONG.finditer(location)}
+    # "Tbilisi, Georgia": the only US word is the state that shares the country's name.
+    if us_words and not (us_words == {"georgia"} and _FOREIGN_STRONG.search(location)):
+        return True
+    if _FOREIGN_STRONG.search(location):
+        return False
+    if _IN_DE_SUFFIX.search(location):
+        return bool(_IN_DE_CITIES.search(location))
+    return not _FOREIGN_TWIN.search(location) or bool(_US_STATE_SUFFIX.search(location))
+
+
+# A posting listed only as "Remote" whose text places the work abroad ("remote within Canada",
+# "candidates based in the UK") and never in the US.
+_WHERE_VERB = r"(?:based|located|living|resid(?:e|es|ing|ent|ents)|remote(?:ly)?|work(?:ing)?|hire|hiring|candidates|anywhere)"
+_REMOTE_ABROAD = re.compile(
+    r"(?i)\b" + _WHERE_VERB + r"\s+(?:only\s+)?(?:in|from|within|across)\s+(?:the\s+)?(?:" + _FOREIGN_PLACES + r")\b"
+)
+_REMOTE_US = re.compile(
+    r"(?i)\b" + _WHERE_VERB + r"\s+(?:only\s+)?(?:in|from|within|across)\s+(?:the\s+)?(?:continental\s+)?"
+    r"(?:united states|u\.s\.a?\.?|us|usa)\b|\bus[- ]based\b|\bremote[- ,(]*(?:us|usa|united states)\b"
+)
+
+
+def remote_outside_us(description: str) -> bool:
+    """True when a bare-"Remote" posting's own text puts the work outside the US only."""
+    text = description or ""
+    return bool(_REMOTE_ABROAD.search(text)) and not _REMOTE_US.search(text)
 
 
 def is_us_location(location: str) -> bool:
     """True for a US city, state, hub or US-remote location.
 
     Dublin, OH and Vancouver, WA are American; Dublin, Ireland, Vancouver, BC and
-    Bengaluru, IN are not. A posting that offers the US among other countries counts.
+    Bengaluru, IN are not. A posting that offers the US among other places counts.
     """
-    location = location or ""
-    if not US_LOCATION.search(location):
-        return False
-    if _US_STRONG.search(location):
-        return True
-    if _FOREIGN_STRONG.search(location):
-        return False
-    return not _FOREIGN_TWIN.search(location) or bool(_US_STATE_SUFFIX.search(location))
-SENIORITY_BLOCK = re.compile(r"\b(senior|sr\.?|staff|lead|principal|director|head(?: of)?|manager|architect|distinguished|fellow|vp|vice president)\b", re.I)
+    places = [part for part in _PLACE_SEPARATOR.split(location or "") if part.strip()]
+    return any(_is_us_place(place) for place in places)
+SENIORITY_BLOCK = re.compile(r"\b(senior|sr\.?|staff|lead|principal|director|dir|head(?: of)?|manager|architect|distinguished|fellow|vp|vice president)\b", re.I)
+# Internships, co-ops and apprenticeships are for students; Annie completed her MS in May
+# 2026 and wants a full-time role (profile.yml target_roles.seniority has no intern level).
+INTERNSHIP = re.compile(r"\b(intern|interns|internship|co-?op|apprentice(?:ship)?)\b", re.I)
 # Annie holds a Master's. A PhD that is merely preferred, or one option among degrees ("MS or PhD"),
 # is fine; a posting that requires one is not hers.
 _PHD = r"ph\.?\s?d\.?"
@@ -93,6 +155,35 @@ def requires_phd(title: str, description: str) -> bool:
         if not _OTHER_DEGREE.search(line) and not re.search(r"\b(preferred|plus|nice to have|bonus)\b", line, re.I):
             return True
     return False
+# Annie completed her MS in May 2026 and is on OPT, so a role reserved for current students
+# is not hers ("Must be actively enrolled in an accredited college/university program during
+# the time of the internship", three Snowflake internships prepared in September 2026).
+# A posting that also takes recent graduates is fine.
+_ENROLLMENT_REQUIRED = re.compile(
+    r"\b(?:currently|actively)\s+(?:enrolled|pursuing|working\s+toward)\b"
+    r"|\breturning\s+to\s+(?:school|university|college|your\s+(?:studies|degree|program))\b"
+    r"|\bmust\s+be\s+(?:a\s+)?(?:current(?:ly)?\s+)?(?:enrolled\s+)?(?:full[- ]time\s+)?student\b"
+    r"|\b(?:at\s+least\s+one|one\s+or\s+more)\s+(?:semester|quarter|term)s?\s+(?:remaining|left)\b",
+    re.I,
+)
+_GRADUATES_WELCOME = re.compile(
+    r"\bor\s+(?:have\s+)?(?:recently\s+)?(?:completed|graduated|earned|obtained|hold)\b|\brecent(?:ly)?\s+graduat",
+    re.I,
+)
+
+
+def requires_enrollment(description: str) -> bool:
+    """True when the posting is only for current students (a PhD-only posting is checked separately)."""
+    text = description or ""
+    for match in _ENROLLMENT_REQUIRED.finditer(text):
+        if re.match(r"(?i)(?:currently|actively)\s+pursuing\s+(?:a\s+)?ph\.?\s?d", match.group() + text[match.end():match.end() + 12]):
+            continue  # requires_phd() reports that one
+        window = text[max(0, match.start() - 120): match.end() + 160]
+        if not _GRADUATES_WELCOME.search(window):
+            return True
+    return False
+
+
 _YEARS = re.compile(r"(\d{1,2})\s*\+?\s*(?:-|to|–)?\s*(?:\d{1,2})?\s*\+?\s*(?:years?|yrs)\b(?:\s+of)?\s+(?:\w+\s+){0,4}?(?:experience|exp)", re.I)
 
 
@@ -119,7 +210,48 @@ def _track_regexes():
     titles = [str(t) for group in ("primary", "secondary") for t in (profile.get("target_roles", {}) or {}).get(group, [])]
     signals = [str(sig) for track in profile.get("role_tracks", []) or [] for sig in track.get("signals", [])]
     words = titles + signals or ["data engineer", "machine learning", "software engineer", "embedded"]
+    words += list(RELATED_TITLES)
     return re.compile(r"(?i)\b(?:" + "|".join(re.escape(w) for w in sorted(set(words), key=len, reverse=True)) + r")\b")
+
+
+# Titles employers use for the same four tracks that the profile's phrases miss. Seen on
+# live boards: "SW Test Development Engineer 2" and "Software QA Engineer 2" (Track D test
+# automation), "ML Engineer" (Track B), "Software Developer" (Track C). Conservative: each
+# names the same day-to-day work; the fit score still decides whether a posting fits.
+RELATED_TITLES = (
+    "software developer", "software development engineer", "full stack engineer", "full stack developer",
+    "software test", "test development engineer", "test automation", "software quality assurance",
+    "quality assurance automation", "automation engineer", "validation engineer", "verification engineer",
+    "machine learning", "data integration engineer", "bi engineer",
+)
+_TITLE_ABBREVIATIONS = (
+    (re.compile(r"\bSWE\b", re.I), "software engineer"),
+    (re.compile(r"\bSDE\b", re.I), "software development engineer"),
+    (re.compile(r"\bSW\b", re.I), "software"),
+    (re.compile(r"\bML\b"), "machine learning"),
+    (re.compile(r"\bQA\b"), "quality assurance"),
+    (re.compile(r"\bEngr?\b\.?", re.I), "engineer"),
+)
+
+
+def normalize_title(title: str) -> str:
+    """'SW Test Development Engr 2' -> 'software Test Development engineer 2'."""
+    text = title or ""
+    for pattern, replacement in _TITLE_ABBREVIATIONS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
+# The kind of job a title names. The profile's track signals include skills ("warehouse",
+# "api", "pipeline") that also appear in unrelated titles ("Warehouse operator", "Account
+# Executive, API"), so a title must name the role itself as well.
+_ROLE_WORD = re.compile(r"\b(engineer|engineering|developer|scientist|programmer|researcher|sdet|analyst|technologist)\b", re.I)
+
+
+def title_in_tracks(title: str) -> bool:
+    """Whether a job title names one of Annie's four target tracks (seniority is checked separately)."""
+    text = normalize_title(title)
+    return bool(SUPPORTED_ROLES.search(text)) and bool(_ROLE_WORD.search(text))
 
 
 SUPPORTED_ROLES = _track_regexes()
@@ -299,6 +431,13 @@ class JobQualityService:
             ).fetchall()
         return [{**dict(row), "evidence": json.loads(row["evidence"])} for row in rows]
 
+    @staticmethod
+    def in_target(posting: dict) -> bool:
+        """US (or bare Remote) location and an entry-level, full-time title in her tracks."""
+        title, location = str(posting.get("title", "")), str(posting.get("location", ""))
+        place_ok = is_us_location(location) or re.fullmatch(r"(?i)\s*remote\s*", location or "") is not None
+        return place_ok and title_in_tracks(title) and not SENIORITY_BLOCK.search(title) and not INTERNSHIP.search(title)
+
     def relevance(self, posting: dict, profile_text: str = "") -> dict:
         title = str(posting.get("title", ""))
         location = str(posting.get("location", ""))
@@ -310,15 +449,21 @@ class JobQualityService:
         bare_remote = re.fullmatch(r"(?i)\s*remote\s*", location or "") is not None
         if not us_ok and not bare_remote:
             blockers.append("Location is not in the United States (or US-remote). Only US roles are pursued.")
+        elif bare_remote and remote_outside_us(description):
+            blockers.append("Listed as \"Remote\", but the posting places the work outside the United States. Only US roles are pursued.")
         if SENIORITY_BLOCK.search(title):
             blockers.append("Seniority in the title (Senior/Staff/Lead/Principal/Manager) is outside the entry-level target.")
-        if not SUPPORTED_ROLES.search(title):
+        if INTERNSHIP.search(title):
+            blockers.append("Internships and co-ops are for current students; Annie completed her MS and is looking for a full-time role.")
+        if not title_in_tracks(title):
             blockers.append("Role does not match one of the four target families (data, ML/AI, software, embedded/test).")
         years = years_required(description)
         if years and years > 4:
             blockers.append(f"The posting asks for {years}+ years of experience; the profile caps at 4.")
         if requires_phd(title, description):
             blockers.append("The posting requires a PhD; Annie holds a Master's.")
+        elif requires_enrollment(description):
+            blockers.append("The posting is for current students (it requires enrollment during the role); Annie completed her MS in May 2026.")
         if len(description.strip()) < 80 or not str(posting.get("url", "")).startswith(("http://", "https://")):
             blockers.append("A full job description and real application route are required.")
         from backend.services.sponsorship import screen as sponsorship_screen
@@ -329,7 +474,7 @@ class JobQualityService:
         jd_terms = _terms(full)
         overlap = len(profile_terms & jd_terms) / max(1, min(30, len(jd_terms)))
         requirement = min(40, round(overlap * 55))
-        role = 25 if SUPPORTED_ROLES.search(title) and not SENIORITY_BLOCK.search(title) else 0
+        role = 25 if title_in_tracks(title) and not SENIORITY_BLOCK.search(title) else 0
         place = 15 if us_ok else 0
         professional_markers = {"python", "sql", "pipeline", "streaming", "pytorch", "aws", "airflow", "kafka", "c++", "c#", "labview", "embedded", "testing"}
         professional = min(15, 3 * len(professional_markers & jd_terms & profile_terms))
@@ -351,7 +496,8 @@ class JobQualityService:
             "threshold": 70,
         }
 
-    def assess_company(self, company: str, posting_url: str, sources: list[dict], findings: list[str], red_flags: list[str], *, size_category="unknown", employee_min=None, employee_max=None, sponsorship_state="unknown", override_reason="") -> dict:
+    def assess_company(self, company: str, posting_url: str, sources: list[dict], findings: list[str], red_flags: list[str], *, size_category="unknown", employee_min=None, employee_max=None, sponsorship_state="unknown", override_reason="", sync=True) -> dict:
+        """``sync=False`` inside a discovery pass, which rebuilds the projections once at its end."""
         cid = self.ensure_company(company)
         source_urls = [str(source.get("url", "")) for source in sources if source.get("url")]
         owned_or_ats = _host_matches_company(posting_url, company)
@@ -384,7 +530,8 @@ class JobQualityService:
             )
             db.execute("UPDATE jobs SET company_id=? WHERE lower(replace(company,' ',''))=?", (cid, normalize_company(company)))
             self.w.record_event(db, "company_verified", company_id=cid, company=company, state=state, sources=source_urls)
-        self.s.sync_projections()
+        if sync:
+            self.s.sync_projections()
         return {"company_id": cid, "state": state, "sources": sources, "findings": findings, "red_flags": detected, "checked_at": checked}
 
     def balanced_five(self, candidates: list[dict]) -> dict:

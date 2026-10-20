@@ -1,0 +1,47 @@
+{
+  "revision": 3,
+  "source_sha256": "5ab8599dd2d596b53ccb0864f67fb76a59304ac9aca319fec3d8d90839219761",
+  "page_count": 1,
+  "created_at": "2026-10-13T06:32:42+00:00",
+  "path": "applications\\Annie_Manoharan_Block_03\\studio\\preview-3",
+  "review_required": true,
+  "layout": {
+    "full_pages": true,
+    "page_count": 1,
+    "target_pages": 1,
+    "paper": "letter",
+    "pages": [
+      {
+        "page": 1,
+        "fill_percent": 96.5,
+        "bottom_blank_mm": 9.0,
+        "largest_internal_gap_mm": 4.6,
+        "paper_ok": true,
+        "words": 488,
+        "within_margins": true
+      }
+    ],
+    "target_fill_percent": 80,
+    "normal_margins_mm": 12.7
+  },
+  "ranking": {
+    "track": "C",
+    "section_order": [
+      "Education",
+      "Technical Skills",
+      "Professional Experience",
+      "Projects"
+    ],
+    "changes": [
+      "Ranked SkillsLanguages items against the JD.",
+      "Ranked SkillsData items against the JD.",
+      "Ranked SkillsML items against the JD.",
+      "Ranked SkillsCloud items against the JD.",
+      "Ranked skill categories against the JD.",
+      "Track C: section order Education > Technical Skills > Professional Experience > Projects."
+    ],
+    "method": "Deterministic JD relevance ordering of registered evidence; not an ATS score.",
+    "cuts": []
+  },
+  "body_font_pt": 10.0
+}

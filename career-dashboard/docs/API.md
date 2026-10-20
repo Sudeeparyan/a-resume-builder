@@ -10,6 +10,12 @@ are refused. Nothing here returns a key value.
 | GET | `/ai/settings` | Providers, whether each has a key, its live model list, tier choices, and the agent roster. `?refresh=true` refetches model lists. |
 | PUT | `/ai/settings` | Save the writing and reading tier choices: `{"tiers": {"strong": {provider, model}, "cheap": {...}}}`. |
 | POST | `/ai/settings/test` | Make the smallest real call with `{provider, model}`; returns `ok` and a plain-language `detail`. |
+| GET | `/ai/route` | Auto's route: `route` (order, `enabled`, `allow_fallbacks`, `capacity`), `endpoints` (each plan's readiness, models, resting until, 5-hour usage) and `ready`. |
+| PUT | `/ai/route` | Save the route. At least one free plan must stay on; Azure always sorts last. |
+| DELETE | `/ai/route/rest/{provider}` | Clear a plan's rest by hand ("it reset early, try it now"). |
+| GET | `/agents/runs/{run_id}/trace` | One run's whole record for the side panel: events, sources, posting outcomes, summary. |
+| GET | `/agents/runs/{run_id}/spans` | The run's span timeline (local traces only). |
+| GET | `/traces/runs` | The latest traced runs with AI-call, web-call and failure counts. |
 | PUT | `/ai/fallback` | Save the backup provider (`{provider, model}`) used when the main provider fails a call; `{provider: ""}` clears it. A real fallback is recorded as a `provider_fallback` activity row with the action that moved. |
 
 The older `/ai/providers`, `/ai/preferences` and `/ai/test` remain for the Codex path. Kimi is a first-class hosted provider (`kimi`, Moonshot base URL); only the named `MOONSHOT_API_KEY=…` form is picked up, never a bare `sk-` token. Kimi has no web tool here, so web actions (discovery, research) are routed to a provider that can browse rather than failing.
@@ -34,12 +40,45 @@ Job rows include `sponsor_tier` (`S`, `A`, `B`, `C`), `sponsor_evidence` (label,
 
 Every saved posting also carries `fit_score` (0–100 against the active profile), `fit_rationale` (the component breakdown in one sentence) and `raw_jd` (the description as first seen). Every discovery preset returns its postings best-fit-first: after the sponsorship, never-re-apply, relevance and legitimacy gates, the survivors are sorted by the deterministic relevance score and cut to the day's limit (5 by default).
 
+## Daily Search pipeline
+
+`backend/services/pipeline.py` (ported from the Template in October 2026): find 1-5 jobs, then take
+each one end to end, one helper after the other: `posting` (re-read; a closed or now-refusing
+posting stops the job before it gets a folder), `research` (company research, the hiring-manager
+view, her profile against both, and the requirement check), `tailor`, `pdf`, `review` (an
+independent `resume_match` run that must return a verdict), `study_plan` and `ready`. A feed search
+(`portals`) saves every eligible match; the pipeline prepares the best fits, one per company, none
+for a company with three resumes waiting. Nothing is ever submitted.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/pipeline` | Sources, helpers with time/token estimates, the AIs that can run it, learned speeds, saved choices and status. |
+| GET | `/pipeline/status` | The running and last run, today's paid-call allowance, whether Tectonic is installed. |
+| PUT | `/pipeline/preferences` | Remember `{count, source, steps}` (the AI is always the one chosen in Settings). |
+| POST | `/pipeline/run` | Start a run (202). Refused while another search runs or when today's plan is complete. |
+| POST | `/pipeline/{run_id}/stop` | Stop after the current step; finished work is kept. |
+| GET | `/jobs/{job_id}/fit` | The job's requirement matrix: each requirement quoted from the posting, met/partial/missing with the evidence ids that show it (`services/fit.py`). |
+| POST | `/jobs/{job_id}/fit` | Check again, by AI on a free plan when one is free (never a paid key). |
+| GET | `/studio/{job_id}/readiness` | The ready-to-submit check (`services/readiness.py`): verdict `ready`/`review`/`blocked`, a readiness score from fit, coverage and readability, and every check with what is left to do. Not an interview prediction. |
+
+`/summary` also carries `needs_you`: what only Annie can do now (an AI app signed out, no AI set up,
+pending profile entries, predicted items waiting in Assurance, open questions), each with the page
+that resolves it (`services/needs_you.py`).
+
+## Cover letters and Word copies
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/jobs/{job_id}/cover-letter` | A new version: an AI draft from registered evidence that passed every check and a second AI's audit, else the letter built from her registered sentences (`services/cover_letters.py`). Returns `method`, `note`, `evidence_ids`, `docx_path`. Never sent. |
+| GET | `/jobs/{job_id}/cover-letter/download?format=md\|docx` | The latest letter as Markdown or Word. |
+| GET | `/studio/{job_id}/download?format=pdf\|docx\|tex` | The resume; `docx` is a Word copy of the same compiled revision as the PDF, on US Letter. |
+
 ## Resume Studio
 
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/studio/{job_id}/assessment` | ATS readiness, resume coverage, opportunity fit, and keywords split into `missing_supported` and `missing_unsupported`. |
-| GET | `/studio/{job_id}/download?format=pdf\|tex` | Attachment download. PDF requires the current compiled revision. |
+| GET | `/studio/{job_id}/download?format=pdf\|docx\|tex` | Attachment download. PDF and Word require the current compiled revision. |
 | POST | `/studio/{job_id}/chat/preview` | Preview a change set. Exact commands apply directly; plain English goes to the resume tailor agent. `applies_resume_change` and `ai_note` say what will happen and why. |
 | POST | `/studio/{job_id}/chat/apply` | Apply a preview at its expected revision, compile, and rescore. |
 | POST | `/studio/{job_id}/chat/undo` | Restore the source revision as a new version. |
@@ -91,6 +130,6 @@ The page polls `GET /assistant` every 1.2 s while a message is processing, every
 
 ## Agent runs
 
-`POST /agents/run` takes `kind` (`research`, `resume_advisor`, `email`, `discovery`, `resume_build`, `resume_match`, `instruction_interpret`, `study_plan`), optional `job_id`, `provider`, `model` and a discovery `preset` (`default`, `balanced_five`, `portals`). A discovery result lists `added`, `duplicates` and `excluded` (company, title, URL, reason and sentence). A balanced-five run adds `balanced_shortages`. The `portals` preset reads tracked Greenhouse/Lever/Ashby feeds and makes no AI call. `study_plan` writes `study-plan.md` into the job's application folder.
+`POST /agents/run` takes `kind` (`research`, `resume_advisor`, `email`, `discovery`, `resume_build`, `resume_match`, `instruction_interpret`, `study_plan`), optional `job_id`, `provider`, `model` and a discovery `preset` (`default`, `balanced_five`, `portals`). A discovery result lists `added`, `duplicates` and `excluded` (company, title, URL, reason and sentence). A balanced-five run adds `balanced_shortages`. The `portals` preset reads the tracked employers' Workday, Greenhouse, Lever, Ashby and SmartRecruiters feeds, makes no AI call, is not limited by the daily application plan, and saves every eligible match (up to 60 a pass) spread across employers. Stored discovery results keep each read posting's company, title, URL and location, not its text (`jobs_read` counts them). `study_plan` writes `study-plan.md` into the job's application folder.
 
 `POST /studio/{job_id}/fill` fits the draft to exactly one US Letter page (11 → 10.5 → 10pt, then the documented cuts) and returns the new version with its measured layout.

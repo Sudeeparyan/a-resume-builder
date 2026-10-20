@@ -1,0 +1,59 @@
+candidate_revision: 2026-09-18.1
+job_id: 49c96e068c942114
+role_eligible: false
+job_snapshot_sha256: fd152a78d141489627b4bd58a32b2eb6d70c90825d4a4a319d8f2f2e6025e212
+supported_requirement_coverage: 0
+requirements: []
+company_problem:
+  statement: Pending review of the saved job description.
+  source_url: https://job-boards.greenhouse.io/verkada/jobs/4134234007
+  published_or_accessed: '2026-10-04'
+  evidence_class: explicit
+  confidence: low
+selected_project_id: c24806d7d4ee411ebbd3f409a940ac21
+selected_project_ids:
+- c24806d7d4ee411ebbd3f409a940ac21
+- PROJ-P07-FPGA
+selected_project_reason: Draft selection by overlap with approved project wording;
+  review the business problem and full job requirements.
+resume_claim_ids:
+- CONTACT-EMAIL-001
+- CONTACT-GITHUB-001
+- CONTACT-PHONE-001
+- CONTACT-PORTFOLIO-001
+- COURSEWORK-MS-001
+- EDU-BE-001
+- EDU-MS-001
+- EXP-INSOPS-001
+- EXP-RA-001
+- EXP-SOLITON-PE-001
+- EXP-TA-001
+- IDENTITY-001
+- METRIC-DRAEGER-94
+- PROJ-P07-FPGA
+- SKILL-CLOUD-001
+- SKILL-CV-TOOLS-001
+- SKILL-DATA-TOOLS-001
+- SKILL-DESKTOP-001
+- SKILL-EMBEDDED-001
+- SKILL-GENAI-001
+- SKILL-LAKEHOUSE-001
+- SKILL-LANGUAGES-001
+- SKILL-ML-001
+- SKILL-STREAMING-001
+- SKILL-TEST-001
+- SKILL-TOUCHED-001
+held_claims_used: []
+studio_review_required: true
+source_evidence_errors:
+- 'Unknown source EVIDENCE ID on line 60: resume_items:5d30fd974be74efc82b7dc5bc4e152c2'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:2b2d3321b02e47da8d9e3ac3f44a9b51'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:7172508e2f3a4ee2b68ce14c411f4f02'
+- 'Unknown source EVIDENCE ID on line 68: resume_items:c24806d7d4ee411ebbd3f409a940ac21'
+- 'Unknown source EVIDENCE ID on line 70: resume_items:c24806d7d4ee411ebbd3f409a940ac21'
+- 'Unknown source EVIDENCE ID on line 72: resume_items:c24806d7d4ee411ebbd3f409a940ac21'
+- 'Unknown source EVIDENCE ID on line 74: resume_items:c24806d7d4ee411ebbd3f409a940ac21'
+- 'Unknown source EVIDENCE ID on line 76: resume_items:c24806d7d4ee411ebbd3f409a940ac21'
+- 'Unknown source EVIDENCE ID on line 78: resume_items:c24806d7d4ee411ebbd3f409a940ac21'
+- 'Unknown source EVIDENCE ID on line 170: resume_items:c24806d7d4ee411ebbd3f409a940ac21'
+- 'Unknown source EVIDENCE ID on line 172: resume_items:c24806d7d4ee411ebbd3f409a940ac21'

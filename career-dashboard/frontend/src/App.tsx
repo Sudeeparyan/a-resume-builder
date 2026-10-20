@@ -1,9 +1,10 @@
-import { Component, useCallback, useEffect, useState } from "react";
+import { Component, useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   LayoutDashboard,
   MessageSquareText,
   Search,
+  Radar,
   FileText,
   ShieldCheck,
   UserRound,
@@ -11,13 +12,17 @@ import {
   Workflow,
   CheckCircle2,
   LoaderCircle,
+  Menu,
   X,
 } from "lucide-react";
 import { api } from "./api";
-import { Field, Loading, Modal, NoticeContext } from "./components/UI";
+import { LatestRequest } from "./latestRequest";
+import { AskContext, Field, Loading, Modal, NoticeContext } from "./components/UI";
+import { PHONE_SHORT, PhoneMore } from "./components/PhoneNav";
 import JobDetail from "./components/JobDetail";
 import Dashboard from "./features/Dashboard";
 import DailySearch from "./features/DailySearch";
+import Tracker from "./features/Tracker";
 import ResumeStudio from "./features/ResumeStudio";
 import Assurance from "./features/Assurance";
 import Profile from "./features/Profile";
@@ -29,6 +34,7 @@ const tabs = [
   ["assistant", "Assistant", MessageSquareText, "Your search"],
   ["dashboard", "Dashboard", LayoutDashboard, "Your search"],
   ["daily", "Daily Search", Search, "Your search"],
+  ["tracker", "Sponsorship Tracker", Radar, "Your search"],
   ["resumes", "Resume Studio", FileText, "Your search"],
   ["assurance", "Assurance", ShieldCheck, "Your search"],
   ["profile", "Profile", UserRound, "You"],
@@ -44,16 +50,30 @@ function routeFromHash() {
 /** A render failure in one page must not unmount the whole app. */
 class ErrorBoundary extends Component<
   { children: ReactNode },
-  { message: string }
+  { message: string; recovering: boolean }
 > {
-  state = { message: "" };
+  state = { message: "", recovering: false };
+  lastRecovery = 0;
   static getDerivedStateFromError(error: unknown) {
     return { message: error instanceof Error ? error.message : String(error) };
   }
   componentDidCatch(error: unknown) {
     console.error("Page render failed:", error);
+    // Most failures pass (data arriving mid-update, the app restarting): try once more by
+    // itself, and only show the message when it fails again straight away.
+    if (Date.now() - this.lastRecovery > 15000) {
+      this.lastRecovery = Date.now();
+      this.setState({ recovering: true });
+      window.setTimeout(() => this.setState({ message: "", recovering: false }), 1500);
+    }
   }
   render() {
+    if (this.state.recovering)
+      return (
+        <div className="callout" role="status">
+          Reloading this page…
+        </div>
+      );
     if (!this.state.message) return this.props.children;
     return (
       <div className="callout warning" role="alert">
@@ -86,19 +106,35 @@ export default function App() {
       : null,
   );
   const [add, setAdd] = useState(false);
+  // The phone's More sheet (the tabs that are not in its bottom bar).
+  const [moreOpen, setMoreOpen] = useState(false);
+  const closeMore = useCallback(() => setMoreOpen(false), []);
+  useEffect(() => setMoreOpen(false), [route]);
+  // A question another tab handed to the Assistant; `n` makes asking the same thing twice count.
+  const [asked, setAsked] = useState<{ text: string; send: boolean; n: number } | null>(null);
+  const ask = useCallback((text: string, send = true) => {
+    setSelected(null);
+    setAsked((prev) => ({ text, send, n: (prev?.n ?? 0) + 1 }));
+    location.hash = "assistant";
+    setRoute("assistant");
+  }, []);
   const notify = useCallback(
     (text: string, error = false) => setToast({ text, error }),
     [],
   );
+  // A slower earlier read can never replace a newer summary.
+  const summaryReads = useRef(new LatestRequest()).current;
   const refresh = useCallback(async () => {
     try {
-      setData(await api("/v2/summary"));
-      setError("");
+      await summaryReads.run(() => api<Summary>("/v2/summary"), (value) => {
+        setData(value);
+        setError("");
+      });
     } catch (e) {
       setError((e as Error).message);
       throw e;
     }
-  }, []);
+  }, [summaryReads]);
   useEffect(() => {
     refresh().catch(() => {});
     const timer = setInterval(() => refresh().catch(() => {}), 8000);
@@ -140,8 +176,9 @@ export default function App() {
   const current = tabs.find((t) => t[0] === route);
   return (
     <NoticeContext.Provider value={toast}>
+      <AskContext.Provider value={ask}>
       <div className="app">
-        <aside>
+        <aside className="app-sidebar">
           <div className="brand">
             <b>A</b>
             <div>
@@ -150,7 +187,7 @@ export default function App() {
           </div>
           <nav aria-label="Main navigation">
             {tabs.map(([id, label, Icon, group], i) => (
-              <div key={id} className="nav-item">
+              <div key={id} className={"nav-item" + (id in PHONE_SHORT ? "" : " nav-extra")}>
                 {group !== tabs[i - 1]?.[3] && (
                   <span className="nav-group">{group}</span>
                 )}
@@ -162,6 +199,9 @@ export default function App() {
                 >
                   <Icon size={20} />
                   <span>{label}</span>
+                  <small className="nav-short" aria-hidden="true">
+                    {PHONE_SHORT[id] || label}
+                  </small>
                   {id === "agents" && working.length > 0 && (
                     <span className="nav-count" aria-label={`${working.length} working`}>
                       {working.length}
@@ -170,6 +210,25 @@ export default function App() {
                 </button>
               </div>
             ))}
+            {/* Phones only: the fifth tab, opening the sheet with the rest of the tabs. */}
+            <div className="nav-item nav-more">
+              <button
+                type="button"
+                title="More: Tracker, Assurance, Profile, Agents, Settings"
+                aria-haspopup="dialog"
+                aria-expanded={moreOpen}
+                className={!(route in PHONE_SHORT) ? "active" : ""}
+                onClick={() => setMoreOpen(!moreOpen)}
+              >
+                <Menu size={20} />
+                <small className="nav-short">More</small>
+                {working.length > 0 && (
+                  <span className="nav-count" aria-label={`${working.length} working`}>
+                    {working.length}
+                  </span>
+                )}
+              </button>
+            </div>
           </nav>
           <div className="sidebar-note">
             <span className="status-dot" /> Personal workspace
@@ -181,6 +240,14 @@ export default function App() {
             <small>Saved locally · US Central time</small>
           </div>
         </aside>
+        <PhoneMore
+          open={moreOpen}
+          tabs={tabs.map(([id, label, Icon]) => ({ id, label, Icon }))}
+          route={route}
+          working={working.length}
+          onClose={closeMore}
+          onGo={navigate}
+        />
         <main>
           <header>
             <span className="crumb">
@@ -225,13 +292,16 @@ export default function App() {
             {!data ? (
               <Loading label="Loading your workspace" />
             ) : (
-              <ErrorBoundary>
+              // Keyed by tab: a page that failed must not keep its message on the next tab.
+              <ErrorBoundary key={route}>
                 {route === "assistant" && (
                   <Assistant
                     data={data}
                     refresh={refresh}
                     notify={notify}
                     onJob={openStudio}
+                    asked={asked}
+                    onAsked={() => setAsked(null)}
                   />
                 )}
                 {route === "dashboard" && (
@@ -242,6 +312,7 @@ export default function App() {
                     onJob={openStudio}
                     onDaily={() => navigate("daily")}
                     onAdd={() => setAdd(true)}
+                    onGo={navigate}
                   />
                 )}
                 {route === "daily" && (
@@ -253,6 +324,7 @@ export default function App() {
                     onAdd={() => setAdd(true)}
                   />
                 )}
+                {route === "tracker" && <Tracker notify={notify} refresh={refresh} />}
                 {route === "resumes" && (
                   <ResumeStudio
                     data={data}
@@ -322,6 +394,7 @@ export default function App() {
           />
         )}
       </div>
+      </AskContext.Provider>
     </NoticeContext.Provider>
   );
 }

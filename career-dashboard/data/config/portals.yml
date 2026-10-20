@@ -6,7 +6,7 @@
 # ============================================================
 
 meta:
-  last_updated: "2026-09-04"
+  last_updated: "2026-10-02"
   scan_cadence: "weekly"
   region: "united-states"
 
@@ -22,6 +22,8 @@ tracked_companies:
   # ---- CAP-EXEMPT: no H-1B lottery, files any time of year ----
   - name: "University of Arkansas"
     careers_url: "https://jobs.uark.edu/"
+    ats: "workday"
+    ats_token: "uasys.wd5.myworkdayjobs.com/UASYS"   # UA System Workday board, verified 2026-10-02
     cap_exempt: true
     tier: 1
     why: "Current employer (TA + RA). Internal candidate; cap-exempt."
@@ -58,6 +60,8 @@ tracked_companies:
   # ---- Medical device / health tech: matches her strongest domain thread ----
   - name: "Medtronic"
     careers_url: "https://jobs.medtronic.com/"
+    ats: "workday"
+    ats_token: "medtronic.wd1.myworkdayjobs.com/MedtronicCareers"
     cap_exempt: false
     tier: 1
     why: "She already delivered a project FOR Medtronic via Soliton. Strongest narrative fit in the whole list."
@@ -72,6 +76,8 @@ tracked_companies:
 
   - name: "Abbott"
     careers_url: "https://www.jobs.abbott/"
+    ats: "workday"
+    ats_token: "abbott.wd5.myworkdayjobs.com/abbottcareers"
     cap_exempt: false
     tier: 2
     why: "Medical device; embedded and data roles."
@@ -79,6 +85,8 @@ tracked_companies:
 
   - name: "Dexcom"
     careers_url: "https://careers.dexcom.com/"
+    ats: "workday"
+    ats_token: "dexcom.wd1.myworkdayjobs.com/Dexcom"
     cap_exempt: false
     tier: 2
     why: "Continuous glucose monitoring — device telemetry streaming, close to her P1 project."
@@ -110,6 +118,584 @@ tracked_companies:
     cap_exempt: false
     tier: 3
     why: "Large data employer, consistent sponsor. Note: Snowflake itself is a listed gap in her skills."
+    enabled: true
+
+  # ============================================================
+  # Added 2026-10-02. Every board below answered its public job API
+  # live on that date. Only entry-level titles in her four tracks are
+  # opened on Workday/SmartRecruiters boards; every posting still
+  # passes the sponsorship gate, never-re-apply and relevance checks.
+  # Set enabled: false to stop reading a company.
+  # ============================================================
+
+  # ---- CAP-EXEMPT: universities, academic medical centres, national labs (no H-1B lottery) ----
+  - name: "Western Governors University"
+    careers_url: "https://wgu.wd5.myworkdayjobs.com/External"
+    ats: "workday"
+    ats_token: "wgu.wd5.myworkdayjobs.com/External"
+    cap_exempt: true
+    tier: 1
+    why: "Nonprofit university; hires associate data engineers (an Associate Data Engineer role was found 2026-09)."
+    enabled: true
+  - name: "Argonne National Laboratory"
+    careers_url: "https://argonne.wd1.myworkdayjobs.com/Argonne_Careers"
+    ats: "workday"
+    ats_token: "argonne.wd1.myworkdayjobs.com/Argonne_Careers"
+    cap_exempt: true
+    tier: 1
+    why: "DOE national lab run by UChicago Argonne LLC; research software and data roles. Some roles need citizenship; the gate catches those."
+    enabled: true
+  - name: "St. Jude Children's Research Hospital"
+    careers_url: "https://stjude.wd1.myworkdayjobs.com/StJude"
+    ats: "workday"
+    ats_token: "stjude.wd1.myworkdayjobs.com/StJude"
+    cap_exempt: true
+    tier: 1
+    why: "Nonprofit research hospital (Memphis, near Arkansas); clinical data and research computing."
+    enabled: true
+  - name: "Vanderbilt University Medical Center"
+    careers_url: "https://vumc.wd1.myworkdayjobs.com/vumccareers"
+    ats: "workday"
+    ats_token: "vumc.wd1.myworkdayjobs.com/vumccareers"
+    cap_exempt: true
+    tier: 1
+    why: "Academic medical center; health data engineering."
+    enabled: true
+  - name: "Washington University in St. Louis"
+    careers_url: "https://wustl.wd1.myworkdayjobs.com/External"
+    ats: "workday"
+    ats_token: "wustl.wd1.myworkdayjobs.com/External"
+    cap_exempt: true
+    tier: 1
+    why: "University; research data and software roles."
+    enabled: true
+  - name: "University of Chicago"
+    careers_url: "https://uchicago.wd5.myworkdayjobs.com/External"
+    ats: "workday"
+    ats_token: "uchicago.wd5.myworkdayjobs.com/External"
+    cap_exempt: true
+    tier: 1
+    why: "University; research computing and data roles."
+    enabled: true
+  - name: "Cornell University"
+    careers_url: "https://cornell.wd1.myworkdayjobs.com/CornellCareerPage"
+    ats: "workday"
+    ats_token: "cornell.wd1.myworkdayjobs.com/CornellCareerPage"
+    cap_exempt: true
+    tier: 1
+    why: "University; research software and data roles."
+    enabled: true
+  - name: "Brown University"
+    careers_url: "https://brown.wd5.myworkdayjobs.com/staff-careers-brown"
+    ats: "workday"
+    ats_token: "brown.wd5.myworkdayjobs.com/staff-careers-brown"
+    cap_exempt: true
+    tier: 1
+    why: "University; research computing roles."
+    enabled: true
+  - name: "Mass General Brigham"
+    careers_url: "https://massgeneralbrigham.wd1.myworkdayjobs.com/MGBExternal"
+    ats: "workday"
+    ats_token: "massgeneralbrigham.wd1.myworkdayjobs.com/MGBExternal"
+    cap_exempt: true
+    tier: 1
+    why: "Harvard-affiliated academic medical system; clinical data, ML and medical-device software."
+    enabled: true
+  - name: "Cleveland Clinic"
+    careers_url: "https://ccf.wd1.myworkdayjobs.com/ClevelandClinicCareers"
+    ats: "workday"
+    ats_token: "ccf.wd1.myworkdayjobs.com/ClevelandClinicCareers"
+    cap_exempt: true
+    tier: 1
+    why: "Academic medical center; clinical data and analytics engineering."
+    enabled: true
+
+  # ---- MEDICAL DEVICES AND HEALTH TECH: her Drager V&V and Soliton-for-Medtronic work ----
+  - name: "Stryker"
+    careers_url: "https://stryker.wd1.myworkdayjobs.com/StrykerCareers"
+    ats: "workday"
+    ats_token: "stryker.wd1.myworkdayjobs.com/StrykerCareers"
+    cap_exempt: false
+    tier: 1
+    why: "Medical devices; software test, V&V and embedded roles (Track D)."
+    enabled: true
+  - name: "Edwards Lifesciences"
+    careers_url: "https://edwards.wd5.myworkdayjobs.com/EdwardsCareers"
+    ats: "workday"
+    ats_token: "edwards.wd5.myworkdayjobs.com/EdwardsCareers"
+    cap_exempt: false
+    tier: 1
+    why: "Medical devices; test automation and data roles."
+    enabled: true
+  - name: "Insulet"
+    careers_url: "https://insulet.wd5.myworkdayjobs.com/insuletcareers"
+    ats: "workday"
+    ats_token: "insulet.wd5.myworkdayjobs.com/insuletcareers"
+    cap_exempt: false
+    tier: 1
+    why: "Insulin pumps; device telemetry and software test, close to her IoT project."
+    enabled: true
+  - name: "ResMed"
+    careers_url: "https://resmed.wd3.myworkdayjobs.com/ResMed_External_Careers"
+    ats: "workday"
+    ats_token: "resmed.wd3.myworkdayjobs.com/ResMed_External_Careers"
+    cap_exempt: false
+    tier: 1
+    why: "Connected respiratory devices; device data pipelines and embedded software."
+    enabled: true
+  - name: "BD"
+    careers_url: "https://bdx.wd1.myworkdayjobs.com/EXTERNAL_CAREER_SITE_USA"
+    ats: "workday"
+    ats_token: "bdx.wd1.myworkdayjobs.com/EXTERNAL_CAREER_SITE_USA"
+    cap_exempt: false
+    tier: 2
+    why: "Medical technology; software V&V and data roles."
+    enabled: true
+  - name: "Baxter"
+    careers_url: "https://baxter.wd1.myworkdayjobs.com/baxter"
+    ats: "workday"
+    ats_token: "baxter.wd1.myworkdayjobs.com/baxter"
+    cap_exempt: false
+    tier: 2
+    why: "Medical devices; embedded and test roles."
+    enabled: true
+  - name: "Philips"
+    careers_url: "https://philips.wd3.myworkdayjobs.com/jobs-and-careers"
+    ats: "workday"
+    ats_token: "philips.wd3.myworkdayjobs.com/jobs-and-careers"
+    cap_exempt: false
+    tier: 2
+    why: "Health technology; patient-monitoring software (her Drager domain)."
+    enabled: true
+  - name: "GE HealthCare"
+    careers_url: "https://gehc.wd5.myworkdayjobs.com/GEHC_ExternalSite"
+    ats: "workday"
+    ats_token: "gehc.wd5.myworkdayjobs.com/GEHC_ExternalSite"
+    cap_exempt: false
+    tier: 2
+    why: "Medical imaging and monitoring; software, test and AI roles."
+    enabled: true
+  - name: "Illumina"
+    careers_url: "https://illumina.wd1.myworkdayjobs.com/illumina-careers"
+    ats: "workday"
+    ats_token: "illumina.wd1.myworkdayjobs.com/illumina-careers"
+    cap_exempt: false
+    tier: 2
+    why: "Genomics instruments; data and software engineering."
+    enabled: true
+  - name: "Natera"
+    careers_url: "https://job-boards.greenhouse.io/natera"
+    ats: "greenhouse"
+    ats_token: "natera"
+    cap_exempt: false
+    tier: 2
+    why: "Genetic testing; data engineering and software roles."
+    enabled: true
+  - name: "Flatiron Health"
+    careers_url: "https://job-boards.greenhouse.io/flatironhealth"
+    ats: "greenhouse"
+    ats_token: "flatironhealth"
+    cap_exempt: false
+    tier: 2
+    why: "Oncology data platform; data engineering."
+    enabled: true
+  - name: "Komodo Health"
+    careers_url: "https://job-boards.greenhouse.io/komodohealth"
+    ats: "greenhouse"
+    ats_token: "komodohealth"
+    cap_exempt: false
+    tier: 2
+    why: "Healthcare data platform; data engineering."
+    enabled: true
+  - name: "Butterfly Network"
+    careers_url: "https://job-boards.greenhouse.io/butterflynetwork"
+    ats: "greenhouse"
+    ats_token: "butterflynetwork"
+    cap_exempt: false
+    tier: 2
+    why: "Handheld ultrasound; embedded, ML and test roles."
+    enabled: true
+  - name: "Veeva Systems"
+    careers_url: "https://jobs.lever.co/veeva"
+    ats: "lever"
+    ats_token: "veeva"
+    cap_exempt: false
+    tier: 3
+    why: "Life-sciences software; associate software engineer roles."
+    enabled: true
+
+  # ---- EMBEDDED, TEST AND INDUSTRIAL AUTOMATION: Track D (LabVIEW, FPGA, embedded C) ----
+  - name: "Analog Devices"
+    careers_url: "https://analogdevices.wd1.myworkdayjobs.com/External"
+    ats: "workday"
+    ats_token: "analogdevices.wd1.myworkdayjobs.com/External"
+    cap_exempt: false
+    tier: 1
+    why: "Semiconductors; embedded, FPGA and test engineering."
+    enabled: true
+  - name: "NXP Semiconductors"
+    careers_url: "https://nxp.wd3.myworkdayjobs.com/careers"
+    ats: "workday"
+    ats_token: "nxp.wd3.myworkdayjobs.com/careers"
+    cap_exempt: false
+    tier: 2
+    why: "Semiconductors; embedded software and validation."
+    enabled: true
+  - name: "Rockwell Automation"
+    careers_url: "https://rockwellautomation.wd1.myworkdayjobs.com/External_Rockwell_Automation"
+    ats: "workday"
+    ats_token: "rockwellautomation.wd1.myworkdayjobs.com/External_Rockwell_Automation"
+    cap_exempt: false
+    tier: 2
+    why: "Industrial automation; embedded firmware and test."
+    enabled: true
+  - name: "Caterpillar"
+    careers_url: "https://cat.wd5.myworkdayjobs.com/CaterpillarCareers"
+    ats: "workday"
+    ats_token: "cat.wd5.myworkdayjobs.com/CaterpillarCareers"
+    cap_exempt: false
+    tier: 3
+    why: "Embedded controls, test automation and data roles."
+    enabled: true
+  - name: "Bosch"
+    careers_url: "https://jobs.smartrecruiters.com/BoschGroup"
+    ats: "smartrecruiters"
+    ats_token: "BoschGroup"
+    cap_exempt: false
+    tier: 2
+    why: "Embedded and test engineering across automotive and devices."
+    enabled: true
+  - name: "Continental"
+    careers_url: "https://jobs.smartrecruiters.com/Continental"
+    ats: "smartrecruiters"
+    ats_token: "Continental"
+    cap_exempt: false
+    tier: 3
+    why: "Automotive embedded software and validation."
+    enabled: true
+  - name: "Western Digital"
+    careers_url: "https://jobs.smartrecruiters.com/WesternDigital"
+    ats: "smartrecruiters"
+    ats_token: "WesternDigital"
+    cap_exempt: false
+    tier: 2
+    why: "Storage firmware, test and software engineering."
+    enabled: true
+
+  # ---- DATA AND ML PLATFORMS: Tracks A and B (Python, Spark, Kafka, AWS, PyTorch) ----
+  - name: "Datadog"
+    careers_url: "https://job-boards.greenhouse.io/datadog"
+    ats: "greenhouse"
+    ats_token: "datadog"
+    cap_exempt: false
+    tier: 2
+    why: "Observability data platform; software and data engineering."
+    enabled: true
+  - name: "MongoDB"
+    careers_url: "https://job-boards.greenhouse.io/mongodb"
+    ats: "greenhouse"
+    ats_token: "mongodb"
+    cap_exempt: false
+    tier: 2
+    why: "Database company; new-grad software engineering."
+    enabled: true
+  - name: "Elastic"
+    careers_url: "https://job-boards.greenhouse.io/elastic"
+    ats: "greenhouse"
+    ats_token: "elastic"
+    cap_exempt: false
+    tier: 3
+    why: "Search and analytics; software engineering."
+    enabled: true
+  - name: "Fivetran"
+    careers_url: "https://job-boards.greenhouse.io/fivetran"
+    ats: "greenhouse"
+    ats_token: "fivetran"
+    cap_exempt: false
+    tier: 2
+    why: "Data pipelines (ELT); her P1/InsOps work maps directly."
+    enabled: true
+  - name: "Starburst"
+    careers_url: "https://job-boards.greenhouse.io/starburst"
+    ats: "greenhouse"
+    ats_token: "starburst"
+    cap_exempt: false
+    tier: 3
+    why: "Trino data platform; data and software engineering."
+    enabled: true
+  - name: "Cockroach Labs"
+    careers_url: "https://job-boards.greenhouse.io/cockroachlabs"
+    ats: "greenhouse"
+    ats_token: "cockroachlabs"
+    cap_exempt: false
+    tier: 3
+    why: "Distributed SQL database; software engineering."
+    enabled: true
+  - name: "Sigma Computing"
+    careers_url: "https://job-boards.greenhouse.io/sigmacomputing"
+    ats: "greenhouse"
+    ats_token: "sigmacomputing"
+    cap_exempt: false
+    tier: 3
+    why: "Cloud analytics; data and software engineering."
+    enabled: true
+  - name: "Samsara"
+    careers_url: "https://job-boards.greenhouse.io/samsara"
+    ats: "greenhouse"
+    ats_token: "samsara"
+    cap_exempt: false
+    tier: 2
+    why: "IoT sensor data platform; matches her IoT telemetry project."
+    enabled: true
+  - name: "Scale AI"
+    careers_url: "https://job-boards.greenhouse.io/scaleai"
+    ats: "greenhouse"
+    ats_token: "scaleai"
+    cap_exempt: false
+    tier: 2
+    why: "AI data platform; ML and software engineering."
+    enabled: true
+  - name: "Anthropic"
+    careers_url: "https://job-boards.greenhouse.io/anthropic"
+    ats: "greenhouse"
+    ats_token: "anthropic"
+    cap_exempt: false
+    tier: 3
+    why: "AI research company; ML engineering."
+    enabled: true
+  - name: "OpenAI"
+    careers_url: "https://jobs.ashbyhq.com/openai"
+    ats: "ashby"
+    ats_token: "openai"
+    cap_exempt: false
+    tier: 3
+    why: "AI research company; ML and software engineering."
+    enabled: true
+  - name: "Cohere"
+    careers_url: "https://jobs.ashbyhq.com/cohere"
+    ats: "ashby"
+    ats_token: "cohere"
+    cap_exempt: false
+    tier: 3
+    why: "LLM company; ML engineering."
+    enabled: true
+  - name: "Perplexity"
+    careers_url: "https://jobs.ashbyhq.com/perplexity"
+    ats: "ashby"
+    ats_token: "perplexity"
+    cap_exempt: false
+    tier: 3
+    why: "AI search; ML and software engineering."
+    enabled: true
+  - name: "Hex"
+    careers_url: "https://jobs.ashbyhq.com/hex"
+    ats: "ashby"
+    ats_token: "hex"
+    cap_exempt: false
+    tier: 3
+    why: "Data notebooks; software and data engineering."
+    enabled: true
+  - name: "Modal"
+    careers_url: "https://jobs.ashbyhq.com/modal"
+    ats: "ashby"
+    ats_token: "modal"
+    cap_exempt: false
+    tier: 3
+    why: "ML infrastructure; software engineering."
+    enabled: true
+  - name: "Supabase"
+    careers_url: "https://jobs.ashbyhq.com/supabase"
+    ats: "ashby"
+    ats_token: "supabase"
+    cap_exempt: false
+    tier: 3
+    why: "Postgres platform; software engineering."
+    enabled: true
+  - name: "Waymo"
+    careers_url: "https://job-boards.greenhouse.io/waymo"
+    ats: "greenhouse"
+    ats_token: "waymo"
+    cap_exempt: false
+    tier: 3
+    why: "Autonomous driving; ML, perception and test engineering."
+    enabled: true
+  - name: "Nuro"
+    careers_url: "https://job-boards.greenhouse.io/nuro"
+    ats: "greenhouse"
+    ats_token: "nuro"
+    cap_exempt: false
+    tier: 3
+    why: "Autonomous delivery; ML, embedded and test roles."
+    enabled: true
+
+  # ---- SOFTWARE COMPANIES WITH NEW-GRAD HIRING AND H-1B HISTORY: Track C ----
+  - name: "Cloudflare"
+    careers_url: "https://job-boards.greenhouse.io/cloudflare"
+    ats: "greenhouse"
+    ats_token: "cloudflare"
+    cap_exempt: false
+    tier: 3
+    why: "Software and systems engineering; new-grad roles."
+    enabled: true
+  - name: "Okta"
+    careers_url: "https://job-boards.greenhouse.io/okta"
+    ats: "greenhouse"
+    ats_token: "okta"
+    cap_exempt: false
+    tier: 3
+    why: "Identity platform; software engineering."
+    enabled: true
+  - name: "Twilio"
+    careers_url: "https://job-boards.greenhouse.io/twilio"
+    ats: "greenhouse"
+    ats_token: "twilio"
+    cap_exempt: false
+    tier: 3
+    why: "Communications APIs; software engineering."
+    enabled: true
+  - name: "GitLab"
+    careers_url: "https://job-boards.greenhouse.io/gitlab"
+    ats: "greenhouse"
+    ats_token: "gitlab"
+    cap_exempt: false
+    tier: 3
+    why: "DevOps platform; remote US software roles."
+    enabled: true
+  - name: "Pure Storage"
+    careers_url: "https://job-boards.greenhouse.io/purestorage"
+    ats: "greenhouse"
+    ats_token: "purestorage"
+    cap_exempt: false
+    tier: 3
+    why: "Storage systems; software and test engineering."
+    enabled: true
+  - name: "Rubrik"
+    careers_url: "https://job-boards.greenhouse.io/rubrik"
+    ats: "greenhouse"
+    ats_token: "rubrik"
+    cap_exempt: false
+    tier: 3
+    why: "Data security; software engineering."
+    enabled: true
+  - name: "Verkada"
+    careers_url: "https://job-boards.greenhouse.io/verkada"
+    ats: "greenhouse"
+    ats_token: "verkada"
+    cap_exempt: false
+    tier: 3
+    why: "Connected cameras; embedded, ML and software roles."
+    enabled: true
+  - name: "Pinterest"
+    careers_url: "https://job-boards.greenhouse.io/pinterest"
+    ats: "greenhouse"
+    ats_token: "pinterest"
+    cap_exempt: false
+    tier: 3
+    why: "Consumer platform; ML and software engineering."
+    enabled: true
+  - name: "Dropbox"
+    careers_url: "https://job-boards.greenhouse.io/dropbox"
+    ats: "greenhouse"
+    ats_token: "dropbox"
+    cap_exempt: false
+    tier: 3
+    why: "Cloud storage; software engineering."
+    enabled: true
+  - name: "Duolingo"
+    careers_url: "https://job-boards.greenhouse.io/duolingo"
+    ats: "greenhouse"
+    ats_token: "duolingo"
+    cap_exempt: false
+    tier: 3
+    why: "Education technology; software and ML engineering."
+    enabled: true
+  - name: "Affirm"
+    careers_url: "https://job-boards.greenhouse.io/affirm"
+    ats: "greenhouse"
+    ats_token: "affirm"
+    cap_exempt: false
+    tier: 3
+    why: "Fintech; software and data engineering."
+    enabled: true
+  - name: "Lyft"
+    careers_url: "https://job-boards.greenhouse.io/lyft"
+    ats: "greenhouse"
+    ats_token: "lyft"
+    cap_exempt: false
+    tier: 3
+    why: "Rideshare; data and software engineering."
+    enabled: true
+  - name: "Instacart"
+    careers_url: "https://job-boards.greenhouse.io/instacart"
+    ats: "greenhouse"
+    ats_token: "instacart"
+    cap_exempt: false
+    tier: 3
+    why: "Grocery platform; data and ML engineering."
+    enabled: true
+  - name: "Airbnb"
+    careers_url: "https://job-boards.greenhouse.io/airbnb"
+    ats: "greenhouse"
+    ats_token: "airbnb"
+    cap_exempt: false
+    tier: 3
+    why: "Travel platform; data and software engineering."
+    enabled: true
+  - name: "Figma"
+    careers_url: "https://job-boards.greenhouse.io/figma"
+    ats: "greenhouse"
+    ats_token: "figma"
+    cap_exempt: false
+    tier: 3
+    why: "Design software; software engineering."
+    enabled: true
+  - name: "Coinbase"
+    careers_url: "https://job-boards.greenhouse.io/coinbase"
+    ats: "greenhouse"
+    ats_token: "coinbase"
+    cap_exempt: false
+    tier: 3
+    why: "Crypto platform; software and data engineering."
+    enabled: true
+  - name: "Notion"
+    careers_url: "https://jobs.ashbyhq.com/notion"
+    ats: "ashby"
+    ats_token: "notion"
+    cap_exempt: false
+    tier: 3
+    why: "Productivity software; software engineering."
+    enabled: true
+  - name: "Ramp"
+    careers_url: "https://jobs.ashbyhq.com/ramp"
+    ats: "ashby"
+    ats_token: "ramp"
+    cap_exempt: false
+    tier: 3
+    why: "Fintech; software and data engineering."
+    enabled: true
+  - name: "Spotify"
+    careers_url: "https://jobs.lever.co/spotify"
+    ats: "lever"
+    ats_token: "spotify"
+    cap_exempt: false
+    tier: 3
+    why: "Streaming; data and ML engineering (US roles only pass the gate)."
+    enabled: true
+  - name: "Palantir"
+    careers_url: "https://jobs.lever.co/palantir"
+    ats: "lever"
+    ats_token: "palantir"
+    cap_exempt: false
+    tier: 3
+    why: "Software engineering; many government roles need clearance and are excluded by the gate."
+    enabled: true
+  - name: "ServiceNow"
+    careers_url: "https://jobs.smartrecruiters.com/ServiceNow"
+    ats: "smartrecruiters"
+    ats_token: "ServiceNow"
+    cap_exempt: false
+    tier: 3
+    why: "Enterprise software; associate software engineering."
     enabled: true
 
 # ------------------------------------------------------------

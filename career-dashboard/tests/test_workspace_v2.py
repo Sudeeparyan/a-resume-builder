@@ -690,11 +690,12 @@ def test_portals_preset_gates_ranks_and_saves_tracked_feed_postings(service, mon
     result = run["result"]
     assert result["summary"].startswith("Tracked career pages read directly (no AI call).")
 
-    # The refusal is excluded with its sentence and the portals source; the senior title is rejected.
+    # The refusal is excluded with its sentence and the portals source.
     assert [item["url"] for item in result["excluded"]] == ["https://jobs.ashbyhq.com/confluent/2"]
     assert "without sponsorship" in result["excluded"][0]["sentence"]
     assert service.excluded()[0]["source"] == "portals"
-    assert any("confluent/1: relevance gate Seniority" in lead for lead in result["rejected_leads"])
+    # The senior title is outside her target: counted in the summary, not logged as a rejected lead.
+    assert result["outside_target"] == 1 and not any("confluent/1" in lead for lead in result["rejected_leads"])
     # A tracked employer is never dropped for "legitimacy needs review".
     assert not any("legitimacy" in lead for lead in result["rejected_leads"])
 

@@ -10,7 +10,7 @@ career-dashboard/backend/.venv/
 career-dashboard/frontend/node_modules/
 career-dashboard/frontend/dist/
 # career-dashboard/frontend/tsconfig.tsbuildinfo
-
+backup
 # # Live database and its snapshots — never commit personal application state
 # career-dashboard/data/*.db
 # career-dashboard/data/*.db-*

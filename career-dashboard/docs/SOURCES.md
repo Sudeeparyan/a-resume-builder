@@ -11,6 +11,7 @@ Port date: 18 September 2026. The app itself is the newer career-dashboard editi
 | `system/config/profile.yml`, `system/profile/positioning.md` | `data/config/profile.yml`, `data/context/PROFILE-NOTES.md` | Identity, four tracks, narrative (no ICCV claim), resume contract |
 | `system/config/sponsorship.yml` | `data/config/sponsorship.yml` | Patterns kept; US phrasings, negation guards and the cap-exempt key fix added |
 | `system/data/sponsors-uscis.csv` | `data/sponsors/sponsors-uscis.csv` | Public USCIS employer history (83,624 employers) |
+| Built from the USCIS CSV (2026-10) | `data/sponsors/sponsor-boards.csv` (+ `.meta.yml`, review JSON) | Public job boards of H-1B sponsors, each checked to list a US posting and name the same employer; rebuilt by `backend/scripts/build_sponsor_boards.py` |
 | `system/config/regions.yml`, `portals.yml` | `data/config/` | US hubs and tracked companies (Confluent's ATS corrected to Ashby) |
 | `system/profile/interview-stories.md` | `data/interview-prep/story-bank.md` | Interview stories |
 | `system/data/signature-projects.md` | `signature_assignments` in `data/career.db`, projected to `data/signature-projects.md` | USC → MiGa, Databricks → IoT platform |

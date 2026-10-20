@@ -74,6 +74,7 @@ class Verdict:
     h1b_matched_name: str | None = None
     h1b_approvals: int = 0
     h1b_years: list[str] = field(default_factory=list)
+    h1b_denials: int = 0
     everify: bool = False
     restored: bool = False       # Annie reviewed the exclusion sentence and restored the posting
 
@@ -106,6 +107,7 @@ class Verdict:
             "h1b_matched_name": self.h1b_matched_name,
             "h1b_approvals": self.h1b_approvals,
             "h1b_years": self.h1b_years,
+            "h1b_denials": self.h1b_denials,
             "everify": self.everify,
             "positive_evidence": self.screen.evidence,
             "restored": self.restored,
@@ -127,17 +129,39 @@ def overridden(evidence: dict[str, Any] | None, verdict: "Verdict") -> bool:
 # --------------------------------------------------------------------------
 # Rules
 # --------------------------------------------------------------------------
-@lru_cache(maxsize=2)
+# Broad Group 1 patterns retired on 2026-10-02. "now or in the future" alone matches the
+# standard application question ("Will you now or in the future require sponsorship?"),
+# and "no C2C" is about contractors, not visas; both hid postings open to Annie. They are
+# skipped even if an older copy of sponsorship.yml still lists them.
+RETIRED_PATTERNS = {
+    r"now\s+or\s+in\s+the\s+future",
+    r"no\s+(C2C|corp\s*to\s*corp|third[- ]party)",
+}
+
+
 def load_rules(path: str | None = None) -> dict[str, Any]:
+    """Compiled gate rules; an edited sponsorship.yml takes effect without a restart."""
+    target = Path(path) if path else RULES_PATH
+    try:
+        stamp = target.stat().st_mtime_ns
+    except OSError:
+        stamp = 0
+    return _compile_rules(str(target), stamp)
+
+
+@lru_cache(maxsize=8)
+def _compile_rules(path: str, _stamp: int) -> dict[str, Any]:
     import yaml
 
-    with (Path(path) if path else RULES_PATH).open(encoding="utf-8") as stream:
+    with Path(path).open(encoding="utf-8") as stream:
         cfg = yaml.safe_load(stream) or {}
     compiled: dict[str, Any] = {}
     for group in ("exclude_no_sponsorship", "exclude_cannot_hire", "positive_sponsorship",
                   "everify_signals", "do_not_exclude_on", "negation_guards", "ambiguous_sponsor_noun"):
         patterns = []
         for raw in cfg.get(group, []) or []:
+            if group == "exclude_no_sponsorship" and raw in RETIRED_PATTERNS:
+                continue
             try:
                 patterns.append(re.compile(raw, re.IGNORECASE))
             except re.error:
@@ -169,41 +193,127 @@ def _first_match(patterns, sentence: str):
     return None
 
 
+def _original_sentences(text: str) -> list[str]:
+    """Split posting text without changing the wording returned as evidence."""
+    # Mask only abbreviation punctuation, preserving every character's position.
+    protected = re.sub(r"\b(?:U\.S\.(?:A\.)?|e\.g\.|i\.e\.|etc\.|vs\.|Inc\.|Corp\.|Ltd\.|St\.)",
+                       lambda match: match.group().replace(".", "\x00"), text or "", flags=re.IGNORECASE)
+    parts = re.split(r"(?<=[.!?;])\s+|[\r\n\u2022\u00b7\u25aa\u25cf]+", protected)
+    return [part.replace("\x00", ".").strip() for part in parts if part.strip()]
+
+
+# A note that reports the ABSENCE of restrictive wording ("No visa sponsorship or
+# work-authorization sentence appears in the JD"; "The posting contains no statement about
+# visa sponsorship, ... ITAR/EAR status"). When a posting page cannot be read, the gate reads
+# the discovery AI's own description, whose restriction words appear only to say they are
+# missing. Each guard needs a word about the text itself (sentence, wording, mention...) plus
+# a verb of finding, so a real refusal ("No sponsorship is available") still excludes: no
+# verb may sit between the "no" and that word. Both wordings above hid real entry-level
+# postings (DMC, Western Governors University) before 2026-10-02.
+_META = r"(?:sentences?|language|wording|mentions?|statements?|text|references?|clauses?|phrases?|indications?)"
+_SEEN = r"(?:visible|found|present|shown|seen|stated|included|given|listed|located|identified|displayed|mentioned)"
+_NO_VERB = r"(?:(?!\b(?:is|are|will|shall|can|be|been|being|offered|available|provided|sponsor|sponsors)\b)[^.;])"
+ABSENCE_CLAIMS = [re.compile(pattern, re.IGNORECASE) for pattern in (
+    rf"\b(?:no|none\s+of\s+the|not\s+any)\b{_NO_VERB}{{0,160}}\b{_META}\b[^.;]{{0,40}}\b(?:was|were|is|are|could\s+be)\s+(?:not\s+)?{_SEEN}\b",
+    rf"\b(?:no|none\s+of\s+the|not\s+any)\b{_NO_VERB}{{0,160}}\b{_META}\b[^.;]{{0,40}}\b(?:appears?|exists?|occurs?)\b",
+    rf"\b(?:did|do|does|could|can)\s*(?:not|n['’]t)\s+(?:see|find|show|locate|display|contain|include|mention|state|list|give)\b[^.;]{{0,120}}\b{_META}\b",
+    rf"\b{_META}\b[^.;]{{0,120}}\b(?:was|were|is|are)\s+not\s+{_SEEN}\b",
+    rf"\b(?:contains?|includes?|has|have|carries|carry|makes?|gives?)\s+(?:no|not\s+any)\s+{_META}\b",
+    rf"\bthere\s+(?:is|are|was|were)\s+no\s+{_META}\b",
+)]
+
+
+INDEPENDENT_CLAUSE = re.compile(
+    r"\b(?:but|however|although|though|except\s+that|and(?=\s+(?:"
+    r"we\b|they\b|you\b|applicants\b|candidates\b|the\s+(?:company|employer|posting)\b|"
+    r"this\s+(?:role|position)\b|cannot\b|can't\b|must\b|will\s+not\b|do(?:es)?\s+not\b)))\b",
+    re.IGNORECASE,
+)
+_REQUIREMENT_NOUN = (r"(?:(?:a|an|any)\s+)?(?:(?:security|active|U\.?S\.?|United\s+States)\s+)?"
+                     r"(?:clearance|citizenship|sponsorship|visa)")
+NEGATED_REQUIREMENT_LIST = re.compile(
+    r"\b(?:does|do|will)\s+not\s+require\s+" + _REQUIREMENT_NOUN
+    + r"(?:\s*(?:,\s*(?:and|or)?|and|or)\s*" + _REQUIREMENT_NOUN + r")*",
+    re.IGNORECASE,
+)
+NON_IMMIGRATION_SPONSOR = re.compile(
+    r"\bsponsor(?:s|ing|ed)?\s+(?:(?:a|an|the|our)\s+)?(?:(?:local|community|charity|sports?|sporting|annual)\s+)?"
+    r"(?:teams?|events?|conferences?|meetups?|hackathons?|projects?|content|research\s+grants?)\b",
+    re.IGNORECASE,
+)
+
+
+# A clause that only PREFERS a clearance or citizenship does not bar Annie ("Active US
+# Security clearance ... is beneficial, but not necessary": six Palantir software roles).
+# Used for the cannot-hire group only, and only when the clause holds no requirement word.
+PREFERRED_ONLY = re.compile(
+    r"^(?=.*\b(?:a\s+plus|plus|preferred|beneficial|desired|desirable|nice[\s-]+to[\s-]+have|advantageous|bonus)\b)"
+    r"(?!.*\b(?:required|requires?|must|mandatory|necessary\s+to|need\s+to|needs\s+to)\b).*$",
+    re.IGNORECASE,
+)
+
+
+def _first_unguarded_match(patterns, sentence: str, guards):
+    """The first pattern that matches outside every guarded phrase.
+
+    Only the guarded wording is ignored, not the whole sentence: "No clearance needed,
+    but we cannot sponsor visas" still excludes on its second clause.
+    """
+    protected = []
+    for guard in guards:
+        for match in guard.finditer(sentence):
+            # "Could not see the precise sentence about security clearance" is a note about
+            # missing text; the list that follows it belongs to that note too.
+            end = len(sentence) if re.search(r"\b" + _META + r"\b", match.group(), re.IGNORECASE) else match.end()
+            protected.append((match.start(), end))
+    for pattern in patterns:
+        for match in pattern.finditer(sentence):
+            if not any(start < match.end() and match.start() < end for start, end in protected):
+                return pattern
+    return None
+
+
 def screen(jd_text: str, rules: dict[str, Any] | None = None) -> Screen:
     """Read the posting's own words. Never raises on odd input.
 
-    Order per sentence: skip innocent "sponsor" nouns; skip sentences that negate
-    the requirement ("no clearance required"); Group 2 (cannot hire) then Group 1
-    (won't sponsor) exclude on first hit; positive sentences are collected.
-    A sentence matching only `do_not_exclude_on` ("must be authorized to work")
-    can never exclude: Annie is authorized.
+    Per sentence: ignore guarded wording (negations such as "no clearance required",
+    notes about absent wording, innocent "sponsor" nouns, the application form's
+    sponsorship question), then Group 2 (cannot hire) and Group 1 (won't sponsor)
+    exclude on the first unguarded hit. A contrast ("but", "however") starts a new
+    clause, so a separate restriction in the same sentence still applies. Positive
+    sentences are collected. A sentence matching only `do_not_exclude_on` ("must be
+    authorized to work") can never exclude: Annie is authorized.
     """
     rules = rules or load_rules()
     everify = bool(_first_match(rules["everify_signals"], jd_text or ""))
     positives: list[dict] = []
-    for sentence in split_sentences(jd_text or ""):
-        if _first_match(rules["ambiguous_sponsor_noun"], sentence):
-            continue
-        if _first_match(rules["negation_guards"], sentence):
-            continue
-        hard = _first_match(rules["exclude_cannot_hire"], sentence)
-        soft = None if hard else _first_match(rules["exclude_no_sponsorship"], sentence)
-        if hard or soft:
-            # "Must be authorized to work in the US" on its own is fine; it only excludes
-            # when a refusal phrase is present in the same sentence, which is what matched.
-            matched = hard or soft
-            return Screen(
-                verdict="EXCLUDED",
-                reason="cannot_hire" if hard else "no_sponsorship",
-                reason_label=("Requires citizenship / clearance / ITAR / permanent residency" if hard
-                              else "Posting explicitly will not sponsor"),
-                sentence=sentence[:400],
-                pattern=matched.pattern,
-                everify=everify,
-            )
-        positive = _first_match(rules["positive_sponsorship"], sentence)
-        if positive:
-            positives.append({"pattern": positive.pattern, "sentence": sentence[:400]})
+    guards = [*rules["negation_guards"], *ABSENCE_CLAIMS, *rules["ambiguous_sponsor_noun"],
+              NEGATED_REQUIREMENT_LIST, NON_IMMIGRATION_SPONSOR]
+    for original in _original_sentences(jd_text or ""):
+        for sentence in split_sentences(original):
+            clauses = INDEPENDENT_CLAUSE.split(sentence)
+            hard = next((match for clause in clauses
+                         if (match := _first_unguarded_match(rules["exclude_cannot_hire"], clause, [*guards, PREFERRED_ONLY]))), None)
+            soft = None if hard else next(
+                (match for clause in clauses
+                 if (match := _first_unguarded_match(rules["exclude_no_sponsorship"], clause, guards))), None)
+            if hard or soft:
+                # "Must be authorized to work in the US" on its own is fine; it only excludes
+                # when a refusal phrase is present in the same sentence, which is what matched.
+                matched = hard or soft
+                return Screen(
+                    verdict="EXCLUDED",
+                    reason="cannot_hire" if hard else "no_sponsorship",
+                    reason_label=("Requires citizenship / clearance / ITAR / permanent residency" if hard
+                                  else "Posting explicitly will not sponsor"),
+                    sentence=original[:400],
+                    pattern=matched.pattern,
+                    everify=everify,
+                )
+            positive = next((match for clause in clauses
+                             if (match := _first_unguarded_match(rules["positive_sponsorship"], clause, guards))), None)
+            if positive:
+                positives.append({"pattern": positive.pattern, "sentence": original[:400]})
     if positives:
         return Screen("KEEP", "explicit_sponsorship", "Posting explicitly offers sponsorship",
                       sentence=positives[0]["sentence"], evidence=positives[:3], everify=everify)
@@ -406,13 +516,21 @@ def evaluate(company: str, jd_text: str, url: str = "", location: str = "",
         text = text + "\n" + "\n".join(s for s in extra_sentences if s)
     result = screen(text, rules)
     cap_exempt, cap_reason = is_cap_exempt(company, domain_of(url), rules, employer_type)
-    history = (sponsor_index or index()).lookup(company, _state_of(location))
+    sponsors = sponsor_index or index()
+    history = sponsors.lookup(company, _state_of(location))
+    if not history.get("found"):
+        # A sponsor-board brand ("Robinhood") filed with USCIS under its legal name
+        # (ROBINHOOD MARKETS INC): the registry built that link after checking the board.
+        from backend.services.sponsor_boards import legal_key_for
+        legal_key = legal_key_for(company)
+        if legal_key:
+            history = sponsors.lookup(legal_key, _state_of(location))
     tier = resolve_tier(result, cap_exempt, int(history.get("approvals") or 0))
     return Verdict(
         tier=tier, screen=result, cap_exempt=cap_exempt, cap_exempt_reason=cap_reason,
         h1b_found=bool(history.get("found")), h1b_matched_name=history.get("matched_name"),
         h1b_approvals=int(history.get("approvals") or 0), h1b_years=list(history.get("years") or []),
-        everify=result.everify,
+        h1b_denials=int(history.get("denials") or 0), everify=result.everify,
     )
 
 

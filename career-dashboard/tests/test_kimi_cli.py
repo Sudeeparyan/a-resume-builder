@@ -219,7 +219,25 @@ def test_failures_become_plain_messages(tmp_path, monkeypatch):
         (fake_run(err="HTTP 401 Unauthorized", code=1), "not signed in"),
         (fake_run(err="Error 429: membership usage limit reached", code=1), "usage limit"),
         (fake_run(err="boom", code=2), "could not finish"),
+        # Kimi Code 2.0.2's words for a lapsed membership sign-in (seen live, 2026-09-29..10-02).
+        (fake_run(out=stream({"role": "meta", "type": "system.version", "version": "2.0.2"}),
+                  err="error: failed to run prompt: provider managed:kimi-code has no credential configured\n"
+                      "See log: C:\\Users\\x\\.kimi-code\\logs\\kimi-code.log\n", code=1), "not signed in"),
     ]
+    for fake, expected in cases:
+        monkeypatch.setattr(kimi_cli.subprocess, "run", fake)
+        with pytest.raises(ValueError, match=expected):
+            kimi_cli.invoke("hi", SCHEMA)
+
+    # An unknown failure quotes the CLI's own error line, never the version banner.
+    monkeypatch.setattr(kimi_cli.subprocess, "run", fake_run(
+        out=stream({"role": "meta", "type": "system.version", "version": "2.0.2"}),
+        err="error: model backend exploded\nSee log: kimi-code.log\n", code=1))
+    with pytest.raises(ValueError) as raised:
+        kimi_cli.invoke("hi", SCHEMA)
+    assert "model backend exploded" in str(raised.value) and "system.version" not in str(raised.value)
+
+    cases = []
     for fake, expected in cases:
         monkeypatch.setattr(kimi_cli.subprocess, "run", fake)
         with pytest.raises(ValueError, match=expected):

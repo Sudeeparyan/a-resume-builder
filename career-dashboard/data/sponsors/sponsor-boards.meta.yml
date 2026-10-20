@@ -1,0 +1,20 @@
+source: Careers boards of employers in the USCIS H-1B Employer Data Hub (data/sponsors/sponsors-uscis.csv)
+built_at: '2026-10-09T07:40:38+00:00'
+uscis_csv: sponsors-uscis.csv
+candidates: 1500
+rows: 89
+boards_by_ats:
+  smartrecruiters: 34
+  greenhouse: 48
+  lever: 5
+  ashby: 2
+acceptance: 'At least one current US posting, and the board names the same employer:
+  its own name equals the USCIS legal name (exact), is at least 85% similar (similar),
+  or is the brand the legal name extends with descriptor words (brand); a board that
+  states no name needs a US posting whose own text names the employer (text). When
+  the match rests on one word left after dropping words from the legal name, a US
+  posting must also be in the city or state USCIS records for the employer.'
+csv_sha256: 51fad6a29989032d52fd607f1ef41b280224e452c169b2bb75378dde9360dddc
+notes: 'Built 2026-10-09 from the top 1,500 H-1B employers (99 boards); the 35 rows
+  whose match rested on one common word were re-checked the same day under the USCIS-place
+  rule and 10 were dropped. Full review of the 1,500: sponsor-boards-review-full-2026-10-09.json.'

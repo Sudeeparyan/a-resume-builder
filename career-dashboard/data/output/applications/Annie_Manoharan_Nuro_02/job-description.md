@@ -1,0 +1,42 @@
+# Nuro — Software Engineer, Onboard Platform
+
+Location: Mountain View, California (HQ)
+Source: https://nuro.ai/careersitem?gh_jid=7998328
+Saved: 2026-10-13T06:41:27+00:00
+Verification: not verified; user-supplied snapshot.
+
+Who We Are
+
+Nuro believes self-driving vehicles are the most immediate and profound opportunity for AI to drive positive change in the physical world. Safer streets, more time for what matters, and easier access to the world around us, that’s why we’re building a universal autonomy platform: self-driving for all roads and all rides.
+
+Founded in 2016, Nuro is a physical AI company developing Level 4 autonomous driving technology for a wide range of vehicles, use cases, and markets. Powered by the Nuro Driver™, our universal autonomy platform enables the global mobility ecosystem to deploy autonomy at scale, from robotaxis and logistics fleets to personal vehicles.
+
+With years of real-world deployment experience and a flexible, partner-led business model, Nuro is working toward a future where millions of autonomous vehicles powered by our technology help make everyday life safer, easier, and more connected.
+
+Nuro has raised over $2B in capital from Uber, NVIDIA, Google, Softbank, Fidelity, T. Rowe Price, and other leading investors.
+
+About the Role
+
+Our software team is growing, and we are looking for talented engineers to join us and be instrumental to one of the following areas: Onboard Systems, Performance, and Devices Platform.
+
+- Onboard Systems: Our onboard system team’s software engineers provide a reliable and high-performance platform that allows our autonomy teams to integrate their autonomy software and algorithms that work across various self-driving platforms. This work requires close collaboration with our software teams, hardware teams, and systems/safety team to make sure new software and hardware work together safely and reliably, and resolve onboard error and performance problems.
+
+- Performance: Our Performance team optimizes the performance of Nuro’s AV software, ensuring our vehicles can react quickly and safely to the world around them. The team builds systems and tools for continuous performance analysis, and drives latency reduction and resource efficiency efforts to ensure the autonomy teams can implement an autonomy stack that is efficient and performant for current and future generations of the Nuro Driver.
+
+- Devices Platform: The Devices Platform team’s mandate is to lay the foundation of Nuro’s onboard software for our sensor and compute platform, including device drivers, inter-device protocols and pipelines, and device runtime APIs. We are creating the hardware-agnostic platform to be used by the perception and autonomy SW stack, and to realize the full potential of our sensor and compute HW in reliability, quality, and performance. This team is also responsible for working with internal stakeholders and external suppliers to define, evaluate, and integrate the next-generation HW platform for Nuro’s products and to build the necessary tooling to assist continuous testing and validation.
+
+About You
+
+You have deep expertise and prior experience in some or many of the following areas:
+
+- 2+ years of relevant industry experience in addition to a Bachelor’s Degree, Master’s or PhD in Computer Science, Electrical Engineering, Computer Engineering, Robotics, or related field.
+
+- Must have strong C++ skills
+
+- You have experience in one or more of the following areas: large-scale distributed systems; computer architecture and operating systems; advanced algorithms using C++ and Python; highly-concurrent, multi-processor, and multi-threaded environments; software performance tuning and optimization;profiling and tracing tools and infrastructure (perf, eBPF, Perfetto, pprof, NVIDIA Nsight Systems/Compute); robotics software frameworks; robotics hardware components (including sensors, embedded platforms, etc); and different compute modalities (x86, ARM, GPU, FPGA, etc)
+
+- You have strong problem-solving and programming skills.
+
+At Nuro, your base pay is one part of your total compensation package. For this position, the reasonably expected pay range is between $160,360 and $240,540 for the level at which this job has been scoped. Your base pay will depend on several factors, including your experience, qualifications, education, location, and skills. In the event that you are considered for a different level, a higher or lower pay range would apply. This position is also eligible for an annual performance bonus, equity, and a competitive benefits package.
+
+At Nuro, we celebrate differences and are committed to a diverse workplace that fosters inclusion and psychological safety for all employees. Nuro is proud to be an equal opportunity employer and expressly prohibits any form of workplace discrimination based on race, color, religion, gender, sexual orientation, gender identity or expression, national origin, age, genetic information, disability, veteran status, or any other legally protected characteristics.

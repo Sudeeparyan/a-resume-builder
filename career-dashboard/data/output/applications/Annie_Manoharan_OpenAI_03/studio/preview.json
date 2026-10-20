@@ -1,0 +1,45 @@
+{
+  "revision": 3,
+  "source_sha256": "851e66b19f295b668a6b751e160496ef0bccc4c8a44efb3c2b13db173135e0ec",
+  "page_count": 1,
+  "created_at": "2026-10-05T06:20:41+00:00",
+  "path": "applications\\Annie_Manoharan_OpenAI_03\\studio\\preview-3",
+  "review_required": true,
+  "layout": {
+    "full_pages": true,
+    "page_count": 1,
+    "target_pages": 1,
+    "paper": "letter",
+    "pages": [
+      {
+        "page": 1,
+        "fill_percent": 94.9,
+        "bottom_blank_mm": 13.2,
+        "largest_internal_gap_mm": 4.6,
+        "paper_ok": true,
+        "words": 475,
+        "within_margins": true
+      }
+    ],
+    "target_fill_percent": 80,
+    "normal_margins_mm": 12.7
+  },
+  "ranking": {
+    "track": "C",
+    "section_order": [
+      "Education",
+      "Technical Skills",
+      "Professional Experience",
+      "Projects"
+    ],
+    "changes": [
+      "Ranked SkillsLanguages items against the JD.",
+      "Ranked SkillsCloud items against the JD.",
+      "Ranked skill categories against the JD.",
+      "Track C: section order Education > Technical Skills > Professional Experience > Projects."
+    ],
+    "method": "Deterministic JD relevance ordering of registered evidence; not an ATS score.",
+    "cuts": []
+  },
+  "body_font_pt": 10.0
+}

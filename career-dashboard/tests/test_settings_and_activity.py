@@ -36,7 +36,7 @@ def test_saved_key_is_private_replaceable_and_wins_over_keys_txt(tmp_path):
     root = tmp_path / "career-dashboard"
     root.mkdir()
     (tmp_path / "keys.txt").write_text("OPENROUTER_API_KEY=sk-or-v1-older000000000000\n")
-    assert keys.source(root, "OPENROUTER_API_KEY") == "Resume/keys.txt"
+    assert keys.source(root, "OPENROUTER_API_KEY") == "repository root keys.txt"
 
     keys.save(root, "OPENROUTER_API_KEY", FAKE)
     keys.save(root, "GEMINI_API_KEY", "AIza" + "x" * 30)
@@ -49,7 +49,7 @@ def test_saved_key_is_private_replaceable_and_wins_over_keys_txt(tmp_path):
     assert keys.source(root, "OPENROUTER_API_KEY") == "saved in the app"
 
     # Removing the app's copy falls back to the hand-kept file, which is untouched.
-    assert keys.remove(root, "OPENROUTER_API_KEY") == "Resume/keys.txt"
+    assert keys.remove(root, "OPENROUTER_API_KEY") == "repository root keys.txt"
     assert "older" in (tmp_path / "keys.txt").read_text()
     keys.remove(root, "GEMINI_API_KEY")
     assert not (root / ".env").exists()
@@ -87,6 +87,8 @@ def test_save_key_reports_whether_the_key_works_and_never_echoes_it(service, mon
 def test_key_providers_join_the_gateway_and_web_work_moves_to_a_capable_one(service, monkeypatch):
     monkeypatch.setattr(claude_code, "available", lambda: True)
     keys.save(service.w.root, "GEMINI_API_KEY", "AIza" + "x" * 30)
+    # The email route is listed only once a mail connector is saved in Settings.
+    service.set_pref("gmail", {"connector_id": "gmail-test"})
     gateway = AIGateway(service, lambda *a, **k: {})
     assert isinstance(gateway.providers["gemini"], HostedProvider)
     assert gateway.providers["gemini"].configured and not gateway.providers["kimi"].configured

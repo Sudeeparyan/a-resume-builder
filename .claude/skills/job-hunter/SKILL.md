@@ -21,12 +21,12 @@ Everything runs through the app in `career-dashboard/`; `PY` means `career-dashb
 
 - **Sponsorship gate** (`WS sponsor-check --company "<name>" --file <jd.txt>`): an explicit refusal, or a citizenship/clearance/ITAR/EAR/permanent-residency requirement, excludes the posting; it is logged with its sentence. Silence is shown. "Must be authorized to work in the US" never excludes: she is authorized (F-1 OPT).
 - **Never re-apply** (`WS check-reapply --company "<name>" --title "<role>"`): same company and role never again; rejected → company hidden 180 days; ghosted → different role only, after 90 days.
-- **Role fit**: four tracks, entry level, ≤4 years, United States or Remote (US).
+- **Role fit**: four tracks, entry level, ≤4 years, United States or Remote (US). Not a role for current students only ("must be actively enrolled"): she completed her MS in May 2026.
 - **Ranking**: tier S (cap-exempt) → A (says it sponsors) → B (proven H-1B sponsor) → C (silent), then score.
 
 ## Steps
 
-1. Tracked career pages: `WS run --kind discovery --preset portals` (no AI call).
+1. Tracked career pages: `WS run --kind discovery --preset portals` (no AI call). It reads 75+ employers' own feeds in `career-dashboard/data/config/portals.yml` (Workday, Greenhouse, Lever, Ashby, SmartRecruiters) and saves every eligible match, spread across employers. Add an employer there (with its `ats` and `ats_token`) rather than searching it by hand each time.
 2. AI discovery: `WS run --kind discovery` (or `--preset balanced_five`).
 3. By hand: Indeed `search_jobs` (country `US`) and `get_job_details` for the full JD; employer/ATS pages beat aggregators. Quote restrictive sentences verbatim.
 4. Gate, then save: `$PY career-dashboard/backend/scripts/career.py add --file <job.json>` (it runs the gate and the re-apply check itself).

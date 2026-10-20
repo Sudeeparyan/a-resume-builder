@@ -1,0 +1,60 @@
+candidate_revision: 2026-09-18.1
+job_id: 0ac67c2433157a3b
+role_eligible: false
+job_snapshot_sha256: 174b9df08594b2dd738997a55bff7598956f382bfb28b403ddd775b676a1b7e7
+supported_requirement_coverage: 0
+requirements: []
+company_problem:
+  statement: Pending review of the saved job description.
+  source_url: https://job-boards.greenhouse.io/twilio/jobs/7661919
+  published_or_accessed: '2026-10-05'
+  evidence_class: explicit
+  confidence: low
+selected_project_id: f90f614938b04609bc4c13137485da15
+selected_project_ids:
+- f90f614938b04609bc4c13137485da15
+- PROJ-P01-IOT
+selected_project_reason: Draft selection by overlap with approved project wording;
+  review the business problem and full job requirements.
+resume_claim_ids:
+- CONTACT-EMAIL-001
+- CONTACT-GITHUB-001
+- CONTACT-PHONE-001
+- CONTACT-PORTFOLIO-001
+- COURSEWORK-MS-001
+- EDU-BE-001
+- EDU-MS-001
+- EXP-INSOPS-001
+- EXP-RA-001
+- EXP-SOLITON-PE-001
+- EXP-TA-001
+- IDENTITY-001
+- METRIC-DRAEGER-94
+- PROJ-P01-IOT
+- SKILL-CLOUD-001
+- SKILL-CV-TOOLS-001
+- SKILL-DATA-TOOLS-001
+- SKILL-DESKTOP-001
+- SKILL-GENAI-001
+- SKILL-LAKEHOUSE-001
+- SKILL-LANGUAGES-001
+- SKILL-ML-001
+- SKILL-STREAMING-001
+- SKILL-TEST-001
+- SKILL-TOUCHED-001
+held_claims_used: []
+studio_review_required: true
+source_evidence_errors:
+- 'Unknown source EVIDENCE ID on line 60: resume_items:5f10535aa90d4dc2bb8f185918831e1a'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:20353615e93249eb9879c55bf9500e6a'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:e173edc4b3cf4c90b6d3f196f2c7e0af'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:c3185b109d634b8dacdf104a9863970a'
+- 'Unknown source EVIDENCE ID on line 68: resume_items:f90f614938b04609bc4c13137485da15'
+- 'Unknown source EVIDENCE ID on line 70: resume_items:f90f614938b04609bc4c13137485da15'
+- 'Unknown source EVIDENCE ID on line 72: resume_items:f90f614938b04609bc4c13137485da15'
+- 'Unknown source EVIDENCE ID on line 74: resume_items:f90f614938b04609bc4c13137485da15'
+- 'Unknown source EVIDENCE ID on line 76: resume_items:f90f614938b04609bc4c13137485da15'
+- 'Unknown source EVIDENCE ID on line 78: resume_items:f90f614938b04609bc4c13137485da15'
+- 'Unknown source EVIDENCE ID on line 170: resume_items:f90f614938b04609bc4c13137485da15'
+- 'Unknown source EVIDENCE ID on line 172: resume_items:f90f614938b04609bc4c13137485da15'
+- 'Unknown source EVIDENCE ID on line 174: resume_items:f90f614938b04609bc4c13137485da15'

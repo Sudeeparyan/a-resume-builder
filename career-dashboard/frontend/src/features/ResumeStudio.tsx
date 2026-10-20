@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  AlertTriangle,
   CheckCircle2,
   Copy,
   Download,
@@ -10,13 +11,16 @@ import {
   Search,
   Settings2,
   Sparkles,
+  XCircle,
 } from "lucide-react";
 import { api, fileUrl } from "../api";
 import { Badge, Field, Modal, ReportView, Running } from "../components/UI";
 import { JobList } from "../components/JobList";
 import { macroSpan, readField, writeField } from "./studioFields";
 import { AgentControl } from "./AgentControl";
-import type { CoverLetter, Job, Run, Summary } from "../types";
+import FitCheck from "./FitCheck";
+import { CoverLetterView } from "../components/CoverLetterView";
+import type { CoverLetter, Job, Readiness, Run, Summary } from "../types";
 type Draft = {
   match?: {
     score: number | null;
@@ -198,33 +202,7 @@ export default function ResumeStudio({
           <JobList jobs={data.jobs} onSelect={onJob} />
         </section>
       )}
-      {coverLetter && (
-        <Modal
-          title={`${coverLetter.company} · Cover letter`}
-          onClose={() => setCoverLetter(null)}
-        >
-          <div className="callout warning">
-            Draft only. Review it against the job description before sending.
-          </div>
-          <div className="cover-letter-preview">{coverLetter.content}</div>
-          <div className="actions">
-            <button
-              className="secondary"
-              onClick={() => navigator.clipboard.writeText(coverLetter.content)}
-            >
-              Copy letter
-            </button>
-            <a
-              className="primary"
-              href={fileUrl(coverLetter.path)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open saved file ↗
-            </a>
-          </div>
-        </Modal>
-      )}
+      {coverLetter && <CoverLetterView letter={coverLetter} onClose={() => setCoverLetter(null)} />}
     </>
   );
 }
@@ -356,7 +334,7 @@ function Editor({
       if (alive.current) setBusy("");
     }
   }
-  async function download(format: "pdf" | "tex") {
+  async function download(format: "pdf" | "tex" | "docx") {
     // A plain link navigated the whole app to a raw JSON error page when the
     // server refused, so fetch the file and surface any refusal as a message.
     try {
@@ -487,8 +465,14 @@ function Editor({
       </section>
     );
   const current = !dirty && !!draft.preview?.current;
+  const reviewRun = data.runs.find((r) => r.kind === "resume_match" && r.job_id === jobId);
   return (
     <>
+      <ReadinessCard
+        jobId={jobId}
+        refreshKey={[draft.revision, draft.preview?.current, draft.match?.current, reviewRun?.id, reviewRun?.state,
+                     job.posting_state, data.runs.filter((r) => r.job_id === jobId && r.state === "running").length].join(":")}
+      />
       <div className="studio-steps" aria-label="Resume workflow">
         <button
           className={`${step === "analyse" ? "active" : ""} ${researchRun?.state === "completed" ? "complete" : ""}`}
@@ -599,6 +583,18 @@ function Editor({
             onClick={() => download("pdf")}
           >
             <Download size={16} /> Download PDF
+          </button>
+          <button
+            className="secondary"
+            disabled={!current}
+            title={
+              current
+                ? "A Word copy of the same checked revision, for forms that ask for .docx"
+                : "Build the current revision first — the Word copy is made from the compiled revision"
+            }
+            onClick={() => download("docx")}
+          >
+            <Download size={16} /> Download Word
           </button>
           <button className="secondary" onClick={() => download("tex")}>
             <Download size={16} /> Download LaTeX
@@ -1288,6 +1284,7 @@ function AnalyseRole({
           )}
         </div>
       </div>
+      <FitCheck jobId={job.id} />
       <div className="studio-stage-footer">
         <p className="small">
           Hiring analysis is isolated from your profile. It receives only the
@@ -1296,6 +1293,103 @@ function AnalyseRole({
         <button className="primary" onClick={onNext}>
           Check my current resume <ArrowRight size={16} />
         </button>
+      </div>
+    </section>
+  );
+}
+
+const VERDICT_TONE: Record<Readiness["verdict"], "green" | "amber" | "red"> = { ready: "green", review: "amber", blocked: "red" };
+const PART_LABEL: Record<keyof Readiness["parts"], string> = {
+  fit: "Fit with the role",
+  coverage: "Posting covered by the PDF",
+  ats: "Readability",
+};
+
+function CheckMark({ state }: { state: Readiness["checks"][number]["state"] }) {
+  if (state === "pass") return <CheckCircle2 size={15} className="tone-done" aria-label="passed" />;
+  if (state === "fail") return <XCircle size={15} className="tone-failed" aria-label="not passed" />;
+  return <AlertTriangle size={15} className="tone-warn" aria-label="needs attention" />;
+}
+
+/** The ready-to-submit check (backend/services/readiness.py): the same verdict a Daily Search ends with. */
+function ReadinessCard({ jobId, refreshKey }: { jobId: string; refreshKey: string }) {
+  const [result, setResult] = useState<Readiness>();
+  const [error, setError] = useState("");
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    let live = true;
+    api<Readiness>("/v2/studio/" + jobId + "/readiness")
+      .then((r) => {
+        if (live) {
+          setResult(r);
+          setError("");
+        }
+      })
+      .catch((e) => live && setError((e as Error).message));
+    return () => {
+      live = false;
+    };
+  }, [jobId, refreshKey, tick]);
+  if (!result)
+    return error ? <div className="callout warning">The final check could not run: {error}</div> : null;
+  const left = result.checks.filter((c) => c.state !== "pass");
+  return (
+    <section className={"card spaced readiness " + result.verdict} aria-labelledby="readiness-title">
+      <div className="section-title">
+        <div>
+          <div className="eyebrow">FINAL CHECK BEFORE YOU SEND IT</div>
+          <h2 id="readiness-title">
+            <Badge tone={VERDICT_TONE[result.verdict]}>{result.label}</Badge>
+          </h2>
+        </div>
+        <button className="secondary" onClick={() => setTick((n) => n + 1)}>
+          <RefreshCw size={15} /> Check again
+        </button>
+      </div>
+      <div className="match-overview">
+        <div className={"match-score" + (result.verdict === "ready" ? " current" : "")}>
+          <strong>{result.score ?? "—"}</strong>
+          <small>readiness out of 100</small>
+        </div>
+        <div className="readiness-body">
+          <ul className="readiness-parts">
+            {(Object.keys(PART_LABEL) as (keyof Readiness["parts"])[]).map((key) => (
+              <li key={key}>
+                <span>{PART_LABEL[key]}</span>
+                <b>{result.parts[key] ?? "—"}</b>
+                <small>{result.weights[key]}% of the score</small>
+              </li>
+            ))}
+          </ul>
+          {left.length ? (
+            <ul className="readiness-checks">
+              {left.map((c) => (
+                <li key={c.id}>
+                  <CheckMark state={c.state} />
+                  <span>
+                    <b>{c.label}:</b> {c.note}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>Every check passed. Read the PDF once, then apply through the posting link yourself.</p>
+          )}
+          <details>
+            <summary>All {result.checks.length} checks</summary>
+            <ul className="readiness-checks">
+              {result.checks.map((c) => (
+                <li key={c.id}>
+                  <CheckMark state={c.state} />
+                  <span>
+                    <b>{c.label}:</b> {c.note}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
+          <p className="small muted">{result.note}</p>
+        </div>
       </div>
     </section>
   );

@@ -20,16 +20,22 @@ She is on **active F-1 OPT** and **is authorized to work in the US now**. The ga
 
 | What the posting says | What happens |
 |---|---|
-| Explicitly **will not sponsor** ("without sponsorship now or in the future", "we do not sponsor") | **EXCLUDED.** Never listed anywhere. Logged in Excluded roles with the sentence that triggered it. |
-| Requires **US citizenship, a security clearance, ITAR/EAR or US-person status, or permanent residency** | **EXCLUDED.** She cannot lawfully be hired, whatever the interview outcome. |
+| Explicitly **will not sponsor** ("without sponsorship now or in the future", "we do not sponsor", "will not consider candidates who require sponsorship", "Visa sponsorship: No"), or turns away OPT/CPT/F-1/H-1B holders | **EXCLUDED.** Never listed anywhere. Logged in Excluded roles with the sentence that triggered it. |
+| Requires **US citizenship, a security clearance, ITAR/EAR or US-person status, permanent residency, or permanent work authorization** | **EXCLUDED.** She cannot lawfully be hired, whatever the interview outcome. |
 | **Says nothing** about sponsorship | **SHOWN.** Most postings; where most offers come from. |
 | Explicitly **will sponsor** | **SHOWN, ranked top.** |
 
 **Do not over-filter.** "Must be authorized to work in the United States" does not disqualify her. "No security clearance required" does not disqualify her. A sentence that *reports the absence* of restriction wording (for example a research note saying the posting carries no sponsorship, citizenship or ITAR/EAR language) is not a restriction — those absence claims are listed in `negation_guards`. Only an explicit refusal or a citizenship/clearance requirement excludes.
 
+**US only, everywhere.** `is_us_location` in `backend/job_quality.py` decides. A role whose location is outside the US is never saved, not by a search, not by her own Save, not from the Tracker or chat (`add_posting` blocks it as `outside_us`), and never enters the Tracker. A posting that lists the US among other places counts. A trailing "IN" or "DE" counts only after a known Indiana or Delaware city, because feeds use them for India and Germany; "Tel Aviv, IL", "Montreal, CA" and "Tbilisi, Georgia" are not American. A bare "Remote" is kept unless its own text places the work abroad only ("remote within Canada").
+
 **Sponsorship history never excludes anyone.** H-1B records, E-Verify and cap-exempt status are ranking signals only. Tiers: **S** cap-exempt employer (universities, academic medical centers, national labs, nonprofit research institutes; no lottery) · **A** posting says it sponsors · **B** proven H-1B sponsor, silent posting · **C** silent, no record (the normal case, still worth applying).
 
-Every exclusion is stored in `excluded_postings` with its sentence and shown under **Excluded roles** on the Dashboard and in `data/output/SUMMARY.md`. A wrong exclusion is restored from the Dashboard; a restore sticks, and the daily posting sweep will not exclude the same posting again for the same sentence.
+Every exclusion is stored in `excluded_postings` with its sentence and shown under **Excluded roles** on the Dashboard and in `data/output/SUMMARY.md`. A wrong exclusion is restored from the Dashboard; a restore sticks, and neither the daily posting sweep nor a discovery pass will exclude the same posting again for the same sentence. A feed pass (`--preset portals`) reads every role an employer lists, so it gates and logs only postings inside her target (US or US-remote, an entry-level title in her tracks, not an internship); the rest are counted in the run summary, not listed one by one.
+
+**H-1B sponsor boards.** Besides the companies in `portals.yml`, the feed pass reads the public job boards (Greenhouse, Lever, Ashby, SmartRecruiters) of employers in the USCIS H-1B data: `data/sponsors/sponsor-boards.csv`, built by `backend/scripts/build_sponsor_boards.py` (rerun monthly or when the USCIS CSV is refreshed). A board is listed only when it had a current US posting and named the same employer as the USCIS legal name (and, when that name is one common word such as "Mercury", had a posting where USCIS records the employer); `backend/services/sponsor_boards.py` holds the checks. Each pass reads the 120 boards read least recently, after her tracked companies, and remembers each read in `sponsor_board_reads`. This widens *where* the search looks; it changes nothing about the gate. A company with no board or no H-1B record is still searched by the AI pass and still shown when its posting is silent.
+
+**Sponsorship Tracker.** Every in-target posting a pass reads, saved or not, is kept for 60 days in `market_postings` and shown on the **Sponsorship Tracker** tab. Each row has the posting's quoted sponsorship sentence, its tier, the employer's USCIS approvals/denials, advertised pay and the gate that decided it. It can be filtered and exported to CSV, and a row can be saved to her jobs (the sponsorship and never-re-apply gates still apply). Her status is joined from `jobs` at read time; the Tracker never keeps a second status list. Facts with sources, never immigration advice.
 
 ## Never re-apply
 
@@ -38,6 +44,8 @@ Every exclusion is stored in `excluded_postings` with its sentence and shown und
 - Same company **and** same role: never surfaced again, at any status, including excluded postings and anything archived by a fresh start.
 - Company **rejected** her: the whole company is hidden for **180 days**; that exact role never again.
 - **Applied** and silent for **21 days**: the hourly scheduler marks it **ghosted**. The company is eligible again after **90 days**, for a **different** role only. A reply (a status change or a confirmed email) takes it out of ghosted.
+
+- **Removed with a reason that teaches** (the Dashboard's removal dialog, `REMOVAL_REASONS`): "Not this company" or "This company won't sponsor me" keeps every later role at that company out of automatic searches; "Wrong kind of role" keeps that job title out at every company. "Too senior", "Wrong location" and "Not suitable" apply to that vacancy only. A job Annie saves herself (Save a job, the Tracker, chat) is never blocked by a lesson; it only gets a note.
 
 This overrides the previous edition's "never age an application automatically"; Annie's rule wins.
 
@@ -51,7 +59,7 @@ This overrides the previous edition's "never age an application automatically"; 
 - Soliton is two roles (Q1, answered 2026-09-18): Engineering Intern Jul 2022 – May 2023, then Project Engineer Jun 2023 – Jun 2024.
 - InsOps is a **Data Engineering Intern** role. The superseded "Data Science Intern / InsOpsAI" framing is held and never reused.
 - MiGa and DualFit are **AICV Lab research**, not side projects. Preserve her hedges ("Contributed to", "Supported"); never upgrade a hedge to ownership.
-- Target four tracks (`profile.yml role_tracks`): **A** Data / Analytics Engineering, **B** ML / AI Engineering, **C** Software Engineering, **D** Embedded / Test Automation. Entry level only: no Senior/Staff/Lead/Principal/Manager titles, nothing asking for more than 4 years.
+- Target four tracks (`profile.yml role_tracks`): **A** Data / Analytics Engineering, **B** ML / AI Engineering, **C** Software Engineering, **D** Embedded / Test Automation. Entry level only: no Senior/Staff/Lead/Principal/Manager/Director titles, nothing asking for more than 4 years. Full-time only: no internships, co-ops or roles that require current enrollment (she completed her MS in May 2026).
 - **Never write to `data/context/`** except `QUESTIONS-FOR-YOU.md`, or when Annie asks you to record something ("I built X", "I finished the AWS course"); then say exactly which file changed.
 - Never submit applications or send outreach without her explicit go-ahead. Preparing a resume is not a submission.
 
@@ -96,6 +104,14 @@ Job fit, supported requirement coverage and artifact QA are different things; ne
 ## Batch requests
 
 "Give me 10 companies" (or `/hunt`) means: discover and verify up to ten eligible, live US postings that pass the sponsorship gate and the never-re-apply check; research, tailor, compile, render, inspect and deliver ten isolated one-page folders plus study plans. Keep replacing excluded, duplicate, expired or ineligible leads. If the honest search yields fewer, report the shortage and the search coverage. Use `backend/workflows/modes/batch-resumes.md` and the batch scripts. Never invent matches to reach a count.
+
+## Daily Search, readiness and the AI route (ported from the Template, October 2026)
+
+Daily Search runs `services/pipeline.py`: find 1-5 jobs, then take each one end to end (posting re-read with the sponsorship gate, research with the hiring-manager view and the requirement check, tailor, one-page PDF, independent review, study plan) and finish with the ready-to-submit check (`services/readiness.py`). Readiness is a verdict (ready / needs review / not ready) and a score from fit, coverage and readability; it is never an interview prediction, and nothing is submitted. A resume is not ready while a predicted item waits in Assurance or the independent review of that exact PDF has no passing verdict. The Dashboard's **Needs you** lists only what Annie must do (a signed-out AI app, pending profile entries, Assurance items, open questions).
+
+Cover letters (`services/cover_letters.py`) are written from registered evidence only, checked for every number, name and skill, audited by a second AI, and never mention visas, OPT, H-1B, green cards, citizenship or sponsorship; otherwise they are built from her registered sentences. Word copies of the resume and letter come from the same checked revision as the PDF.
+
+Choosing **Auto** in Settings routes every AI step across her plans (Kimi Code, Codex, Claude Code, Antigravity), resting a plan at its usage limit until the reset time it printed; Azure is paid and last. The daily AI limit counts paid calls only. Agent runs are traced locally (`data/traces.db`); prompts and resume text never leave the PC.
 
 ## Layout and state
 

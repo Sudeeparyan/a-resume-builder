@@ -35,11 +35,14 @@ from backend.services.workspace_v2 import CareerServices  # noqa: E402
 # Children before parents, so foreign keys never block a delete.
 JOB_TABLES = (
     "application_evidence", "chat_change_sets", "cover_letters", "instruction_messages",
-    "job_requirements", "mail_evidence", "posting_checks", "posting_identities",
-    "resume_assessments", "resume_scores", "search_jobs", "studio_captures",
+    "job_fit", "job_requirements", "mail_evidence", "posting_checks", "posting_identities",
+    "resume_assessments", "resume_items", "resume_scores", "search_jobs", "studio_captures",
     "studio_drafts", "studio_versions", "agent_run_events", "agent_runs", "search_runs",
     "company_checks", "jobs", "companies", "ai_cache", "ai_calls",
 )
+
+# Tables that point at a job but are kept on purpose (their job_id is set to NULL).
+KEPT_CHILDREN = {"signature_assignments"}
 
 PROJECTIONS = ("jobs.json", "application-tracker.md", "applied-companies.md",
                "pipeline.md", "workspace-state.json", "activity.json")
@@ -49,6 +52,22 @@ def counts(db) -> dict:
     return {table: db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
             for table in JOB_TABLES
             if db.execute("SELECT 1 FROM sqlite_master WHERE name=?", (table,)).fetchone()}
+
+
+def uncovered_children(db) -> list[str]:
+    """Tables with a foreign key into a cleared table that this script would not clear.
+
+    A table added later (resume_items) made the delete fail on 2026-10-02 after the
+    application folders had already been moved; checking first means nothing moves.
+    """
+    tables = [row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+    return sorted(
+        f"{table} -> {fk[2]}"
+        for table in tables
+        if table not in JOB_TABLES and table not in KEPT_CHILDREN
+        for fk in db.execute(f"PRAGMA foreign_key_list({table})")
+        if fk[2] in JOB_TABLES
+    )
 
 
 def snapshot(root: Path, target: Path, before: dict) -> None:
@@ -104,7 +123,11 @@ def fresh_start(root: Path, today: str | None = None) -> dict:
         target = root.parent / "backup" / f"{today}-fresh-start-{suffix}"
         suffix += 1
     with workspace.connect() as db:
+        missing = uncovered_children(db)
         before = counts(db)
+    if missing:
+        raise SystemExit("fresh_start does not know how to clear: " + ", ".join(missing)
+                         + ". Add them to JOB_TABLES (or KEPT_CHILDREN); nothing was changed.")
     snapshot(root, target, before)
     with workspace.connect() as db:
         db.execute("BEGIN IMMEDIATE")

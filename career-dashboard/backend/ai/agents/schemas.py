@@ -14,6 +14,8 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
 
+# ---- Annie's posting-evaluation graph (backend/ai/agents/graph.py) --------------------
+
 class Requirement(BaseModel):
     text: str = Field(description="The requirement as a short canonical phrase, e.g. 'Power BI'")
     category: Literal["required", "responsibility", "preferred"]
@@ -64,6 +66,28 @@ class PostingVerdict(BaseModel):
     evidence: str = Field(description="The wording on the page that justifies this state, quoted")
 
 
+class FitRequirement(BaseModel):
+    """One thing the posting asks for, and whether the candidate's registered evidence shows it."""
+    text: str = Field(description="The requirement as a short canonical phrase, e.g. 'Apache Kafka' or 'stream processing'")
+    category: Literal["required", "preferred", "responsibility"]
+    excerpt: str = Field(description="The exact sentence from the job description, copied verbatim")
+    status: Literal["met", "partial", "missing"]
+    evidence_ids: list[str] = Field(default_factory=list, description="Ids from the evidence catalogue that show it; empty when missing")
+    note: str = Field(default="", description="One short clause on how the evidence meets it, or what is missing")
+
+
+class FitBlocker(BaseModel):
+    excerpt: str = Field(description="The exact sentence from the job description, copied verbatim")
+    reason: str = Field(description="Why it rules the candidate out, in a few words")
+
+
+class FitAnalysis(BaseModel):
+    """The requirement matrix. Code verifies every excerpt and evidence id before it is trusted (services/fit.py)."""
+    requirements: list[FitRequirement]
+    hard_blockers: list[FitBlocker] = Field(default_factory=list)
+    summary: str = Field(default="", description="One sentence on the overall fit")
+
+
 class ResumeEdit(BaseModel):
     field: Literal["summary", "skills", "project", "second_project", "font"]
     value: str = Field(description="The replacement value for this field")
@@ -107,6 +131,16 @@ class CoverLetterDraft(BaseModel):
     unsupported_claims: list[str] = Field(description="Anything written that the evidence does not support. Should be empty.")
 
 
+class UnsupportedSentence(BaseModel):
+    sentence: str = Field(description="The letter's sentence, copied exactly")
+    why: str = Field(description="What it says about the candidate that the evidence does not state")
+
+
+class LetterAudit(BaseModel):
+    unsupported: list[UnsupportedSentence] = Field(
+        description="Sentences about the candidate that the evidence does not support; empty when all are supported")
+
+
 class MailVerdict(BaseModel):
     kind: Literal["application_receipt", "rejection", "interview_invite", "offer", "unrelated"]
     company: Optional[str] = None
@@ -143,16 +177,38 @@ class TailoredProject(BaseModel):
 
 
 class TailoredSkill(BaseModel):
-    name: str
+    name: str = Field(description="One skill name, e.g. 'Apache Spark'; no commas, semicolons or parentheses")
     origin: Literal["verified", "predicted"]
     evidence_id: str = Field(default="", description="Registry claim id for verified items; empty for predicted")
+
+
+class BulletRewrite(BaseModel):
+    """New wording for one registered project bullet, in the posting's vocabulary.
+
+    It states the same facts: the same numbers, and only names and tools that the registered
+    bullet, the evidence in `cited_ids` or the registered skills hold. services/rewrite_guard.py
+    checks it word by word; one that fails keeps the registered wording.
+    """
+    evidence_id: str = Field(description="The kept verified project's registry id")
+    bullet: int = Field(description="Which of its registered bullets this rewords: 1, 2 or 3")
+    text: str = Field(description="The new wording, one resume line")
+    cited_ids: list[str] = Field(default_factory=list,
+                                 description="Other registered evidence ids (for example a skill) whose words it uses")
 
 
 class TailoringResult(BaseModel):
     """A per-job Projects + Skills plan. Experience, Education and personal sections are never part of it."""
     projects: list[TailoredProject]
     skills: list[TailoredSkill]
+    rewrites: list[BulletRewrite] = Field(default_factory=list,
+                                          description="Optional rewordings of kept verified project bullets; empty when the registered wording fits")
     rationale: str = Field(description="One short paragraph on why this mix fits the role")
+
+
+class ToolCall(BaseModel):
+    """One more read-only tool the agent runs in the same turn."""
+    tool: str = Field(description="The tool name, exactly as listed in tools")
+    arguments: str = Field(default="{}", description="The tool's arguments as one JSON object")
 
 
 class AgentTurn(BaseModel):
@@ -169,4 +225,9 @@ class AgentTurn(BaseModel):
     suggestions: list[str] = Field(
         default_factory=list,
         description="For reply: up to four short messages she could send next; for ask: the likely answers, e.g. yes / no",
+    )
+    more_calls: list[ToolCall] = Field(
+        default_factory=list,
+        description="For call: up to five more tools that only read (never change anything) to run in this same "
+                    "turn, when you already know you need them all, e.g. get_job for three jobs. Leave empty otherwise.",
     )

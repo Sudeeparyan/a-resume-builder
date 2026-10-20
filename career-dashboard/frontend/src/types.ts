@@ -70,12 +70,22 @@ export type CoverLetter = {
   version: number;
   content: string;
   path: string;
+  /** The Word copy under data/output. */
+  docx_path?: string;
   created_at: string;
+  /** "ai": drafted by the AI and checked against the evidence; "template": registered sentences. */
+  method?: "ai" | "template";
+  evidence_ids?: string[];
+  company_facts?: { text: string; quote: string; url: string }[];
+  /** Why an AI draft was set aside, when it was. */
+  note?: string;
   review_required: boolean;
 };
 export type Report = {
   summary: string;
   report: string;
+  verdict?: "pass" | "review" | "blocked";
+  issues?: string[];
   sources: { title: string; url: string; accessed_at: string }[];
   limitations: string[];
 };
@@ -198,6 +208,8 @@ export type Summary = {
     ghosted: number;
   };
   activity: { id: number; action: string; occurred_at: string; details: any }[];
+  /** What only Annie can do now (backend/services/needs_you.py), most urgent first. */
+  needs_you?: NeedsYouItem[];
 };
 export type Knowledge = {
   id: string;
@@ -318,4 +330,187 @@ export type AssistantOverview = {
   engine: AssistantEngine;
   agents: AssistantAgent[];
   capabilities: { group: string; labels: string[] }[];
+};
+
+/** One endpoint on Auto's route (GET /v2/ai/route, backend/ai/router.py status()). */
+export type RouteEndpoint = {
+  provider: string;
+  label: string;
+  position: number;
+  enabled: boolean;
+  ready: boolean;
+  paid: boolean;
+  models: { strong: string; cheap: string };
+  capabilities: string[];
+  resting: { until: string; until_text: string; reason: string; kind: string } | null;
+  last_ok: string | null;
+  last_error: string | null;
+  served_today: number;
+  paid_block: string | null;
+  /** The plan's current 5-hour window (free plans only; tokens are metered estimates). */
+  usage: {
+    tokens: number;
+    calls: number;
+    capacity: number | null;
+    capacity_source: "you" | "learned" | "guess";
+    learned_at: string | null;
+    percent: number | null;
+    window_resets: string | null;
+    resets_text: string;
+  } | null;
+};
+export type RoutePolicy = {
+  order: string[];
+  enabled: Record<string, boolean>;
+  allow_fallbacks: boolean;
+  /** Tokens per 5-hour window she typed per free plan. */
+  capacity?: Record<string, number | null>;
+};
+
+// Daily Search pipeline (backend/services/pipeline.py).
+export type PipelineSource = { id: string; label: string; what: string; ai: boolean };
+export type PipelineFindCost = {
+  minutes: number;
+  minutes_per_job: number;
+  tokens: number;
+  tokens_per_job: number;
+  budget_calls: number;
+};
+export type PipelineStepInfo = {
+  id: string;
+  label: string;
+  what: string;
+  ai: boolean;
+  web: boolean;
+  minutes: number;
+  tokens: number;
+  budget_calls: number;
+};
+export type PipelineModel = { id: string; label: string; hint: string };
+// Auto: the route across her AI plans (backend/ai/router.py).
+
+export type PipelineProvider = {
+  id: string;
+  label: string;
+  kind: "local" | "api" | "auto";
+  ready: boolean;
+  web: boolean;
+  cost: string;
+  note: string | null;
+  models: PipelineModel[];
+  route?: RouteEndpoint[];
+};
+// tokens: measured tokens per job for this AI (the tailor reports usage), when known.
+export type PipelineSpeed = { factor: number; learned: boolean; runs: number; tokens?: number };
+/** One thing a posting asks for, quoted from it, and whether her registered evidence meets it. */
+export type FitRequirement = {
+  text: string;
+  category: "required" | "preferred" | "responsibility";
+  excerpt: string;
+  /** "unknown": the rules could not name it, so it is not scored. */
+  status: "met" | "partial" | "missing" | "unknown";
+  evidence_ids: string[];
+  note: string;
+};
+/** The verified requirement check for one job (GET /v2/jobs/{id}/fit, services/fit.py). */
+export type JobFit = {
+  matrix: { requirements: FitRequirement[]; hard_blockers: { excerpt: string; reason: string }[]; summary: string };
+  method: "ai" | "rules";
+  provider: string;
+  model: string;
+  provider_label: string;
+  score: number;
+  components: { requirements: number; role_seniority: number; location: number };
+  must_have_ok: boolean;
+  rationale: string;
+  ai_error: string;
+  checked_at?: string;
+};
+export type PipelineChoice = {
+  count: number;
+  source: string;
+  provider: string;
+  model: string;
+  steps: Record<string, boolean>;
+};
+export type PipelineStepState = {
+  state: "waiting" | "running" | "done" | "failed" | "skipped";
+  seconds?: number;
+  note?: string;
+  error?: string;
+  started_epoch?: number;
+  quick?: boolean;
+  found?: number;
+  /** The ready-to-submit check's verdict and readiness score (backend/services/readiness.py). */
+  verdict?: ReadinessVerdict;
+  score?: number | null;
+  /** What is left before sending, most important first. */
+  next?: string[];
+  /** Each search pass of a Daily Search that came back short and looked again. */
+  passes?: { label: string; state: string; found?: number; looked?: number; seconds?: number; error?: string }[];
+};
+export type ReadinessVerdict = "ready" | "review" | "blocked";
+/** GET /studio/<job>/readiness: the final check before a resume is sent. */
+export type Readiness = {
+  job_id: string;
+  verdict: ReadinessVerdict;
+  label: string;
+  score: number | null;
+  parts: { fit: number | null; coverage: number | null; ats: number | null };
+  weights: { fit: number; coverage: number; ats: number };
+  checks: { id: string; label: string; state: "pass" | "warn" | "fail"; note: string }[];
+  next: string[];
+  review_summary: string | null;
+  note: string;
+  checked_at: string;
+};
+export type PipelineJobProgress = {
+  id: string;
+  company: string;
+  title: string;
+  steps: Record<string, PipelineStepState>;
+};
+export type PipelineRun = {
+  id: string;
+  state: "queued" | "running" | "completed" | "failed" | "stopped";
+  config: PipelineChoice;
+  progress: {
+    stage: string;
+    jobs_target: number;
+    started_epoch: number;
+    finished_epoch?: number;
+    find: PipelineStepState;
+    jobs: PipelineJobProgress[];
+    /** How many prepared jobs each ready-to-submit verdict got. */
+    ready?: Partial<Record<ReadinessVerdict, number>>;
+  };
+  error: string | null;
+  stop_requested: boolean;
+  created_at: string;
+  finished_at: string | null;
+};
+export type PipelineStatus = {
+  tools: { pdf: boolean };
+  // The daily limit counts paid calls only (Azure, API keys); free plan calls are free_used.
+  budget: { limit: number; used: number; remaining: number; paid_only?: boolean; free_used?: number };
+  plan: { remaining_today: number };
+  current: PipelineRun | null;
+  last: PipelineRun | null;
+};
+export type PipelineInfo = PipelineStatus & {
+  sources: PipelineSource[];
+  find: Record<"find_ai" | "find_pages", PipelineFindCost> & Partial<Record<"find_feeds", PipelineFindCost>>;
+  steps: PipelineStepInfo[];
+  max_jobs: number;
+  providers: PipelineProvider[];
+  speeds: Record<string, Record<string, PipelineSpeed>>;
+  preferences: PipelineChoice;
+};
+
+export type NeedsYouItem = {
+  id: string;
+  text: string;
+  where: "profile" | "settings" | "daily" | "assurance";
+  url?: string;
+  job_ids?: string[];
 };

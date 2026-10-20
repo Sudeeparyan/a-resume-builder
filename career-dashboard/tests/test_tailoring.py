@@ -179,21 +179,55 @@ def test_a_failed_tailor_leaves_the_draft_and_items_untouched(service, studio, j
     assert any(row["action"] == "studio_tailor_failed" for row in service.w.activity())
 
 
-def test_a_reworded_verified_project_is_rejected_before_any_change(service, studio, job):
-    before = studio.open(job["id"])["source"]
+def test_a_reworded_verified_project_gets_its_registered_wording_back(service, studio, job):
+    studio.open(job["id"])
     result = tailored_result(service)
+    registered = list(result.projects[0].bullets)
     result.projects[0].bullets[0] = "Reworded beyond recognition."
-    with pytest.raises(ValueError, match="copied unchanged"):
-        studio.tailor(job["id"], StubTeam(result))
-    assert studio.get(job["id"])["source"] == before
-    assert studio.items(job["id"]) == []
+    draft = studio.tailor(job["id"], StubTeam(result))
+    assert "Reworded beyond recognition" not in draft["source"]
+    row = studio.items(job["id"])[0]
+    assert row["origin"] == "verified" and row["content"]["bullets"] == registered
 
 
-def test_a_predicted_item_with_never_claim_wording_is_rejected(service, studio, job):
-    before = studio.open(job["id"])["source"]
+def test_one_unusable_suggestion_is_left_out_and_reported_not_fatal(service, studio, job):
+    studio.open(job["id"])
     result = tailored_result(service)
     result.skills[2].name = "Kubernetes"  # on the registry's never-claim list
-    with pytest.raises(ValueError, match="never allowed"):
+    result.skills.append(schemas.TailoredSkill(name="Network programming (TCP/IP, sockets)", origin="predicted"))
+    result.skills.append(schemas.TailoredSkill(name="Spark, Flink", origin="predicted"))
+    result.skills.append(schemas.TailoredSkill(name="Rust", origin="verified"))  # not in her registry
+    draft = studio.tailor(job["id"], StubTeam(result))
+    assert draft["tailored"] is True
+    skills = [row["content"] for row in studio.items(job["id"]) if row["section"] == "skills"]
+    # The gloss in brackets is dropped from the name; the forbidden, list and unregistered ones never print.
+    assert skills == ["Python", "Apache Kafka", "Network programming"]
+    assert "Kubernetes" not in draft["source"] and "Spark, Flink" not in draft["source"]
+    assert len(draft["dropped"]) == 3
+    assert any("never allowed" in note for note in draft["dropped"])
+    assert any("Left out 3" in warning for warning in draft["warnings"])
+
+
+def test_a_project_that_cannot_lead_moves_to_the_supporting_slot(service, studio, job):
+    studio.open(job["id"])
+    result = tailored_result(service)
+    other = service.w.add_job("Another employer", "Data Engineer", "Austin, TX",
+                              "https://careers.another.test/jobs/1", job["description"])
+    with service.w.connect() as db:
+        db.execute("INSERT INTO signature_assignments(company_key, project_id, job_id, assigned_at) VALUES(?,?,?,?)",
+                   ("anotheremployer", "PROJ-P05-RESUME", other["id"], "2026-09-01"))
+    draft = studio.tailor(job["id"], StubTeam(result))
+    rows = [row for row in studio.items(job["id"]) if row["section"] == "projects"]
+    assert [row["origin"] for row in rows] == ["predicted", "verified"]
+    assert draft["fields"]["SelectedProjectTitle"] == "Streaming Order Analytics Prototype"
+
+
+def test_nothing_usable_still_fails_and_leaves_the_draft_untouched(service, studio, job):
+    before = studio.open(job["id"])["source"]
+    result = tailored_result(service)
+    for skill in result.skills:
+        skill.name, skill.origin = "Kubernetes", "predicted"
+    with pytest.raises(ValueError, match="no usable skills"):
         studio.tailor(job["id"], StubTeam(result))
     assert studio.get(job["id"])["source"] == before
     assert studio.items(job["id"]) == []

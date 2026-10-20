@@ -33,9 +33,9 @@ a provider by its prefix.
 | `MOONSHOT_API_KEY` | Kimi directly — named form only: Kimi keys start with `sk-`, so a bare token is never guessed as Kimi |
 
 `keys.txt` and every `.env` are git-ignored. With no key configured, a local
-CLI runtime is used and costs nothing: Codex, Claude Code or Kimi Code,
-whichever is installed and signed in (Settings lists all three and picks the
-main one). Settings shows which keys were found,
+CLI runtime is used and costs nothing: Codex, Claude Code, Google Antigravity
+(`agy`) or Kimi Code, whichever is installed and signed in (Settings lists all
+four and picks the main one). Settings shows which keys were found,
 without revealing any value, and Test connection proves one works. Settings can
 also name a **backup provider**: a failed call is retried once on it and the
 switch is recorded in the activity log (`provider_fallback`).

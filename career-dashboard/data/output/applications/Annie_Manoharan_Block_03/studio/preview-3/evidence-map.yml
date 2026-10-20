@@ -1,0 +1,58 @@
+candidate_revision: 2026-09-18.1
+job_id: 1b71f2b78dd1010c
+role_eligible: false
+job_snapshot_sha256: 5ea92e3d3c2aa25d89f9893d8ea8a8e3281c19435fe5d55dd5c659e307159c6e
+supported_requirement_coverage: 0
+requirements: []
+company_problem:
+  statement: Pending review of the saved job description.
+  source_url: https://block.xyz/careers/jobs/4901418008?gh_jid=4901418008
+  published_or_accessed: '2026-10-13'
+  evidence_class: explicit
+  confidence: low
+selected_project_id: 816755f54b3943529bb502c8dc27db0b
+selected_project_ids:
+- 816755f54b3943529bb502c8dc27db0b
+- PROJ-P01-IOT
+selected_project_reason: Draft selection by overlap with approved project wording;
+  review the business problem and full job requirements.
+resume_claim_ids:
+- CONTACT-EMAIL-001
+- CONTACT-GITHUB-001
+- CONTACT-PHONE-001
+- CONTACT-PORTFOLIO-001
+- COURSEWORK-MS-001
+- EDU-BE-001
+- EDU-MS-001
+- EXP-INSOPS-001
+- EXP-RA-001
+- EXP-SOLITON-PE-001
+- EXP-TA-001
+- IDENTITY-001
+- METRIC-DRAEGER-94
+- PROJ-P01-IOT
+- SKILL-CLOUD-001
+- SKILL-CV-TOOLS-001
+- SKILL-DATA-TOOLS-001
+- SKILL-DESKTOP-001
+- SKILL-GENAI-001
+- SKILL-LAKEHOUSE-001
+- SKILL-LANGUAGES-001
+- SKILL-ML-001
+- SKILL-STREAMING-001
+- SKILL-TEST-001
+- SKILL-TOUCHED-001
+held_claims_used: []
+studio_review_required: true
+source_evidence_errors:
+- 'Unknown source EVIDENCE ID on line 60: resume_items:8ead897876bd49578c050df5479dc61f'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:b4351317b1af495e891f7249231909bf'
+- 'Unknown source EVIDENCE ID on line 68: resume_items:816755f54b3943529bb502c8dc27db0b'
+- 'Unknown source EVIDENCE ID on line 70: resume_items:816755f54b3943529bb502c8dc27db0b'
+- 'Unknown source EVIDENCE ID on line 72: resume_items:816755f54b3943529bb502c8dc27db0b'
+- 'Unknown source EVIDENCE ID on line 74: resume_items:816755f54b3943529bb502c8dc27db0b'
+- 'Unknown source EVIDENCE ID on line 76: resume_items:816755f54b3943529bb502c8dc27db0b'
+- 'Unknown source EVIDENCE ID on line 78: resume_items:816755f54b3943529bb502c8dc27db0b'
+- 'Unknown source EVIDENCE ID on line 170: resume_items:816755f54b3943529bb502c8dc27db0b'
+- 'Unknown source EVIDENCE ID on line 172: resume_items:816755f54b3943529bb502c8dc27db0b'
+- 'Unknown source EVIDENCE ID on line 174: resume_items:816755f54b3943529bb502c8dc27db0b'

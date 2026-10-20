@@ -1,12 +1,77 @@
-import { useEffect, useRef, useContext, createContext } from "react";
+import { useEffect, useRef, useState, useContext, createContext } from "react";
 import type { ReactNode } from "react";
-import { X, LoaderCircle, ExternalLink, CheckCircle2 } from "lucide-react";
+import { X, LoaderCircle, ExternalLink, CheckCircle2, Sparkles } from "lucide-react";
 import { safeUrl } from "../api";
 import type { Report, Run } from "../types";
 export const NoticeContext = createContext<{
   text: string;
   error: boolean;
 } | null>(null);
+/** Opens the Assistant tab with a question about what is on screen. `send` false puts the
+ *  text in the chat box for her to finish or confirm with Enter. */
+export type AskAssistantFn = (text: string, send?: boolean) => void;
+export const AskContext = createContext<AskAssistantFn | null>(null);
+export type AskPrompt = { label: string; text: string; send?: boolean };
+
+/** "Ask the assistant" with a few questions about this page. A question that only reads is
+ *  sent at once; one that would start work or change something waits in the chat box. */
+export function AskAssistant({
+  prompts,
+  label = "Ask the assistant",
+}: {
+  prompts: AskPrompt[];
+  label?: string;
+}) {
+  const ask = useContext(AskContext);
+  const box = useRef<HTMLDetailsElement>(null);
+  const [openRight, setOpenRight] = useState(false);
+  useEffect(() => {
+    const close = (e: Event) => {
+      const menu = box.current;
+      if (!menu?.open) return;
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !menu.contains(e.target as Node))
+        menu.open = false;
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, []);
+  if (!ask || !prompts.length) return null;
+  return (
+    <details
+      className={"ask-menu" + (openRight ? " open-right" : "")}
+      ref={box}
+      onToggle={(e) => {
+        // The menu opens leftwards from the button; too near the left edge, it opens rightwards.
+        const menu = e.currentTarget;
+        if (menu.open) setOpenRight(menu.getBoundingClientRect().right < Math.min(300, window.innerWidth - 32) + 16);
+      }}
+    >
+      <summary className="secondary">
+        <Sparkles size={16} aria-hidden="true" /> {label}
+      </summary>
+      <ul>
+        {prompts.map((p) => (
+          <li key={p.label}>
+            <button
+              type="button"
+              onClick={() => {
+                if (box.current) box.current.open = false;
+                ask(p.text, p.send ?? true);
+              }}
+            >
+              <span>{p.label}</span>
+              <small>{p.send === false ? "Opens the chat with this ready to send" : "Asks now in the chat"}</small>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
 export function Badge({
   children,
   tone = "neutral",
@@ -93,6 +158,35 @@ export function Modal({
     </dialog>
   );
 }
+/** An on/off switch that reads its state aloud and shows "On"/"Off" beside the knob. */
+export function Switch({
+  checked,
+  onChange,
+  label,
+  disabled = false,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  label: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      className={"switch" + (checked ? " on" : "")}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+    >
+      <span className="switch-track">
+        <span className="switch-knob" />
+      </span>
+      <span className="switch-text">{checked ? "On" : "Off"}</span>
+    </button>
+  );
+}
 export function Field({
   label,
   children,
@@ -119,7 +213,7 @@ export function Running({ run }: { run: Run }) {
       </span>
       <div>
         <b>
-          {({research: "Company & hiring review", resume_advisor: "Resume advisor", email: "Gmail sync", discovery: "Job discovery", resume_build: "Resume build & score", resume_match: "Independent document review", instruction_interpret: "Instruction interpreter"} as Record<string, string>)[run.kind] || run.kind}{" "}
+          {({research: "Company & hiring review", resume_advisor: "Resume advisor", email: "Gmail sync", discovery: "Job discovery", resume_build: "Resume build & score", resume_match: "Independent document review", instruction_interpret: "Instruction interpreter", study_plan: "Study plan"} as Record<string, string>)[run.kind] || run.kind}{" "}
           · {run.state}
         </b>
         <small>{run.error || run.result?.stage || "Waiting to start"}</small>
@@ -258,9 +352,18 @@ export function RichText({ text }: { text: string }) {
   return <div className="report-text">{blocks}</div>;
 }
 export function ReportView({ report }: { report: Report }) {
+  const issues = Array.isArray(report.issues) ? report.issues.filter((issue) => typeof issue === "string" && issue.trim()) : [];
+  const verdict = report.verdict === "pass" && issues.length ? "review" : report.verdict;
+  const reviewLabel = verdict === "pass" ? "Review passed" : verdict === "review" ? "Needs your review" : verdict === "blocked" ? "Review blocked" : null;
   return (
     <>
+      {reviewLabel && <Badge tone={verdict === "pass" ? "green" : verdict === "blocked" ? "red" : "amber"}>{reviewLabel}</Badge>}
       <p className="report-summary">{report.summary}</p>
+      {issues.length > 0 && (
+        <ul aria-label="Review issues">
+          {issues.map((issue, i) => <li key={i}>{issue}</li>)}
+        </ul>
+      )}
       <RichText text={report.report} />
       {report.limitations.length > 0 && (
         <div className="callout">

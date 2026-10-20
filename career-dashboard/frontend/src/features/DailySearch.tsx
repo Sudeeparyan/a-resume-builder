@@ -23,9 +23,7 @@ export default function DailySearch({
   onJob: (id: string) => void;
   onAdd: () => void;
 }) {
-  const [g, setG] = useState<any>(null);
   const [runs, setRuns] = useState<any[]>([]);
-  const [busy, setBusy] = useState(false);
   const [all, setAll] = useState(false);
   const [info, setInfo] = useState<PipelineInfo | null>(null);
   const [choice, setChoice] = useState<PipelineChoice | null>(null);
@@ -310,79 +308,6 @@ export default function DailySearch({
           </Empty>
         )}
       </section>
-      {g && (
-        <Modal title="Set your application plan" onClose={() => setG(null)}>
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              setBusy(true);
-              try {
-                await api("/v2/goals", "PUT", g);
-                await refresh();
-                setG(null);
-                notify("Plan saved. Your carryover has been recalculated.");
-              } catch (e) {
-                notify((e as Error).message, true);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            <Field label="Applications per week">
-              <input
-                type="number"
-                min="1"
-                max="200"
-                required
-                value={g.weekly_target}
-                onChange={(e) =>
-                  setG({ ...g, weekly_target: Number(e.target.value) })
-                }
-              />
-            </Field>
-            <Field label="Start tracking from">
-              <input
-                type="date"
-                max={data.goals.date}
-                required
-                value={g.start_date}
-                onChange={(e) => setG({ ...g, start_date: e.target.value })}
-              />
-            </Field>
-            <fieldset>
-              <legend>Application days</legend>
-              <div className="day-choices">
-                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
-                  (d, i) => (
-                    <label key={d}>
-                      <input
-                        type="checkbox"
-                        checked={g.workdays.includes(i)}
-                        onChange={(e) =>
-                          setG({
-                            ...g,
-                            workdays: e.target.checked
-                              ? [...g.workdays, i]
-                              : g.workdays.filter((n: number) => n !== i),
-                          })
-                        }
-                      />
-                      {d}
-                    </label>
-                  ),
-                )}
-              </div>
-            </fieldset>
-            <p className="small">
-              Changing this plan recalculates unfinished work from the start
-              date. Choose a new start date if you want a fresh target.
-            </p>
-            <button className="primary" disabled={busy || !g.workdays.length}>
-              Save plan
-            </button>
-          </form>
-        </Modal>
-      )}
     </>
   );
 }

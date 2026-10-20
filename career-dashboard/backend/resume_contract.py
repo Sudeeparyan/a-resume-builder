@@ -194,7 +194,7 @@ def load_contract(profile_path: str | None = None, evidence_path: str | None = N
     for item in registry.values():
         if item.get("status") in {"hold", "missing"}:
             continue
-        for key in ("value", "dates", "title", "employer", "institution", "degree_as_supplied"):
+        for key in ("value", "dates", "title", "employer", "institution", "degree_as_supplied", "grade"):
             if item.get(key):
                 numbers |= _numbers_in(str(item[key]))
         for fact in item.get("approved_facts", []) or []:
@@ -206,6 +206,21 @@ def load_contract(profile_path: str | None = None, evidence_path: str | None = N
     numbers |= {str(n) for n in range(0, 13)}
 
     unsafe = dict(GENERIC_UNSAFE_PATTERNS)
+    # GPA, certifications, LinkedIn and publications are banned only while the registry
+    # holds none that may be used (Annie's open questions keep all four banned). A
+    # profile whose own documents register one may print it.
+    def usable(item):
+        return item.get("status") not in {"hold", "missing"}
+
+    claims = [c for c in registry.values() if usable(c)]
+    if any(c.get("category") == "certification" for c in claims):
+        unsafe.pop("certification (none on record)", None)
+    if any(c.get("category") == "publication" for c in claims):
+        unsafe.pop("publication claim (PUB-001 on hold)", None)
+    if any(c.get("category") in {"education", "education_grade"} and c.get("grade") for c in claims):
+        unsafe.pop("GPA (not on record)", None)
+    if candidate.get("linkedin") and any(c.get("id", "").startswith("CONTACT-LINKEDIN") for c in claims):
+        unsafe.pop("LinkedIn (none on record)", None)
     never = registry.get("SKILL-NEVER-001", {}).get("approved_facts", []) or []
     if never:
         unsafe["skill not in the bank (never claim)"] = r"(?i)\b(?:" + "|".join(re.escape(str(s)) for s in never) + r")\b"

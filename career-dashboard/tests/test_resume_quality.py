@@ -15,6 +15,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "backend/scripts")]
 VALIDATOR = ROOT / "backend/scripts/validate_resume.py"
 BASE = ROOT / "data/templates/resume-base.tex"
+# The validator compares against the live registry, so the fixture follows it.
+CANDIDATE_REVISION = re.search(
+    r"(?m)^candidate_revision:\s*\"?([^\"\s]+)",
+    (ROOT / "data/context/evidence.yml").read_text(encoding="utf-8"),
+).group(1)
 PDF_INTEGRATION_AVAILABLE = bool(
     shutil.which("tectonic") and (shutil.which("swiftc") or shutil.which("swift"))
 )
@@ -64,7 +69,7 @@ class ResumeQualityTests(unittest.TestCase):
         second_id = extract_zero_argument_macros(source_text).get('SecondProjectID')
         evidence_map = directory / "evidence-map.yml"
         evidence_map.write_text(
-            'candidate_revision: "2026-09-18.1"\n'
+            f'candidate_revision: "{CANDIDATE_REVISION}"\n'
             'job_id: "001-data-engineer-test"\n'
             "role_eligible: true\n"
             f'job_snapshot_sha256: "{job_hash}"\n'

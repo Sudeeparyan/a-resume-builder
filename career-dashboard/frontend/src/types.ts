@@ -156,7 +156,7 @@ export type AssuranceClaim = {
   decision: "kept" | "removed" | "pending" | null;
   items: string[];
   evidence_ids: string[];
-  line?: number;
+  line?: number | null;
   note?: string;
 };
 export type AssuranceReport = {
@@ -195,6 +195,9 @@ export type Summary = {
       last_error?: string;
     };
     messages: Mail[];
+    /** False on every profile but the backup: this PC's Gmail is its owner's mailbox. */
+    available?: boolean;
+    note?: string;
   };
   runs: Run[];
   agents: Agent[];
@@ -222,15 +225,50 @@ export type Knowledge = {
   review_state: string;
   deleted: boolean;
 };
+/** One form field, as defined by backend/services/profile_fields.py. */
+export type ProfileFieldSpec = {
+  key: string;
+  label: string;
+  type: "text" | "textarea" | "list" | "number";
+  required?: boolean;
+  placeholder?: string;
+  hint?: string;
+};
+export type ProfileFieldValue = string | number | null | string[];
+/** A knowledge row plus the readable view the Profile page renders. */
+export type ProfileEntry = Knowledge & {
+  label: string;
+  group: string | null;
+  status: string | null;
+  usage: string;
+  sources: string[];
+  fields: Record<string, ProfileFieldValue>;
+  form: ProfileFieldSpec[];
+  extra: { key: string; label: string; value: unknown }[];
+  /** False when a summary-only save changed wording the form keeps elsewhere. */
+  in_sync: boolean;
+  /** Why the entry can't be removed (every resume or the job search needs it), or null. */
+  locked?: string | null;
+  /** For a project: why it is kept off resumes for now, or null. */
+  off_resumes?: string | null;
+};
+/** Where a Profile save was written: the YAML files, the base resume and open drafts. */
+export type ProfileSync = {
+  updated: string[];
+  drafts: { job_id: string; company: string; title: string }[];
+  notes?: string[];
+  revision: string;
+} | null;
 export type ProfileData = {
-  items: Knowledge[];
+  items: ProfileEntry[];
+  schema: Record<string, ProfileFieldSpec[]>;
   removed: number;
   registry: Record<string, any>;
   configuration: Record<string, any>;
   sources: Record<string, string>;
   agents: Agent[];
   profile_dirty: boolean;
-  pending: { id: string; kind: string; title: string; deleted: boolean; source: string }[];
+  pending: { id: string; kind: string; title: string; label: string; deleted: boolean; source: string }[];
   revision: number;
   skills: { name: string; purpose: string; path: string }[];
 };
@@ -267,6 +305,18 @@ export type AssistantMessage = {
     run_id?: string;
     /** Field-level before/after shown on a confirmation card. */
     diff?: { field: string; before: string; after: string }[];
+    /** A reply that read several jobs' resumes: one compact row per job instead of one card. */
+    cards?: {
+      job_id: string;
+      company: string;
+      title: string;
+      tier?: string | null;
+      revision?: number | null;
+      pdf?: string | null;
+      coverage?: number | null;
+      ats?: number | null;
+      posting_url?: string | null;
+    }[];
     /** Plan→calls→results record of an agent run ("what I did"). */
     trace?: { tool: string; summary: string; error?: boolean; auto_applied?: boolean }[];
     [key: string]: unknown;

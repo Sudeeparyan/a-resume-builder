@@ -29,6 +29,7 @@ import Profile from "./features/Profile";
 import Settings from "./features/Settings";
 import Agents, { AGENT_LABEL } from "./features/Agents";
 import Assistant from "./features/Assistant";
+import { PHONE_SHORT, PhoneMore } from "./components/PhoneNav";
 import type { Summary } from "./types";
 const tabs = [
   ["assistant", "Assistant", MessageSquareText, "Your search"],
@@ -93,6 +94,20 @@ class ErrorBoundary extends Component<
   }
 }
 export default function App() {
+  // Which profile this tab belongs to (the /p/<id>/ address) and the others on this PC.
+  const { listing, current, failed, reload } = useProfileListing();
+  const onboarding = current?.state === "onboarding";
+  // Profiles are known (or the server predates them): the workspace can load.
+  const ready = Boolean(current && !onboarding) || failed;
+  useEffect(() => {
+    if (!listing) return;
+    // "/" or an unknown profile: go to the last-used one, keeping the tab named in the address.
+    if (!PROFILE_ID || !listing.profiles.some((p) => p.id === PROFILE_ID))
+      openProfile(listing.last_used || "annie", location.hash.slice(1));
+  }, [listing]);
+  useEffect(() => {
+    if (current) document.title = `${firstName(current.name) || current.name} · Career Workspace`;
+  }, [current]);
   const [route, setRoute] = useState(routeFromHash);
   const [data, setData] = useState<Summary>();
   const [error, setError] = useState("");
@@ -136,6 +151,7 @@ export default function App() {
     }
   }, [summaryReads]);
   useEffect(() => {
+    if (!ready) return;
     refresh().catch(() => {});
     const timer = setInterval(() => refresh().catch(() => {}), 8000);
     const hash = () => {
@@ -148,7 +164,7 @@ export default function App() {
       clearInterval(timer);
       window.removeEventListener("hashchange", hash);
     };
-  }, [refresh]);
+  }, [refresh, ready]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(null), 10000);
@@ -173,8 +189,9 @@ export default function App() {
   const workingJob = working[0]
     ? data?.jobs.find((j) => j.id === working[0].job_id)
     : undefined;
-  const current = tabs.find((t) => t[0] === route);
+  const tab = tabs.find((t) => t[0] === route);
   return (
+    <ProfileContext.Provider value={{ current, profiles: listing?.profiles || [], reload }}>
     <NoticeContext.Provider value={toast}>
       <AskContext.Provider value={ask}>
       <div className="app">
@@ -184,7 +201,7 @@ export default function App() {
             <div>
               ANNIE<small>CAREER WORKSPACE</small>
             </div>
-          </div>
+          )}
           <nav aria-label="Main navigation">
             {tabs.map(([id, label, Icon, group], i) => (
               <div key={id} className={"nav-item" + (id in PHONE_SHORT ? "" : " nav-extra")}>
@@ -192,9 +209,10 @@ export default function App() {
                   <span className="nav-group">{group}</span>
                 )}
                 <button
-                  title={label}
-                  aria-current={route === id ? "page" : undefined}
-                  className={route === id ? "active" : ""}
+                  title={onboarding ? "Available once this profile is built" : label}
+                  aria-current={route === id && !onboarding ? "page" : undefined}
+                  className={route === id && !onboarding ? "active" : ""}
+                  disabled={onboarding}
                   onClick={() => navigate(id)}
                 >
                   <Icon size={20} />
@@ -237,7 +255,7 @@ export default function App() {
               <br />
               Every single day.
             </p>
-            <small>Saved locally · US Central time</small>
+            <small>Saved locally · {timeLabel(current?.market?.timezone)}</small>
           </div>
         </aside>
         <PhoneMore
@@ -251,8 +269,15 @@ export default function App() {
         <main>
           <header>
             <span className="crumb">
-              {current?.[3]} <span aria-hidden="true">/</span>{" "}
-              <b>{current?.[1]}</b>
+              {onboarding ? (
+                <>
+                  New profile <span aria-hidden="true">/</span> <b>Add documents</b>
+                </>
+              ) : (
+                <>
+                  {tab?.[3]} <span aria-hidden="true">/</span> <b>{tab?.[1]}</b>
+                </>
+              )}
             </span>
             <span className="header-status">
               <button
@@ -274,10 +299,18 @@ export default function App() {
                   </>
                 )}
               </button>
-              <span className="avatar">AM</span>
+              {listing ? <ProfileMenu compact /> : <span className="avatar">AM</span>}
             </span>
           </header>
           <div className="page">
+            {onboarding && current ? (
+              setupForm ? (
+                <Onboarding profile={current} notify={notify} onUseChat={() => chooseSetup(false)} />
+              ) : (
+                <OnboardingChat profile={current} notify={notify} onUseForm={() => chooseSetup(true)} />
+              )
+            ) : (
+            <>
             {error && (
               <div className="callout warning" role="alert">
                 {error}
@@ -357,6 +390,8 @@ export default function App() {
                 )}
               </ErrorBoundary>
             )}
+            </>
+            )}
           </div>
         </main>
         {toast && (
@@ -386,6 +421,9 @@ export default function App() {
         )}
         {add && data && (
           <AddJob
+            defaultLocation={
+              !current?.market || current.market.code === "us" ? "Remote (US)" : current.market.default_location
+            }
             date={data.goals.date}
             onClose={() => setAdd(false)}
             refresh={refresh}
@@ -396,15 +434,18 @@ export default function App() {
       </div>
       </AskContext.Provider>
     </NoticeContext.Provider>
+    </ProfileContext.Provider>
   );
 }
 function AddJob({
+  defaultLocation,
   date,
   onClose,
   refresh,
   notify,
   onSelect,
 }: {
+  defaultLocation: string;
   date: string;
   onClose: () => void;
   refresh: () => Promise<void>;
@@ -414,7 +455,7 @@ function AddJob({
   const [form, setForm] = useState({
     company: "",
     title: "",
-    location: "Remote (US)",
+    location: defaultLocation,
     url: "",
     requisition_id: "",
     description: "",

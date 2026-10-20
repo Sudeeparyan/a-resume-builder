@@ -15,39 +15,42 @@
     "profile_initialized": true,
     "skill_fragment_cleanup_v1": {
       "retired_ids": [],
-      "applied_at": "2026-09-19T23:12:00+00:00"
+      "applied_at": "2026-09-23T10:30:59+00:00"
     },
+    "assistant_conversation": "50413d0bc6a34792b8af237c11a3e934",
     "posting_sweep": {
       "last_run_at": "2026-10-13T07:12:31+00:00",
       "checked": 0
     },
-    "assistant_conversation": "8c7370db5b754215906e7b0d7b9e9d98",
     "ai_preferences": {
       "default": {
-        "provider": "kimi_cli",
-        "model": "kimi-runtime"
+        "provider": "auto",
+        "model": "auto"
       },
       "actions": {},
       "tiers": {
         "strong": {
-          "provider": "kimi_cli",
-          "model": "kimi-runtime"
+          "provider": "auto",
+          "model": "auto"
         },
         "cheap": {
-          "provider": "kimi_cli",
-          "model": "kimi-runtime"
+          "provider": "auto",
+          "model": "auto"
         }
+      },
+      "fallback": {
+        "provider": "azure_openai",
+        "model": "gpt-6-luna"
       }
     },
-    "ai_policy": {
-      "daily_call_limit": 15
-    }
+    "profile_state_revision": 7
   },
   "mail": {
     "connection": {
       "connected": false
     },
-    "messages": []
+    "messages": [],
+    "available": true
   },
   "runs": [
     {
@@ -429,7 +432,7 @@
       "id": "60cb1a29ea534b7f94ab3ec70a0f490f",
       "kind": "discovery",
       "job_id": null,
-      "state": "completed",
+      "state": "failed",
       "result": {
         "summary": "Tracked career pages read directly (no AI call).\nAllen Institute: no public ATS feed configured (careers page only)\nArgonne National Laboratory: 1 matching postings opened via workday\nBroad Institute: no public ATS feed configured (careers page only)\nBrown University: 0 matching postings opened via workday\nCleveland Clinic: 0 matching postings opened via workday\nCornell University: 0 matching postings opened via workday\nMass General Brigham: 0 matching postings opened via workday\nMayo Clinic: no public ATS feed configured (careers page only)\nOak Ridge National Laboratory: no public ATS feed configured (careers page only)\nSt. Jude Children's Research Hospital: 2 matching postings opened via workday\nUniversity of Arkansas: 0 matching postings opened via workday\nUniversity of Chicago: 3 matching postings opened via workday\nVanderbilt University Medical Center: 0 matching postings opened via workday\nWashington University in St. Louis: 0 matching postings opened via workday\nWestern Governors University: 4 matching postings opened via workday\nAbbott: 14 matching postings opened via workday\nAffirm: 201 open postings via greenhouse\nAirbnb: 160 open postings via greenhouse\nAnalog Devices: 11 matching postings opened via workday\nAnthropic: 647 open postings via greenhouse\nBD: 2 matching postings opened via workday\nBaxter: 0 matching postings opened via workday\nBosch: 11 matching postings opened via smartrecruiters\nBoston Scientific: no public ATS feed configured (careers page only)\nButterfly Network: 23 open postings via greenhouse\nCaterpillar: 14 matching postings opened via workday\nCloudflare: 435 open postings via greenhouse\nCockroach Labs: 19 open postings via greenhouse\nCohere: 118 open postings via ashby\nCoinbase: 225 open postings via greenhouse\nConfluent: 0 open postings via ashby\nContinental: 0 matching postings opened via smartrecruiters\nDatabricks: 897 open postings via greenhouse\nDatadog: 436 open postings via greenhouse\nDexcom: 3 matching postings opened via workday\nDropbox: 32 open postings via greenhouse\nDuolingo: 60 open postings via greenhouse\nEdwards Lifesciences: 0 matching postings opened via workday\nElastic: 403 open postings via greenhouse\nFigma: 150 open postings via greenhouse\nFivetran: 189 open postings via greenhouse\nFlatiron Health: 23 open postings via greenhouse\nGE HealthCare: 0 matching postings opened via workday\nGitLab: 221 open postings via greenhouse\nHex: 40 open postings via ashby\nIllumina: 0 matching postings opened via workday\nInstacart: 117 open postings via greenhouse\nInsulet: 1 matching postings opened via workday\nKomodo Health: 29 open postings via greenhouse\nLyft: 186 open postings via greenhouse\nMedtronic: 3 matching postings opened via workday\nModal: 41 open postings via ashby\nMongoDB: 392 open postings via greenhouse\nNXP Semiconductors: 11 matching postings opened via workday\nNatera: 210 open postings via greenhouse\nNotion: 129 open postings via ashby\nNuro: 108 open postings via greenhouse\nOkta: 376 open postings via greenhouse\nOpenAI: 808 open postings via ashby\nPalantir: 311 open postings via lever\nPerplexity: 134 open postings via ashby\nPhilips: 1 matching postings opened via workday\nPinterest: 179 open postings via greenhouse\nPure Storage: 363 open postings via greenhouse\nRamp: 166 open postings via ashby\nResMed: 2 matching postings opened via workday\nRockwell Automation: 12 matching postings opened via workday\nRubrik: 134 open postings via greenhouse\nSamsara: 238 open postings via greenhouse\nScale AI: 184 open postings via greenhouse\nServiceNow: 8 matching postings opened via smartrecruiters\nSigma Computing: 73 open postings via greenhouse\nSnowflake: 359 open postings via ashby\nSpotify: 83 open postings via lever\nStarburst: 32 open postings via greenhouse\nStryker: 0 matching postings opened via workday\nSupabase: 52 open postings via ashby\nTwilio: 147 open postings via greenhouse\nVeeva Systems: 937 open postings via lever\nVerkada: 308 open postings via greenhouse\nWaymo: 369 open postings via greenhouse\nWestern Digital: 3 matching postings opened via smartrecruiters\nH-1B sponsor boards: read 89 of 89 this pass (8806 open postings); 0 could not be read.\n\nSkipped 18832 postings outside her target (not in the US, senior, internships, or other kinds of role).",
         "jobs": [

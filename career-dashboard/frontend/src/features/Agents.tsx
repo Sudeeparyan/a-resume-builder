@@ -17,11 +17,11 @@ import {
   ScanSearch,
   Send,
   ShieldCheck,
-  Sparkles,
   UserRoundSearch,
   XCircle,
 } from "lucide-react";
 import { api } from "../api";
+import { useMarket } from "../profiles";
 import { Badge, Loading } from "../components/UI";
 import type { Summary } from "../types";
 import { AGENT_LABEL, PROVIDER_LABEL, active, ago, clock, duration, providerText } from "./agentWords";
@@ -42,6 +42,8 @@ type TraceEvent = {
   ok?: boolean;
   seconds?: number;
   error?: string;
+  /** Auto picked this plan for the call. */
+  routed?: boolean;
 };
 export type ActivityRun = {
   id: string;
@@ -62,6 +64,7 @@ export type ActivityRun = {
 };
 type Activity = {
   runs: ActivityRun[];
+  // daily_call_limit caps paid calls only; free plan calls never count against it.
   budget: {
     daily_call_limit: number;
     calls_today: number;
@@ -90,7 +93,6 @@ const OUTPUT_LABEL: Record<string, string> = {
   research: "Company research",
   hiring: "Hiring-manager view",
   comparison: "Fit with your profile",
-  advice: "Resume advice",
   review: "Independent review",
   plan: "Study plan",
 };
@@ -143,14 +145,6 @@ const FLOW: Step[] = [
     tags: [{ text: "Uses your profile", tone: "amber" }],
     icon: ShieldCheck,
     run: "research",
-  },
-  {
-    id: "advice",
-    label: "Resume advice",
-    does: "Points, projects and skills to lead with",
-    tags: [{ text: "AI", tone: "green" }],
-    icon: Sparkles,
-    run: "resume_advisor",
   },
   {
     id: "build",
@@ -235,7 +229,6 @@ function jobSteps(
     };
   });
   for (const [step, kind] of [
-    ["advice", "resume_advisor"],
     ["review", "resume_match"],
   ]) {
     const run = latest(kind);
@@ -270,6 +263,7 @@ export function pipelineStages(
   reviews: Activity["reviews"],
   builtCount: number,
   discovery?: ActivityRun,
+  postings = "US postings",
 ): PipelineStage[] {
   const total = jobs.length;
   const scored = jobs.filter((j) => typeof j.fit_score === "number").length;
@@ -284,7 +278,7 @@ export function pipelineStages(
         : "failed";
   return [
     {
-      label: "Discover", icon: Radar, does: "5 latest US postings, every day",
+      label: "Discover", icon: Radar, does: `5 latest ${postings}, every day`,
       state: discoveryState,
       note: discovery ? `Last search ${ago(discovery.created_at)} · ${discovery.state}` : "No search yet",
     },
@@ -326,6 +320,7 @@ export default function Agents({
   onSettings: () => void;
   onAssurance: () => void;
 }) {
+  const market = useMarket();
   const [activity, setActivity] = useState<Activity>();
   const [error, setError] = useState("");
   const [open, setOpen] = useState<string | null>(null);
@@ -422,7 +417,7 @@ export default function Agents({
   // The simple view: where the whole pipeline stands, in five plain stages.
   const total = data.jobs.length;
   const reviews = activity.reviews;
-  const stages = pipelineStages(data.jobs, reviews, built.size, discovery);
+  const stages = pipelineStages(data.jobs, reviews, built.size, discovery, market.postings);
 
   return (
     <>
@@ -705,7 +700,7 @@ export default function Agents({
                 open={open === r.id}
                 onToggle={() => setOpen(open === r.id ? null : r.id)}
                 onRetry={
-                  r.state === "failed" && !fixed.has(r.id) && r.job_id && ["research", "resume_advisor", "resume_match"].includes(r.kind)
+                  r.state === "failed" && !fixed.has(r.id) && r.job_id && ["research", "resume_match"].includes(r.kind)
                     ? () => start(r.kind, r.job_id!)
                     : undefined
                 }

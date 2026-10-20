@@ -1,0 +1,51 @@
+candidate_revision: 2026-09-18.1
+job_id: f6d57ca2da29823c
+role_eligible: false
+job_snapshot_sha256: 6911d66504f9a763e2fad777652730546b18607222194759ba9b4a05862b36cf
+supported_requirement_coverage: 0
+requirements: []
+company_problem:
+  statement: Pending review of the saved job description.
+  source_url: https://jobs.ashbyhq.com/color-health/41fa6f16-b2f2-46c6-bdb4-9aae3b9b5b96/application
+  published_or_accessed: '2026-09-23'
+  evidence_class: explicit
+  confidence: low
+selected_project_id: PROJ-P04-NEWS-RAG
+selected_project_ids:
+- PROJ-P04-NEWS-RAG
+- PROJ-P06-EXPENSE
+selected_project_reason: Draft selection by overlap with approved project wording;
+  review the business problem and full job requirements.
+resume_claim_ids:
+- CONTACT-EMAIL-001
+- CONTACT-GITHUB-001
+- CONTACT-PHONE-001
+- CONTACT-PORTFOLIO-001
+- COURSEWORK-MS-001
+- EDU-BE-001
+- EDU-MS-001
+- EXP-INSOPS-001
+- EXP-RA-001
+- EXP-SOLITON-PE-001
+- EXP-TA-001
+- IDENTITY-001
+- METRIC-DRAEGER-94
+- PROJ-P04-NEWS-RAG
+- PROJ-P06-EXPENSE
+- SKILL-CLOUD-001
+- SKILL-CV-TOOLS-001
+- SKILL-DATA-TOOLS-001
+- SKILL-DESKTOP-001
+- SKILL-GENAI-001
+- SKILL-LAKEHOUSE-001
+- SKILL-LANGUAGES-001
+- SKILL-ML-001
+- SKILL-STREAMING-001
+- SKILL-TEST-001
+- SKILL-TOUCHED-001
+held_claims_used: []
+studio_review_required: true
+source_evidence_errors:
+- 'Unknown source EVIDENCE ID on line 60: resume_items:351db8f99cac412faf3c9eb7426a9310'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:d237b4d1842347919d00553113311401'
+- 'Unknown source EVIDENCE ID on line 60: resume_items:fd19efe752af42cc925994f7539abac4'

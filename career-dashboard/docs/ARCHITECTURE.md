@@ -21,6 +21,32 @@ and validators), `workflows/` (agent briefs as Markdown), `ai/` (providers and
 the specialist agents), plus the standalone modules `migrations.py`,
 `job_quality.py`, `assessment.py`, `chat_changes.py` and `resume_rules.py`.
 
+## Profiles
+
+One server holds several profiles, each a separate workspace with the same
+layout. `backend/profiles.py` is the registry (`profiles/registry.json`):
+Annie (`annie`) is the locked backup whose root is the app folder itself
+(`data/` here); every other profile's root is `profiles/<id>/`.
+`backend/dashboard/shell.py` is what `run.py` serves: it builds one
+`create_app(root)` per ready profile (its own `Workspace`, SQLite database,
+services, agent runner, pipeline, assistant and scheduler) and routes
+`/p/<id>/api/...` to it, so no request can reach another profile's objects.
+
+Everything that differs between people is read from the profile's own files:
+`profile.yml` (identity, targets, `country_pack`, `resume_contract`, `scoring`,
+`persona`), `sponsorship.yml` (the gate), `portals.yml`, and optional guides in
+`data/config/guides/`. Country specifics live in `backend/countries/<code>/`
+(`us`, `ie`): location matching, gate templates, paper, spelling, time zone.
+Annie's prompts are the original text (she has no `persona`); another profile's
+agents get `Specialist.profile_system` filled from `backend/ai/persona.py`.
+
+New profiles are built by `backend/services/intake/` from uploaded documents:
+deterministic extraction into numbered blocks, one `profile_extractor` call and
+one `intake_auditor` call per section, a deterministic merge, a coverage ledger
+(every block cited, judged narrative, or kept verbatim), the person's review,
+then one atomic write of the whole file set. The app then seeds the new
+database from those files exactly as it does for Annie.
+
 ## Write path
 
 Every mutation commits to SQLite, records an activity event where appropriate,

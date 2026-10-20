@@ -10,15 +10,18 @@ Saved and prepared jobs in `data/career.db` (projected to `data/pipeline.md`). A
 
 ## 1. The built-in sweep
 
-The dashboard re-checks saved postings daily (`JobQualityService.verify_due`, also `POST /api/v2/jobs/verify-due`). For each posting it records the HTTP result, marks closed or redirected postings expired, and **re-runs the sponsorship gate on the live page text**: a posting whose wording now refuses sponsorship or requires citizenship/clearance moves to Excluded roles with the sentence. A posting Annie already restored after reviewing that same sentence stays.
+The dashboard re-checks saved postings daily (`JobQualityService.verify_due`, also `POST /p/<profile>/api/v2/jobs/verify-due`, e.g. `/p/annie/api/v2/jobs/verify-due`). For each posting it records the HTTP result, marks closed or redirected postings expired, and **re-runs the sponsorship gate on the live page text**: a posting whose wording now refuses sponsorship or requires citizenship/clearance moves to Excluded roles with the sentence. A posting Annie already restored after reviewing that same sentence stays.
 
 ## 2. The URL skill for anything else
 
+From the repo root (`career` is `.\career.cmd` on Windows, `./career` elsewhere; the skill lives in
+`.agents/skills/verify-job-url/`):
+
 ```bash
-backend/.venv/bin/python .agents/skills/verify-job-url/scripts/verify_job_url.py \
-  --file data/pipeline.md \
+career verify-url \
+  --file career-dashboard/data/pipeline.md \
   --delay 8 \
-  --output data/verification-results.json
+  --output career-dashboard/data/verification-results.json
 ```
 
 ## 3. Manual verification

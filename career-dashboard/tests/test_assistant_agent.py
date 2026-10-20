@@ -446,6 +446,38 @@ def test_codex_runs_sealed_and_returns_the_object(tmp_path, monkeypatch):
         codex.run("x", {"type": "object", "properties": {}})
 
 
+def test_codex_talks_utf8_whatever_the_windows_code_page(service, tmp_path, monkeypatch):
+    """Like the real CLI, the fake refuses stdin that is not UTF-8 and answers in raw UTF-8.
+    Before, Windows' ANSI code page broke both ways: a dash in a job title made Codex reject the
+    prompt, and a curly quote in its answer failed to decode (live pipeline run, 23 Sep 2026).
+    Both launchers are covered: the specialists' (codex.run) and the agent runner's."""
+    from backend.services.agents import AgentRunner
+    script = tmp_path / "fake_codex.py"
+    script.write_text(
+        "import json, sys\n"
+        "args = sys.argv[1:]\n"
+        "prompt = sys.stdin.buffer.read().decode('utf-8')\n"
+        "answer = {'echo': prompt, 'quote': '\\u201cDr\\u00e4ger\\u201d \\u2014 ok'}\n"
+        "open(args[args.index('-o') + 1], 'w', encoding='utf-8').write(json.dumps(answer, ensure_ascii=False))\n",
+        encoding="utf-8",
+    )
+    if os.name == "nt":
+        cli = tmp_path / "codex.cmd"
+        cli.write_text(f'@echo off\n"{sys.executable}" "{script}" %*\n', encoding="utf-8")
+    else:
+        cli = tmp_path / "codex"
+        cli.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{script}" "$@"\n', encoding="utf-8")
+        cli.chmod(0o755)
+    monkeypatch.setenv("CODEX_CLI", str(cli))
+    schema = {"type": "object", "properties": {"echo": {"type": "string"}, "quote": {"type": "string"}}}
+    expected = {"echo": "Boston, Massachusetts — hybrid at Dräger", "quote": "“Dräger” — ok"}
+    result, _ = codex.run("Boston, Massachusetts — hybrid at Dräger", schema)
+    assert result == expected
+    runner = AgentRunner(service, execute=lambda *a, **k: {})
+    assert runner.invoke("Boston, Massachusetts — hybrid at Dräger", schema, web=False) == expected
+    runner.pool.shutdown()
+
+
 def test_the_specialist_team_runs_on_codex(tmp_path, monkeypatch):
     calls = []
 

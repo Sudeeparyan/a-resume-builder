@@ -31,12 +31,13 @@ from urllib.request import Request, urlopen
 from backend.paths import CONFIG, TIMEZONE
 
 
-def _today() -> str:
-    """The access date in Annie's time zone, for the source records on each posting."""
+def _today(tz: str | None = None) -> str:
+    """The access date in the candidate's time zone, for the source records on each posting."""
     from datetime import datetime
     from zoneinfo import ZoneInfo
-    return datetime.now(ZoneInfo(TIMEZONE)).date().isoformat()
+    return datetime.now(ZoneInfo(tz or TIMEZONE)).date().isoformat()
 
+# Annie's list; a profile reads its own data/config/portals.yml (tracked_companies(root=...)).
 PORTALS_YML = CONFIG / "portals.yml"
 TIMEOUT = 20
 USER_AGENT = "Mozilla/5.0 (annie-career-workspace; local job search)"
@@ -67,8 +68,9 @@ def html_to_text(raw: str) -> str:
     return _NL_RE.sub("\n\n", text).strip()
 
 
-def tracked_companies(enabled_only: bool = True) -> list[dict[str, Any]]:
-    """Read portals.yml; cap-exempt employers first (no lottery for them)."""
+def tracked_companies(enabled_only: bool = True, root=None) -> list[dict[str, Any]]:
+    """Read the workspace's portals.yml; cap-exempt employers first (no lottery for them)."""
+    path = Path(root) / "data/config/portals.yml" if root else PORTALS_YML
     try:
         import yaml
         data = yaml.safe_load(PORTALS_YML.read_text(encoding="utf-8")) or {}
@@ -160,7 +162,7 @@ def _get_json(url: str, body: dict | None = None):
         lock.release()
 
 
-def _posting(row, source_id, title, url, location, description, employer_type="company"):
+def _posting(row, source_id, title, url, location, description, employer_type="company", tz=None):
     return {
         "company": row.get("name") or "",
         "title": (title or "").strip(),
@@ -316,21 +318,18 @@ def fetch_board(row: dict[str, Any], title_ok: Callable[[str], bool] | None = No
         data, error = _get_json(f"https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true")
         for job in (data or {}).get("jobs", []) or []:
             out.append(_posting(row, job.get("id"), job.get("title"), job.get("absolute_url"),
-                                ((job.get("location") or {}).get("name") or ""), html_to_text(job.get("content") or "")))
+                                ((job.get("location") or {}).get("name") or ""), html_to_text(job.get("content") or ""), tz=tz))
     elif ats == "lever":
         data, error = _get_json(f"https://api.lever.co/v0/postings/{token}?mode=json")
         for job in data or []:
             cats = job.get("categories") or {}
-            body = job.get("descriptionPlain") or html_to_text(job.get("description") or "")
-            for lst in job.get("lists") or []:
-                body += "\n\n" + (lst.get("text") or "") + "\n" + html_to_text(lst.get("content") or "")
             out.append(_posting(row, job.get("id"), job.get("text"), job.get("hostedUrl") or job.get("applyUrl"),
-                                cats.get("location") or "", body))
+                                cats.get("location") or "", _lever_text(job), tz=tz))
     elif ats == "ashby":
         data, error = _get_json(f"https://api.ashbyhq.com/posting-api/job-board/{token}?includeCompensation=true")
         for job in (data or {}).get("jobs", []) or []:
             out.append(_posting(row, job.get("id") or job.get("jobId"), job.get("title"), job.get("jobUrl") or job.get("applyUrl"),
-                                job.get("location") or "", job.get("descriptionPlain") or html_to_text(job.get("descriptionHtml") or "")))
+                                job.get("location") or "", job.get("descriptionPlain") or html_to_text(job.get("descriptionHtml") or ""), tz=tz))
     return out, error
 
 

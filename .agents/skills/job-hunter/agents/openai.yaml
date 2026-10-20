@@ -1,0 +1,4 @@
+interface:
+  display_name: "Job Hunter"
+  short_description: "Find, gate, rank and save US roles that fit Annie"
+  default_prompt: "Use $job-hunter to find this week's best US roles for Annie."

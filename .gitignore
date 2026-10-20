@@ -39,6 +39,20 @@ daily-job-search/.runtime/
 !.env.example
 keys.txt
 
+# Libraries (reinstalled from requirements / package.json)
+.venv/
+venv/
+node_modules/
+
+# Caches and build output (regenerated; run.py rebuilds the frontend on start)
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+career-dashboard/frontend/dist/
+daily-job-search/.runtime/
+*.pid
+
 # LaTeX build artefacts
 *.aux
 *.log
@@ -48,4 +62,8 @@ keys.txt
 *.synctex.gz
 
 .DS_Store
-Archive.zip
+
+# Other people's profiles (their documents, jobs, resumes and chats) stay on this PC
+# only. Annie's workspace (career-dashboard/data/) is tracked as before.
+career-dashboard/profiles/*
+!career-dashboard/profiles/.gitkeep

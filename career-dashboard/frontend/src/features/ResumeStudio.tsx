@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -6,6 +6,7 @@ import {
   Download,
   FileText,
   ArrowRight,
+  MessageSquareText,
   RefreshCw,
   Save,
   Search,
@@ -13,9 +14,10 @@ import {
   Sparkles,
   XCircle,
 } from "lucide-react";
-import { api, fileUrl } from "../api";
-import { Badge, Field, Modal, ReportView, Running } from "../components/UI";
+import { API_BASE, api, fileUrl } from "../api";
+import { AskAssistant, AskContext, Badge, Field, Modal, ReportView, Running } from "../components/UI";
 import { JobList } from "../components/JobList";
+import { useMarket } from "../profiles";
 import { macroSpan, readField, writeField } from "./studioFields";
 import { AgentControl } from "./AgentControl";
 import FitCheck from "./FitCheck";
@@ -120,6 +122,7 @@ export default function ResumeStudio({
   refresh: () => Promise<void>;
 }) {
   const job = data.jobs.find((j) => j.id === jobId);
+  const market = useMarket();
   const [coverLetter, setCoverLetter] = useState<CoverLetter | null>(null);
   const [coverBusy, setCoverBusy] = useState(false);
   const [coverError, setCoverError] = useState("");
@@ -133,7 +136,20 @@ export default function ResumeStudio({
             resume with guided AI help.
           </p>
         </div>
-        <Badge>Editable one-page draft (US Letter)</Badge>
+        <div className="actions">
+          <AskAssistant
+            prompts={
+              job
+                ? [
+                    { label: "What is this resume missing?", text: `What does the ${job.company} — ${job.title} posting ask for that this resume does not show yet, and what can I honestly do about it?` },
+                    { label: "Is it ready to send?", text: `Is the ${job.company} — ${job.title} resume ready to send? Check the PDF, the scores and the Assurance claims.` },
+                    { label: "Change this resume", text: `Change the ${job.company} resume: `, send: false },
+                  ]
+                : [{ label: "Which jobs still need a resume?", text: "Which saved jobs still have no resume PDF?" }]
+            }
+          />
+          <Badge>Editable one-page draft ({market.paper})</Badge>
+        </div>
       </div>
       <div className="studio-job-bar">
         <Field label="Company and role">
@@ -217,6 +233,7 @@ function Editor({
 }) {
   const jobId = job.id;
   const company = job.company;
+  const market = useMarket();
   const [draft, setDraft] = useState<Draft>();
   const [source, setSource] = useState("");
   const [step, setStep] = useState<"analyse" | "match" | "improve">(
@@ -235,9 +252,7 @@ function Editor({
   latestSource.current = source;
   const key = "resume-studio:" + jobId;
   const base = "/v2/studio/" + jobId;
-  const run = data.runs.find(
-    (r) => r.kind === "resume_advisor" && r.job_id === jobId,
-  );
+  const ask = useContext(AskContext);
   const researchRun = data.runs.find(
     (r) => r.kind === "research" && r.job_id === jobId,
   );
@@ -249,8 +264,10 @@ function Editor({
           r.job_id === jobId &&
           ["queued", "running"].includes(r.state),
       );
+  const reviewRun = data.runs.find(
+    (r) => r.kind === "resume_match" && r.job_id === jobId,
+  );
   const dirty = !!draft && source !== draft.source;
-  const activeRun = !!run && ["queued", "running"].includes(run.state);
   const studyRun = data.runs.find(
     (r) => r.kind === "study_plan" && r.job_id === jobId,
   );
@@ -338,7 +355,7 @@ function Editor({
     // A plain link navigated the whole app to a raw JSON error page when the
     // server refused, so fetch the file and surface any refusal as a message.
     try {
-      const response = await fetch("/api" + base + "/download?format=" + format);
+      const response = await fetch(API_BASE + base + "/download?format=" + format);
       if (!response.ok) {
         const detail = await response.json().catch(() => ({}));
         throw new Error(
@@ -522,10 +539,22 @@ function Editor({
       )}
       {step === "match" && (
         <MatchCheck
+          jobId={jobId}
           draft={draft}
           dirty={dirty}
           run={buildRun}
+          review={reviewRun}
           onBuild={startBuild}
+          onReview={async () => {
+            setError("");
+            try {
+              // The AI in Settings reviews it; the review sees only the PDF text and the posting.
+              await api("/v2/agents/run", "POST", { kind: "resume_match", job_id: jobId });
+              await refresh();
+            } catch (e) {
+              setError((e as Error).message);
+            }
+          }}
           onNext={() => setStep("improve")}
         />
       )}
@@ -672,15 +701,18 @@ function Editor({
           </div>
         </div>
       )}
-      <AgentControl
-        jobId={jobId}
-        revision={draft.revision}
-        locked={!!busy || dirty}
-        onBuilding={(active) =>
-          setBusy(active ? "Updating the resume, preview and score…" : "")
-        }
-        onChanged={reloadDraft}
-      />
+      {ask && (
+        // Wording changes go through the chat: it shows the before/after and waits for her yes.
+        <div className="studio-ask">
+          <p>
+            Want a bullet reworded, a skill moved or a project swapped? Ask in the chat: it shows the
+            change first and applies it only after your yes.
+          </p>
+          <button className="secondary" onClick={() => ask(`Change the ${company} resume: `, false)}>
+            <MessageSquareText size={16} /> Ask the assistant to change this resume
+          </button>
+        </div>
+      )}
       <div className="studio-split">
         <section className="studio-panel">
           <div className="studio-panel-heading">
@@ -840,7 +872,7 @@ function Editor({
                   <div className="studio-help">
                     <b>Lead with the skills this role names</b>
                     <span>
-                      Annie's resumes carry no summary: the skills block does
+                      These resumes carry no summary: the skills block does
                       that job. Put the strongest matching skills first in each
                       category. Only skills already in your profile belong here.
                     </span>
@@ -884,7 +916,7 @@ function Editor({
                   Version {draft.preview.revision} · {draft.preview.page_count}{" "}
                   {draft.preview.page_count === 1 ? "page" : "pages"} ·{" "}
                   {draft.preview.page_count === 1
-                    ? "US Letter target: exactly 1 page"
+                    ? `${market.paper} target: exactly 1 page`
                     : "Too long: use Fit to one page (it trims content, never fonts below 10pt)"}
                 </p>
                 {draft.preview.layout && (
@@ -1008,7 +1040,7 @@ function Editor({
           <span>
             <b>Review details & advanced tools</b>
             <small>
-              Match breakdown, company research, Profile captures and version
+              Match breakdown, study plan, Profile captures and version
               history
             </small>
           </span>
@@ -1060,50 +1092,6 @@ function Editor({
           )}
           <div className="studio-agents">
             <section className="card">
-              <div className="section-head">
-                <div>
-                  <div className="eyebrow">AGENT 1 · INDEPENDENT RESEARCH</div>
-                  <h2>What this company wants to see</h2>
-                </div>
-                <Badge>No profile access</Badge>
-              </div>
-              <p>
-                Recent company research, resume priorities, suggested projects
-                and skills. Project ideas stay here until you build them and add
-                your evidence.
-              </p>
-              <button
-                className="secondary"
-                disabled={activeRun}
-                onClick={async () => {
-                  try {
-                    await api("/v2/agents/run", "POST", {
-                      kind: "resume_advisor",
-                      job_id: jobId,
-                    });
-                    await refresh();
-                  } catch (e) {
-                    setError((e as Error).message);
-                  }
-                }}
-              >
-                <RefreshCw size={15} />
-                {activeRun
-                  ? "Research in progress…"
-                  : run
-                    ? "Research · reuse cache"
-                    : "Research this company"}
-              </button>
-              {run && <Running run={run} />}
-              {run?.result?.advice && <ReportView report={run.result.advice} />}
-              {run?.result?.research && (
-                <details className="report-section">
-                  <summary>Company research and sources</summary>
-                  <ReportView report={run.result.research} />
-                </details>
-              )}
-            </section>
-            <section className="card">
               <div className="eyebrow">FIGHT 2 · WIN THE INTERVIEW</div>
               <h2>Study plan for this company</h2>
               <p>
@@ -1141,7 +1129,7 @@ function Editor({
               )}
             </section>
             <section className="card">
-              <div className="eyebrow">AGENT 2 · RULE-BASED TRACKER</div>
+              <div className="eyebrow">VERSIONS & PROFILE CAPTURES</div>
               <h2>Keep your experience with you</h2>
               <p>
                 Runs on each save. Tracks project fields and skills in this
@@ -1396,21 +1384,29 @@ function ReadinessCard({ jobId, refreshKey }: { jobId: string; refreshKey: strin
 }
 
 function MatchCheck({
+  jobId,
   draft,
   dirty,
   run,
+  review,
   onBuild,
+  onReview,
   onNext,
 }: {
+  jobId: string;
   draft: Draft;
   dirty: boolean;
   run?: Run;
+  /** The latest independent review of this job's PDF (a resume_match run). */
+  review?: Run;
   onBuild: () => Promise<void>;
+  onReview: () => Promise<void>;
   onNext: () => void;
 }) {
   const match = draft.match;
   const current = !!match?.current && !dirty;
   const running = !!run && ["queued", "running"].includes(run.state);
+  const reviewing = !!review && ["queued", "running"].includes(review.state);
   return (
     <section className="studio-stage" aria-labelledby="match-title">
       <div className="studio-stage-head">
@@ -1485,10 +1481,34 @@ function MatchCheck({
           ))}
         </div>
       ) : null}
+      <FitCheck jobId={jobId} />
+      <div className="card studio-review">
+        <div className="section-head">
+          <div>
+            <div className="eyebrow">INDEPENDENT REVIEW · PDF + JOB DESCRIPTION ONLY</div>
+            <h3>A second opinion on this PDF</h3>
+            <p className="small">
+              An AI reads only the built PDF's text and the posting, never your profile, and says what a
+              reader would miss. It is tied to the PDF version saved when it started.
+            </p>
+          </div>
+          <button
+            className="secondary"
+            disabled={reviewing || running || !current}
+            title={current ? "Review the current PDF" : "Build the current draft first"}
+            onClick={() => void onReview()}
+          >
+            <Search size={16} />
+            {reviewing ? "Reviewing…" : review ? "Review again" : "Review the PDF"}
+          </button>
+        </div>
+        {review && <Running run={review} />}
+        {review?.result?.review && <ReportView report={review.result.review} />}
+      </div>
       <div className="studio-stage-footer">
         <p className="small">
-          Next, ask the resume assistant for changes and watch the preview and
-          score update.
+          Next, edit the wording or ask the assistant for changes, and watch the
+          preview and score update.
         </p>
         <button className="primary" onClick={onNext}>
           Improve this resume <ArrowRight size={16} />

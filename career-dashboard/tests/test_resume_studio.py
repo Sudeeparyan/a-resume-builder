@@ -99,24 +99,6 @@ def test_project_switch_and_missing_project_warning(service):
     assert any('missing' in w for w in d['warnings'])
 
 
-def test_advisor_receives_only_role_and_public_research(service):
-    j = add(service.w)
-    service.w.update_job(j['id'], 'saved', notes='PRIVATE-NOTES')
-    service.save_knowledge({'kind': 'skill', 'title': 'PRIVATE-SKILL', 'summary': 'Secret'})
-    calls = []
-    def execute(prompt, schema, **kwargs):
-        calls.append((prompt, kwargs))
-        return {'summary': 'Public role expectations', 'report': 'Proposed project, not completed work', 'sources': [], 'limitations': []}
-    runner = AgentRunner(service, execute)
-    runner.enqueue('resume_advisor', j['id'])
-    runner.pool.shutdown(wait=True)
-    assert len(calls) == 2
-    assert all('PRIVATE-' not in p for p, _ in calls)
-    assert calls[1][1] == {'web': False}
-    assert service.runs()[0]['result']['profile_access'] is False
-    assert service.runs()[0]['state'] == 'completed'
-
-
 def test_preview_revision_staleness_and_real_compile(service):
     if not shutil.which('tectonic'):
         pytest.skip('PDF runtime unavailable')
@@ -144,7 +126,7 @@ def test_studio_api_keeps_origin_guard_and_rejects_stale_save(service):
         url = '/api/v2/studio/' + j['id']
         assert client.post(url + '/open').status_code == 200
         assert client.post(url + '/open').status_code == 200
-        assert len([r for r in service.runs() if r['kind'] == 'resume_advisor']) == 0
+        assert not [r for r in service.runs() if r['kind'] in ('research', 'study_plan')]  # opening a draft starts no AI
         assert client.put(url, json={'revision': 1, 'fields': {'SkillsLanguages': 'Python, SQL, API test skill'}}, headers={'Origin': 'https://foreign.test'}).status_code == 403
         assert client.put(url, json={'revision': 1, 'fields': {'SkillsLanguages': 'Python, SQL, API test skill'}}).status_code == 200
         assert client.put(url, json={'revision': 1, 'source': 'Stale'}).status_code == 400

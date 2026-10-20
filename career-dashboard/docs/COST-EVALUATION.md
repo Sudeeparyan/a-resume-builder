@@ -4,6 +4,8 @@ Written 19 September 2026. Covers one run of the whole loop, **find jobs → gat
 
 > **Status: estimate, not measurement.** The workspace does not yet record token counts. `ai_calls` has `input_tokens` / `output_tokens` columns, but every one of the 18 rows from 18 September is NULL, and `AgentTeam.on_usage` has no consumer. Every token figure below is derived from file sizes in this repo and the payload caps in `backend/ai/agents/graph.py`. Section 8 says how to replace them with real numbers after one measured run; the calculator that produced the tables is reproduced in section 9 so you can re-run it with measured inputs.
 
+> **Superseded in part (24 Sep 2026).** The four posting specialists costed below (`requirement_extractor`, `relevance_judge`, `company_investigator`, `posting_verifier`) were never called in production and have been removed. A job's fit is now one `fit_analyst` call (reading tier) on a **free plan only**, and only for the discovery shortlist (`limit + DISCOVERY_SPARES` per round, at most three rounds), cached per posting in `job_fit`; with no free plan free it is checked by rules at no cost. Posting and employer checks run in code. See `docs/AI-AGENTS.md`, *The requirement matrix*. The per-call estimates for the writing agents still stand.
+
 ---
 
 ## 1. What one run is

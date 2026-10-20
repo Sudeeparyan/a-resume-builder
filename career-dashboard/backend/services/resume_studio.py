@@ -15,6 +15,9 @@ from career import atomic_write, company_key, safe_child, tex_escape
 from validate_resume import extract_zero_argument_macros, inspect_pdf, evidence_ids_from_source
 from backend.ai_marks import clean_pdf, clean_text
 from backend.services.resume_layout import ranked_source, set_density, measure_pages
+from backend.pdf_compiler import tectonic_executable
+from backend.resume_contract import contract_for
+from backend.ai_marks import clean_pdf, clean_text
 
 
 LEGACY_PROJECT_SECTION = re.compile(r'\\section\{(?:Selected|Academic) Projects?\}')
@@ -124,6 +127,13 @@ def write_field(source, name, value):
 # Tailoring rewrites Projects and Skills fields only; every other macro is out of bounds.
 TAILORED_MACRO_NAMES = {'CoreSkills'}
 TAILORED_MACRO_PREFIXES = ('SelectedProject', 'SecondProject', 'Skills')
+# A tailored skills line keeps at least this many of its own entries (or half of them, when
+# that is more), and a predicted skill is a short tool or technology name, never a phrase.
+SKILL_LINE_FLOOR = 3
+PREDICTED_SKILL_MAX_WORDS = 4
+PREDICTED_SKILL_MAX_CHARS = 40
+# At most this many registered skills are added because the role requires them (_top_up_skills).
+TOP_UP_SKILLS = 4
 
 
 def tailored_macro(name):
@@ -154,6 +164,21 @@ def _add_evidence_tags(source, macro, tags):
         return pattern.sub(lambda match: '% EVIDENCE: ' + match[1] + ' ' + ' '.join(tags) + '\n' + match[2], source, count=1)
     return re.sub(r'(\\newcommand\{\\' + macro + r'\})',
                   lambda match: '% EVIDENCE: ' + ' '.join(tags) + '\n' + match[1], source, count=1)
+
+
+def _evidence_tags(source, macro):
+    """The tags in the EVIDENCE comment above a macro definition."""
+    match = re.search(r'% EVIDENCE: ([^\n]+)\n\\newcommand\{\\' + macro + r'\}', source)
+    return match[1].split() if match else []
+
+
+def _set_evidence_tags(source, macro, tags):
+    """Replace the EVIDENCE comment above a macro definition (adding one if missing)."""
+    line = '% EVIDENCE: ' + ' '.join(tags) + '\n'
+    pattern = re.compile(r'% EVIDENCE: [^\n]*\n(\\newcommand\{\\' + macro + r'\})')
+    if pattern.search(source):
+        return pattern.sub(lambda match: line + match[1], source, count=1)
+    return re.sub(r'(\\newcommand\{\\' + macro + r'\})', lambda match: line + match[1], source, count=1)
 
 
 class ResumeStudio:
@@ -212,7 +237,7 @@ class ResumeStudio:
                 if not job['folder']:
                     self.w.prepare(job_id)
                 folder = self.w.current_folder(job_id)
-                source = (folder / 'resume.tex').read_text()
+                source = (folder / 'resume.tex').read_text(encoding='utf-8')
                 # Preserve existing prepared wording. Only a newly prepared draft gets skill ordering.
                 if not job['folder']:
                     macros = extract_zero_argument_macros(source)
@@ -224,7 +249,7 @@ class ResumeStudio:
                             skills.sort(key=lambda skill: skill.casefold() not in jd)
                             source = replace_macro(source, name, separator.join(skills))
                 mapping_file = folder / 'evidence-map.yml'
-                draft_profile_revision = (yaml.safe_load(mapping_file.read_text()) or {}).get('candidate_revision', self.w.evidence()['candidate_revision']) if mapping_file.exists() else self.w.evidence()['candidate_revision']
+                draft_profile_revision = (yaml.safe_load(mapping_file.read_text(encoding='utf-8')) or {}).get('candidate_revision', self.w.evidence()['candidate_revision']) if mapping_file.exists() else self.w.evidence()['candidate_revision']
                 studio_folder = folder / 'studio'
                 studio_folder.mkdir(exist_ok=True)
                 stamp = self.s.now()
@@ -246,7 +271,7 @@ class ResumeStudio:
         folder = safe_child(self.w.root / 'data/output', str(Path(row['folder']).relative_to('data/output')))
         atomic_write(folder / 'resume.tex', row['source'])
         preview_file = folder / 'preview.json'
-        preview = json.loads(preview_file.read_text()) if preview_file.exists() else None
+        preview = json.loads(preview_file.read_text(encoding='utf-8')) if preview_file.exists() else None
         if preview:
             preview['current'] = preview['source_sha256'] == hashlib.sha256(row['source'].encode()).hexdigest()
         fields = {k: plain(v) for k, v in extract_zero_argument_macros(row['source']).items() if k in {'ResumeSummary', 'CoreSkills'} or k.startswith(('SelectedProject', 'SecondProject'))}
@@ -385,6 +410,7 @@ class ResumeStudio:
                     source = install_project(source, project, second)
             if extract_zero_argument_macros(before).get('SelectedProjectID') != extract_zero_argument_macros(source).get('SelectedProjectID'):
                 source = re.sub(r'% STUDIO_PROJECT_SKILLS\n% EVIDENCE:[^\n]+\n[^\n]+\n', '', source)
+            source = clean_text(source)  # hidden characters pasted into the source editor
             if not source.strip() or len(source) > 150000:
                 raise ValueError('Resume source must contain 1–150,000 characters')
             if source != before:
@@ -406,7 +432,7 @@ class ResumeStudio:
         """Keep each preview's JD and claim references aligned without claiming a review."""
         original = self.w.current_folder(job_id)
         mapping_path = original / 'evidence-map.yml'
-        mapping = yaml.safe_load(mapping_path.read_text()) if mapping_path.exists() else {}
+        mapping = yaml.safe_load(mapping_path.read_text(encoding='utf-8')) if mapping_path.exists() else {}
         snapshot = original / 'job-description.md'
         if snapshot.exists():
             shutil.copy2(snapshot, target / 'job-description.md')
@@ -426,19 +452,20 @@ class ResumeStudio:
             draft = self.get(job_id)
             if draft['revision'] != revision:
                 raise ValueError('Save or reload the current resume before compiling.')
-            executable = shutil.which('tectonic')
+            executable = tectonic_executable()
             if not executable:
-                raise ValueError('PDF compiler is unavailable. Your draft is saved; restart with Start Dashboard.command.')
+                raise ValueError('PDF compiler is unavailable. Your draft is saved; install Tectonic and try again.')
             folder = safe_child(self.w.root / 'data/output', draft['file_root'])
             with tempfile.TemporaryDirectory(prefix='studio-preview-') as temp:
                 build = Path(temp)
-                (build / 'resume.tex').write_text(draft['source'])
+                (build / 'resume.tex').write_text(draft['source'], encoding='utf-8')
                 try:
-                    run = subprocess.run([executable, '--untrusted', '--outdir', str(build), 'resume.tex'], cwd=build, capture_output=True, text=True, timeout=90)
+                    run = subprocess.run([executable, '--untrusted', '--outdir', str(build), 'resume.tex'], cwd=build, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=90)
                 except subprocess.TimeoutExpired:
                     raise ValueError('Preview timed out. Your source is saved; check it for loops or very large content.') from None
                 if run.returncode or not (build / 'resume.pdf').exists():
                     raise ValueError('Preview could not compile. Your edits are saved.\n' + (run.stderr + run.stdout)[-3500:])
+                clean_pdf(build / 'resume.pdf')
                 if len(PdfReader(str(build / 'resume.pdf')).pages) > 10:
                     raise ValueError('Preview exceeds ten pages. Reduce the content before compiling again.')
                 report = inspect_pdf(build / 'resume.pdf', build / 'pages')
@@ -449,7 +476,7 @@ class ResumeStudio:
                 shutil.copy2(build / 'resume.pdf', target / 'resume.pdf')
                 for page in (build / 'pages').glob('*.png'):
                     shutil.copy2(page, target / page.name)
-                metadata = {'revision': revision, 'source_sha256': hashlib.sha256(draft['source'].encode()).hexdigest(), 'page_count': report['page_count'], 'created_at': self.s.now(), 'path': str(target.relative_to(self.w.root / 'data/output')), 'review_required': True, 'layout': measure_pages(build / 'resume.pdf', build / 'pages')}
+                metadata = {'revision': revision, 'source_sha256': hashlib.sha256(draft['source'].encode()).hexdigest(), 'page_count': report['page_count'], 'created_at': self.s.now(), 'path': str(target.relative_to(self.w.root / 'data/output')), 'review_required': True, 'layout': measure_pages(build / 'resume.pdf', build / 'pages', contract=contract_for(self.w.root))}
                 atomic_write(folder / 'preview.json', json.dumps(metadata))
             self.score(job_id)
             return self.get(job_id)
@@ -462,9 +489,9 @@ class ResumeStudio:
         page still overflows, content is cut in the order profile.yml documents, one
         registered construct at a time. Nothing is ever added that is not registered.
         """
-        from backend.resume_contract import load_contract
+        from backend.resume_contract import contract_for
         from backend.services.resume_projects import install_project
-        contract = load_contract()
+        contract = contract_for(self.w.root)
         with self.lock:
             draft = self.get(job_id)
             if draft['revision'] != revision:
@@ -477,10 +504,10 @@ class ResumeStudio:
                 if not choices:
                     raise ValueError('A signature project and one supporting project are required')
                 base_source = install_project(base_source, choices[0], second=True)
-            source, ranking = ranked_source(base_source, self.w.get_job(job_id), self.w.evidence(), self.s.knowledge(), self.w.profile())
-            executable = shutil.which('tectonic')
+            source, ranking = ranked_source(base_source, self.w.get_job(job_id), self.w.evidence(), self.s.knowledge(), self.w.profile(), contract=contract)
+            executable = tectonic_executable()
             if not executable:
-                raise ValueError('PDF compiler is unavailable. Restart with Start Dashboard.command.')
+                raise ValueError('PDF compiler is unavailable. Install Tectonic and try again.')
             folder = safe_child(self.w.root / 'data/output', draft['file_root'])
             fixed_font = self.s.pref('resume_font:' + job_id)
             points = [fixed_font] if fixed_font else [contract.max_body_pt, round((contract.max_body_pt + contract.min_body_pt) / 2, 2), contract.min_body_pt]
@@ -493,19 +520,20 @@ class ResumeStudio:
                         build = Path(temp) / str(attempt)
                         build.mkdir()
                         attempt += 1
-                        candidate = set_density(source, point)
-                        (build / 'resume.tex').write_text(candidate)
+                        candidate = set_density(source, point, contract=contract)
+                        (build / 'resume.tex').write_text(candidate, encoding='utf-8')
                         try:
-                            result = subprocess.run([executable, '--untrusted', '--outdir', str(build), 'resume.tex'], cwd=build, capture_output=True, text=True, timeout=90)
+                            result = subprocess.run([executable, '--untrusted', '--outdir', str(build), 'resume.tex'], cwd=build, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=90)
                         except subprocess.TimeoutExpired:
                             raise ValueError('Page fitting timed out. Your previous draft remains unchanged.') from None
                         if result.returncode or not (build / 'resume.pdf').exists():
                             raise ValueError('Could not compile the ranked draft. Your previous version is preserved.\n' + (result.stderr + result.stdout)[-2000:])
+                        clean_pdf(build / 'resume.pdf')
                         page_count = len(PdfReader(str(build / 'resume.pdf')).pages)
                         if page_count > contract.pages:
                             continue  # try a smaller allowed font, then cut content
                         inspect_pdf(build / 'resume.pdf', build / 'pages')
-                        layout = measure_pages(build / 'resume.pdf', build / 'pages')
+                        layout = measure_pages(build / 'resume.pdf', build / 'pages', contract=contract)
                         if layout['full_pages'] or page_count == contract.pages:
                             best = (build, candidate, layout, round(float(point), 2))
                             break
@@ -640,7 +668,10 @@ class ResumeStudio:
             draft = self.get(job_id)
             result = AssessmentService(self.s).run(job_id, payload, draft['source'])
             with self.w.connect() as db:
-                db.execute('INSERT INTO resume_scores VALUES(?,?,?,?,?,?,?)',
+                # The same revision, PDF and posting scored again under newer scoring rules replaces
+                # the older score; a plain INSERT hit the table's key and every re-score after a
+                # SCORING_VERSION change failed with a server error (23 Sep).
+                db.execute('INSERT OR REPLACE INTO resume_scores VALUES(?,?,?,?,?,?,?)',
                            (job_id, payload['revision'], payload['source_sha256'], payload['pdf_sha256'], payload['jd_sha256'], json.dumps(result), self.s.now()))
                 self.w.record_event(db, 'resume_scored', job_id, revision=payload['revision'], ats_readiness=result['ats_readiness']['score'], resume_coverage=result['resume_coverage']['score'])
             self.w.export_tracking()
@@ -729,17 +760,37 @@ class ResumeStudio:
             if job['folder']:
                 research_file = self.w.current_folder(job_id) / 'company-research.md'
                 if research_file.exists():
-                    research = research_file.read_text()[:8000]
+                    # Research is saved as UTF-8; the placeholder career.py writes uses the
+                    # platform default, so a stray byte must not stop the tailor.
+                    research = research_file.read_text(encoding='utf-8', errors='replace')[:8000]
             never_claim = next((c.get('approved_facts', []) or []
                                 for c in self.w.evidence().get('claims', []) if c.get('id') == 'SKILL-NEVER-001'), [])
+            # The tailor must know which projects may lead: _check_tailored_projects rejects a
+            # support-only project or another company's signature in the first slot.
+            with self.w.connect() as db:
+                taken = {row[0] for row in db.execute('SELECT project_id FROM signature_assignments WHERE company_key<>?',
+                                                      (company_key(job['company']),))}
+            projects = [{**project, 'can_lead': project['evidence_id'] not in taken
+                         and registry[project['evidence_id']].get('signature_eligible') is not False}
+                        for project in self._verified_projects(registry)]
             payload = {
                 'role': {'title': job['title'], 'company': job['company'],
                          'description': (job['description'] or '')[:12000]},
                 'company_research': research,
-                'verified_projects': self._verified_projects(registry),
+                'verified_projects': projects,
                 'verified_skills': sorted(self._verified_skill_pool().values(), key=lambda skill: skill['name'].casefold()),
                 'never_claim': [str(fact) for fact in never_claim],
             }
+            # What the role asks for, checked against her registry (services/fit.py), so the plan
+            # proves the must-haves and never treats a genuine gap as something she has.
+            analysis = None
+            try:
+                from backend.services import fit
+                analysis = fit.for_job(self.s, job_id)
+                payload['requirements'] = [{k: item[k] for k in ('text', 'category', 'status', 'evidence_ids')}
+                                           for item in analysis['matrix']['requirements'] if item['status'] != 'unknown']
+            except Exception:  # noqa: BLE001 - the plan still works from the posting alone
+                analysis = None
             try:
                 result = team.run('job_tailor', payload)
                 source, projects, skills, dropped = self._apply_tailoring(draft['source'], result, registry, job)
@@ -928,7 +979,37 @@ class ResumeStudio:
                              + (' Left out: ' + '; '.join(dropped) + '.' if dropped else ''))
         return skills
 
-    def _apply_tailoring(self, source, result, registry, job):
+    def _top_up_skills(self, skills, analysis, left_out):
+        """Verified skills that prove a must-have of this role, added when the plan left them out.
+
+        Taken from the job's requirement matrix (services/fit.py): a 'required' item that her
+        evidence meets, naming a registered skill the Skills line does not show. At most
+        TOP_UP_SKILLS are added, so the one-page fit never has to trim experience for them.
+        """
+        if not analysis:
+            return skills
+        from backend.services.fit import named_terms
+
+        pool = self._verified_skill_pool()
+        shown = {skill['content'].casefold() for skill in skills}
+        added = []
+        for item in analysis['matrix']['requirements']:
+            if item['category'] != 'required' or item['status'] != 'met':
+                continue
+            candidates = [entry for entry in pool.values() if entry['evidence_id'] in item['evidence_ids']]
+            for name in named_terms([entry['name'] for entry in candidates], item['text'] + ' ' + item['excerpt']):
+                if name.casefold() in shown or len(added) >= TOP_UP_SKILLS:
+                    continue
+                known = pool[name.casefold()]
+                shown.add(name.casefold())
+                added.append({'row_id': uuid.uuid4().hex, 'section': 'skills', 'content': known['name'],
+                              'origin': 'verified', 'evidence_id': known['evidence_id']})
+        if added:
+            left_out.append('Added ' + ', '.join(s['content'] for s in added)
+                            + ' from your registered skills: the role requires ' + ('it' if len(added) == 1 else 'them') + '.')
+        return [*skills, *added]
+
+    def _apply_tailoring(self, source, result, registry, job, analysis=None):
         from backend.ai.agents.schemas import TailoringResult
         from backend.resume_contract import contract_for
         result = TailoringResult.model_validate(result)
@@ -939,7 +1020,9 @@ class ResumeStudio:
         tailored = self._write_project_slot(source, 'SelectedProject', projects[0])
         if len(projects) > 1 and '% SECOND_PROJECT_BLOCK_START' in tailored:
             tailored = self._write_project_slot(tailored, 'SecondProject', projects[1])
-        tailored = self._write_tailored_skills(tailored, skills)
+        base_file = self.w.root / 'data/templates/resume-base.tex'
+        base = base_file.read_text(encoding='utf-8') if base_file.exists() else None
+        tailored = self._write_tailored_skills(tailored, skills, base)
         old, new = extract_zero_argument_macros(source), extract_zero_argument_macros(tailored)
         illegal = {name for name in set(old) | set(new) if old.get(name) != new.get(name) and not tailored_macro(name)}
         if illegal:
@@ -970,18 +1053,21 @@ class ResumeStudio:
         return re.sub(r'% ' + marker + r'_BLOCK_START[\s\S]*?% ' + marker + r'_BLOCK_END', lambda _: block, source, count=1)
 
     @staticmethod
-    def _write_tailored_skills(source, items):
+    def _write_tailored_skills(source, items, base=None):
         """Replace every skills macro with the tailored list, keeping each macro's category.
 
-        Skills the list keeps stay in the macro that already held them (tailored order);
-        anything new joins the last skills macro so nothing lands in a made-up category.
-        A macro that gains items has their evidence tags merged into its EVIDENCE
-        comment, so a predicted skill stays traceable to its review row.
+        A skill goes to the line the base resume (``base``, resume-base.tex) files it under,
+        in tailored order; anything new joins the last skills line so nothing lands in a
+        made-up category. The base, not the current draft, decides: on 23 Sep a draft an
+        earlier tailoring had thinned (Data Engineering empty) sent every data tool to
+        Cloud and Tools on the next run. A macro that gains items has their evidence tags
+        merged into its EVIDENCE comment, so a predicted skill stays traceable to its review row.
         """
         macros = [match[1] for match in re.finditer(r'\\newcommand\{\\([A-Za-z]+)\}', source)
                   if match[1] == 'CoreSkills' or match[1].startswith('Skills')]
         if not macros:
             return source
+        reference = extract_zero_argument_macros(base) if base else {}
         wanted, seen = [], set()
         for item in items:
             name = item['content']
@@ -993,11 +1079,22 @@ class ResumeStudio:
         per_macro, used = {}, set()
         for macro in macros:
             span = macro_span(source, macro)
-            raw = source[span[0]:span[1]]
+            raw = reference.get(macro) or source[span[0]:span[1]]
             separator = '; ' if '; ' in raw else ', '
-            current = {item.strip().casefold() for item in plain(raw).split(separator) if item.strip()}
-            per_macro[macro] = (separator, [display for key, display, _tag in wanted if key in current])
+            original = [item.strip() for item in plain(raw).split(separator) if item.strip()]
+            current = {item.casefold() for item in original}
+            kept = [display for key, display, _tag in wanted if key in current]
             used |= {key for key, _display, _tag in wanted if key in current}
+            # One model keeps forty skills, another five: a line the tailoring all but emptied
+            # keeps its first original entries (the resume's own verified wording, in order), so
+            # no heading is ever printed with nothing after it.
+            floor = min(len(original), max(SKILL_LINE_FLOOR, len(original) // 2))
+            for item in original:
+                if len(kept) >= floor:
+                    break
+                if item.casefold() not in {name.casefold() for name in kept}:
+                    kept.append(item)
+            per_macro[macro] = (separator, kept)
         leftover = [(display, tag) for key, display, tag in wanted if key not in used]
         added = {}
         if leftover:
@@ -1006,7 +1103,14 @@ class ResumeStudio:
             added[macros[-1]] = [tag for _display, tag in leftover]
         for macro, (separator, kept) in per_macro.items():
             source = write_field(source, macro, separator.join(kept))
-            if macro in added:
+            base_tags = _evidence_tags(base, macro) if base else []
+            if base_tags:
+                # Rebuilt, not appended to: re-tailoring piled up duplicate tags and tags of
+                # review rows the next tailoring deleted, and the claim check then called the
+                # whole line unsupported (Color Health, 23 Sep).
+                tags = list(dict.fromkeys(base_tags + added.get(macro, [])))
+                source = _set_evidence_tags(source, macro, tags)
+            elif macro in added:
                 source = _add_evidence_tags(source, macro, added[macro])
         return source
 

@@ -12,7 +12,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / ".agents/skills/verify-job-url/scripts/verify_job_url.py"
+# The skills live at the repo root, beside the one AGENTS.md every AI app reads.
+SCRIPT = ROOT.parent / ".agents/skills/verify-job-url/scripts/verify_job_url.py"
 SPEC = importlib.util.spec_from_file_location("verify_job_url", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader

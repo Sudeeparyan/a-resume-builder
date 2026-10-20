@@ -703,6 +703,7 @@ export default function Settings({
           </button>
         </div>
       </details>
+      <ProfileSettings notify={notify} />
     </>
   );
 }

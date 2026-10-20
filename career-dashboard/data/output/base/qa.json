@@ -1,8 +1,8 @@
 {
   "candidate_revision": "2026-09-18.1",
-  "checked_at": "2026-09-19T23:29:11.692084+00:00",
+  "checked_at": "2026-09-23T14:29:47.251528+00:00",
   "compile_ok": true,
-  "compiled_pdf_sha256": "39a05e897822b937be11c4495602f803899c193cd4d4d6935e38f42cd144daf8",
+  "compiled_pdf_sha256": "cbdc3fc58974d546013207a4bf00c5ac74210b4311dfa38b78c2a12041496641",
   "evidence_map": {
     "all_candidate_claims_grounded": true,
     "candidate_revision": null,
@@ -50,13 +50,13 @@
   "overflow_count": 0,
   "page2_text_characters": null,
   "page_count": 1,
-  "pdf": "C:\\Users\\sudee\\Desktop\\annie-resume\\a-resume-builder\\a-resume-builder\\career-dashboard\\data\\output\\base\\Annie_Manoharan_Resume.pdf",
+  "pdf": "D:\\Local_PC\\r_builder\\a-resume-builder\\career-dashboard\\data\\output\\base\\Annie_Manoharan_Resume.pdf",
   "pdf_metadata": {
     "author": "Annie Prasanna Manoharan",
     "subject": "Evidence-grounded resume",
     "title": "Annie Prasanna Manoharan - Resume"
   },
-  "pdf_sha256": "39a05e897822b937be11c4495602f803899c193cd4d4d6935e38f42cd144daf8",
+  "pdf_sha256": "cbdc3fc58974d546013207a4bf00c5ac74210b4311dfa38b78c2a12041496641",
   "pdf_text_extractable": true,
   "preview_sha256": {
     "page-01.png": "8e80f96d82d31e2c6abb82999266f99528ce1e353fe8a2d96af618e16315b071"
@@ -66,7 +66,7 @@
   "published_pdf": true,
   "registry_sha256": "9c59b040ebf486052580f248e600cb54c20a428f2acaaacb1ef43b3e4ff03089",
   "release_ready": true,
-  "render_dir": "C:\\Users\\sudee\\Desktop\\annie-resume\\a-resume-builder\\a-resume-builder\\career-dashboard\\data\\output\\base\\resume-preview",
+  "render_dir": "D:\\Local_PC\\r_builder\\a-resume-builder\\career-dashboard\\data\\output\\base\\resume-preview",
   "required_headings_present": true,
   "schema_version": 2,
   "second_project": {
@@ -86,7 +86,7 @@
     "PROJ-P01-IOT",
     "PROJ-P04-NEWS-RAG"
   ],
-  "source": "C:\\Users\\sudee\\Desktop\\annie-resume\\a-resume-builder\\a-resume-builder\\career-dashboard\\data\\templates\\resume-base.tex",
+  "source": "D:\\Local_PC\\r_builder\\a-resume-builder\\career-dashboard\\data\\templates\\resume-base.tex",
   "source_evidence_ids": [
     "CONTACT-EMAIL-001",
     "CONTACT-GITHUB-001",
@@ -134,7 +134,7 @@
     "94"
   ],
   "visual_review": "pass",
-  "visual_reviewed_at": "2026-09-19T23:29:11.789323+00:00",
+  "visual_reviewed_at": "2026-09-23T14:29:47.365656+00:00",
   "visual_reviewer": "Codex",
   "warnings": []
 }

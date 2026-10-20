@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """Annie's morning run: list every new eligible job, then prepare resumes for the best five.
 
-Started by the "Annie Daily Job Search" scheduled task at 07:00 (installed by
-Install-MorningTask.ps1) so everything is ready by 9 AM. It can also be run by hand:
+Annie's run is started by the "Annie Daily Job Search" scheduled task at 07:00
+(installed by Install-MorningTask.ps1); every other profile has its own task,
+"Career Daily Job Search - <name> (<id>)", which passes --profile <id>. By hand:
 
-    career-dashboard/backend/.venv/Scripts/python.exe daily-job-search/morning_run.py
+    career-dashboard/backend/.venv/Scripts/python.exe daily-job-search/morning_run.py [--profile <id>]
+
+Each profile's run talks only to that profile's API (/p/<id>/api/...) and writes
+its logs, MORNING-REPORT.md and history.csv in that profile's own daily folder
+(Annie's: this folder; any other: career-dashboard/profiles/<id>/daily-job-search/).
 
 What it does, in order:
   1. Starts the dashboard server on http://127.0.0.1:8010 if it is not running.
@@ -26,6 +31,7 @@ Nothing is ever submitted anywhere; Annie reviews and applies herself.
 """
 import csv
 import json
+import os
 import subprocess
 import sys
 import time
@@ -40,7 +46,22 @@ BACKEND = ROOT / "career-dashboard" / "backend"
 APP_ROOT = ROOT / "career-dashboard"
 VENV_PY = BACKEND / ".venv" / "Scripts" / "python.exe"
 SCRIPTS = BACKEND / "scripts"
-BASE_URL = "http://127.0.0.1:8010"
+DEFAULT_URL = "http://127.0.0.1:8010"
+POLL_SECONDS = 15
+# The helpers every morning job gets, in the Daily Search pipeline's own words.
+STEP_NAMES = {"research": "Company research", "tailor": "Tailored resume", "study_plan": "Study plan", "pdf": "One-page PDF"}
+
+
+def _base_url() -> str:
+    """The dashboard to talk to: 8010, or a test copy named by --base-url / CAREER_BASE_URL."""
+    if "--base-url" in sys.argv:
+        index = sys.argv.index("--base-url")
+        if index + 1 < len(sys.argv):
+            return sys.argv[index + 1].rstrip("/")
+    return (os.environ.get("CAREER_BASE_URL") or DEFAULT_URL).rstrip("/")
+
+
+BASE_URL = _base_url()
 
 # The scheduled task's console is cp1252; em-dashes and arrows in job text must not crash logging.
 for stream in (sys.stdout, sys.stderr):
@@ -50,12 +71,42 @@ for stream in (sys.stdout, sys.stderr):
         pass
 
 sys.path[:0] = [str(APP_ROOT), str(SCRIPTS)]
-try:
-    from tracking import today as _today
-except Exception:  # the run must still work if the app's helpers move
-    _today = lambda: date.today().isoformat()  # noqa: E731
 
-TODAY = _today()
+
+def _profile_arg() -> str:
+    if "--profile" in sys.argv:
+        index = sys.argv.index("--profile")
+        if index + 1 < len(sys.argv):
+            return sys.argv[index + 1]
+    return "annie"
+
+
+PROFILE = _profile_arg()
+try:
+    from backend.profiles import store as _profiles
+
+    _entry = _profiles().get(PROFILE)
+    WORKSPACE_ROOT = _profiles().root_for(PROFILE)
+except Exception as _error:  # an unknown or unreadable profile: nothing to run
+    raise SystemExit(f"Profile '{PROFILE}' is not on this PC ({_error}).")
+if _entry.get("state") != "ready":
+    raise SystemExit(f"Profile '{PROFILE}' is still being set up; its daily search starts once its workspace is built.")
+# Annie keeps this folder; every other profile writes into its own.
+if not _entry.get("legacy"):
+    DAILY_DIR = WORKSPACE_ROOT / "daily-job-search"
+    DAILY_DIR.mkdir(parents=True, exist_ok=True)
+API_PREFIX = f"/p/{PROFILE}"
+
+try:
+    import yaml
+    from tracking import today as _today
+
+    _zone = ((yaml.safe_load((WORKSPACE_ROOT / "data/config/profile.yml").read_text(encoding="utf-8")) or {})
+             .get("candidate") or {}).get("timezone")
+    TODAY = _today(_zone or None)
+except Exception:  # the run must still work if the app's helpers move
+    TODAY = date.today().isoformat()
+
 LOG_DIR = DAILY_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 LOG_FILE = LOG_DIR / (TODAY + ".log")
@@ -74,7 +125,8 @@ class ApiError(Exception):
 
 
 def api(method, path, body=None, timeout=30):
-    request = urllib.request.Request(BASE_URL + path, method=method)
+    # Every profile's API lives under /p/<id>/api/...; the profile is fixed by the URL.
+    request = urllib.request.Request(BASE_URL + API_PREFIX + path, method=method)
     data = None
     if body is not None:
         data = json.dumps(body).encode()
@@ -105,9 +157,11 @@ def ensure_server():
             log("Dashboard is already running on " + BASE_URL)
             return
         raise SystemExit(
-            "Port 8010 is answered by a different app, so the morning run cannot start. "
+            f"{BASE_URL} is answered by a different app, so the morning run cannot start. "
             "Close whatever is on port 8010 and run Start Dashboard.cmd."
         )
+    if BASE_URL != DEFAULT_URL:
+        raise SystemExit(f"No dashboard answers at {BASE_URL}; start that copy first.")
     log("Dashboard is not running; starting it in the background (no browser tab).")
     server_log = LOG_FILE.open("a", encoding="utf-8")
     starter = VENV_PY if VENV_PY.exists() else "python"
@@ -134,31 +188,33 @@ def ensure_server():
     )
 
 
-def run_agent(kind, job_id=None, preset="default", timeout_minutes=20):
-    """Enqueue an agent run and wait for it; returns the finished run record."""
-    body = {"kind": kind, "preset": preset}
-    if job_id:
-        body["job_id"] = job_id
-    queued = api("POST", "/api/v2/agents/run", body)
-    run_id = queued["id"]
-    log(f"Started {kind}" + (f" ({preset})" if kind == "discovery" else "") + f" run {run_id}")
+def run_pipeline(source, count, include_unprepared=False, timeout_minutes=150):
+    """One Daily Search run, the same engine as the page: find, then research, tailor, study plan, PDF.
+
+    Returns the finished run (its per-job steps are the report). Waits while it runs;
+    Auto moves to the next free plan when one reaches its limit, so there is no retry here.
+    """
+    body = {"count": count, "source": source, "include_unprepared": include_unprepared,
+            "steps": {step: True for step in STEP_NAMES}}
+    started = api("POST", "/api/v2/pipeline/run", body)
+    run_id = started["id"]
+    log(f"Started Daily Search ({source}, up to {count} job(s)) run {run_id}")
     deadline = time.monotonic() + timeout_minutes * 60
+    stage = ""
     while time.monotonic() < deadline:
-        time.sleep(15)
-        runs = api("GET", "/api/v2/agents").get("runs", [])
-        record = next((r for r in runs if r.get("id") == run_id), None)
-        if record is None:
+        time.sleep(POLL_SECONDS)
+        status = api("GET", "/api/v2/pipeline/status")
+        current = status.get("current") or {}
+        if current.get("id") == run_id:
+            now = (current.get("progress") or {}).get("stage") or ""
+            if now and now != stage:
+                log("  " + now)
+                stage = now
             continue
-        state = record.get("state")
-        if state == "completed":
-            return record
-        if state == "failed":
-            raise ApiError(f"{kind} run failed: {record.get('error') or 'no error recorded'}")
-    raise ApiError(f"{kind} run did not finish within {timeout_minutes} minutes")
-
-
-def usage_limited(error):
-    return "usage limit" in str(error).lower()
+        last = status.get("last") or {}
+        if last.get("id") == run_id:
+            return last
+    raise ApiError(f"Daily Search did not finish within {timeout_minutes} minutes")
 
 
 # Resumes prepared per morning, and how many unapplied resumes one company may have
@@ -225,7 +281,7 @@ def ensure_draft(job_id):
 
 def list_jobs():
     output = subprocess.run(
-        [str(VENV_PY), str(SCRIPTS / "career.py"), "jobs"],
+        [str(VENV_PY), str(SCRIPTS / "career.py"), "--profile", PROFILE, "jobs"],
         capture_output=True, text=True, timeout=120,
     )
     if output.returncode:
@@ -246,6 +302,7 @@ def validate_resume(folder):
         return False, "resume.tex missing"
     command = [
         str(VENV_PY), str(SCRIPTS / "validate_resume.py"), str(tex),
+        "--workspace", str(WORKSPACE_ROOT),
         "--compile", "--output", str(folder / "resume.pdf"),
         "--render-dir", str(folder / "resume-preview"),
         "--qa-json", str(folder / "qa.json"),
@@ -278,13 +335,13 @@ def main():
     if "--check" in sys.argv:
         # Plumbing test for the scheduled task: prove the wrapper, interpreter and
         # paths work without spending any AI calls.
-        log("Morning-run self-check")
+        log(f"Morning-run self-check (profile {PROFILE})")
         log("venv python: " + ("found" if VENV_PY.exists() else "MISSING at " + str(VENV_PY)))
         log("dashboard: " + ("running on " + BASE_URL if server_health() else "not running (would be started by a real run)"))
         log("today: " + TODAY + " · log: " + str(LOG_FILE))
         return 0 if VENV_PY.exists() else 1
     started = time.monotonic()
-    log(f"=== Morning run for {TODAY} ===")
+    log(f"=== Morning run for {TODAY} (profile {PROFILE}) ===")
     REPORT_DIR.mkdir(exist_ok=True)
 
     ensure_server()
@@ -295,7 +352,6 @@ def main():
     except ApiError as error:
         log("Ghosted check skipped: " + str(error))
 
-    before = {job["id"] for job in list_jobs()}
     failures = []
     discovery_notes = []
     needs_you = []  # problems only Annie can fix, shown first in the report
@@ -306,20 +362,9 @@ def main():
         if goal_met or (blocked and preset != "portals"):
             break
         try:
-            record = run_agent("discovery", preset=preset, timeout_minutes=minutes)
-            result = record.get("result") or {}
-            added = result.get("added_job_ids") or []
-            note = f"Discovery ({preset}): {len(added)} new job(s) saved."
-            shortages = result.get("balanced_shortages") or []
-            rejected = result.get("rejected_leads") or []
-            if shortages:
-                note += " Mix shortfall: " + " ".join(shortages)
-            if rejected and not added:
-                note += f" {len(rejected)} lead(s) were turned away by the gates (see Dashboard → Rejected leads)."
-            discovery_notes.append(note)
-            log(note)
+            run = run_pipeline(source, want, include_unprepared=number == 0)
         except ApiError as error:
-            if "daily application target is complete" in str(error).lower():
+            if "plan is already complete" in str(error).lower():
                 log("Today's application target is already met; discovery finished.")
                 goal_met = True
                 continue
@@ -390,25 +435,28 @@ def main():
                     entry["notes"].append("Study plan failed: " + str(error))
         job = next((j for j in list_jobs() if j["id"] == job_id), job)
         entry["job"] = job
+        log(f"--- {job['company']} — {job['title']} ---")
+        for step, state in entry["steps"].items():
+            if state.get("state") == "failed":
+                entry["notes"].append(f"{STEP_NAMES.get(step, step)} failed: {state.get('error') or 'no reason recorded'}")
+            elif state.get("state") == "skipped":
+                entry["notes"].append(f"{STEP_NAMES.get(step, step)} was skipped (the run was stopped).")
+            log(f"{STEP_NAMES.get(step, step)}: {state.get('state')}" + (f" — {state['note']}" if state.get("note") else ""))
         if job.get("folder"):
-            folder = APP_ROOT / job["folder"]
+            folder = WORKSPACE_ROOT / job["folder"]
             ok, note = validate_resume(folder)
             entry["pdf"] = ok
             previews = sorted(folder.glob("studio/preview-*/resume.pdf"))
             if previews:
-                entry["preview_pdf"] = str(previews[-1].relative_to(APP_ROOT))
-            if ok:
-                log("Resume ready: one-page PDF compiled." + (" " + note if note else ""))
-            else:
-                log("Resume problem: " + note)
+                entry["preview_pdf"] = str(previews[-1].relative_to(WORKSPACE_ROOT))
+            log("Resume ready: one-page PDF compiled." + (" " + note if note else "") if ok else "Resume problem: " + note)
             if note:
                 entry["notes"].append(note)
         else:
             entry["notes"].append("No application folder was created.")
-        results.append(entry)
 
     try:
-        subprocess.run([str(VENV_PY), str(SCRIPTS / "workspace.py"), "export"],
+        subprocess.run([str(VENV_PY), str(SCRIPTS / "workspace.py"), "export", "--profile", PROFILE],
                        capture_output=True, text=True, timeout=300)
         log("Dashboard projections regenerated.")
     except (OSError, subprocess.TimeoutExpired) as error:
@@ -416,11 +464,14 @@ def main():
 
     if results:
         history = DAILY_DIR / "history.csv"
+        new_file = not history.exists()
         with history.open("a", newline="", encoding="utf-8") as handle:
             writer = csv.writer(handle)
+            if new_file:
+                writer.writerow(["date", "company", "role", "url", "requisition_id", "location", "status", "artifact_dir"])
             for entry in results:
                 job = entry["job"]
-                writer.writerow([TODAY, job["company"], job["title"], job["url"],
+                writer.writerow([TODAY, job["company"], job["title"], job.get("url", ""),
                                  job.get("requisition_id", ""), job.get("location", ""),
                                  "prepared", job.get("folder", "")])
 
@@ -443,23 +494,30 @@ def main():
                   "or run Daily Search by hand.", ""]
     for entry in results:
         job = entry["job"]
-        counts = entry["tailored"] or {}
-        folder = entry["job"].get("folder") or ""
+        steps = entry["steps"]
+        folder = job.get("folder") or ""
         lines.append(f"## {job['company']} — {job['title']}")
         lines.append(f"- Location: {job.get('location', '')} · Fit: {job.get('fit_score') or 'not scored'}")
-        lines.append(f"- Apply: {job['url']}")
+        if job.get("fit_rationale"):
+            lines.append(f"- Why it fits: {job['fit_rationale']}")
+        if job.get("url"):
+            lines.append(f"- Apply: {job['url']}")
+        done = [STEP_NAMES.get(step, step) for step, state in steps.items() if state.get("state") == "done"]
+        if done:
+            lines.append("- Done: " + ", ".join(done))
         if folder:
             pdf = entry.get("preview_pdf") or (folder + "/resume.pdf (appears after the Assurance review passes)")
-            lines.append(f"- Resume PDF: `{pdf}` (also: dashboard → Resume Studio → Download) · Study plan: {'yes' if entry['study_plan'] else 'no'}")
-        if counts:
-            lines.append(f"- Tailored: {counts.get('verified', 0)} verified items, "
-                         f"{counts.get('predicted', 0)} predicted — open the Assurance tab and keep/remove before applying.")
+            lines.append(f"- Resume PDF: `{pdf}` (also: dashboard → Resume Studio → Download)")
+        tailored = (steps.get("tailor") or {}).get("note")
+        if tailored:
+            lines.append(f"- Tailored: {tailored} — open the Assurance tab and keep/remove before applying.")
         for note in entry["notes"]:
             lines.append(f"- ⚠ {note}")
         lines.append("")
     if failures:
         lines += ["## Problems", ""] + [f"- {failure}" for failure in failures] + [""]
     lines.append("Nothing has been submitted anywhere. Review each resume, then apply through the posting link.")
+    lines.append(f"Dashboard: {BASE_URL}/p/{PROFILE}/")
     report = REPORT_DIR / "MORNING-REPORT.md"
     report.write_text("\n".join(lines), encoding="utf-8")
     log("Report written to " + str(report))

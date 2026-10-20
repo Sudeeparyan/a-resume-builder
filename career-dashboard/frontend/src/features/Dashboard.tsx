@@ -12,7 +12,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { api, fileUrl, safeUrl } from "../api";
-import { Badge, Empty, Modal, Field, Running } from "../components/UI";
+import { AskAssistant, Badge, Empty, Modal, Field, Running } from "../components/UI";
 import { JobList } from "../components/JobList";
 import { RemoveJobDialog } from "./RemoveJob";
 import { CoverLetterView } from "../components/CoverLetterView";
@@ -134,9 +134,21 @@ export default function Dashboard({
           <h1>Dashboard</h1>
           <p>Small steps today. More opportunities tomorrow.</p>
         </div>
-        <button className="primary" onClick={onAdd}>
-          ＋ Save a job
-        </button>
+        <div className="actions">
+          <AskAssistant
+            prompts={[
+              { label: "What should I do today?", text: "What should I do today? Look at my goals, my saved jobs and anything waiting on me, and give me the next steps in order." },
+              { label: "What did I apply to this week?", text: "What did I apply to this week, and which resumes are still waiting to be sent?" },
+              { label: "Anything to follow up on?", text: "Which applications have gone quiet or need a follow-up, and are any emails waiting for me?" },
+            ]}
+          />
+          <button className="secondary" onClick={() => setEditingPlan(true)}>
+            <Settings2 size={17} /> Edit plan
+          </button>
+          <button className="primary" onClick={onAdd}>
+            ＋ Save a job
+          </button>
+        </div>
       </div>
       <NeedsYou items={data.needs_you || []} onGo={onGo} />
       <div className="metrics">
@@ -170,7 +182,7 @@ export default function Dashboard({
                 : "Your progress starts with one well-matched role."}
             </p>
             <button onClick={onDaily}>
-              Open daily plan <ArrowRight size={17} />
+              Open Daily Search <ArrowRight size={17} />
             </button>
           </div>
           <div className="progress-dial">
@@ -181,6 +193,17 @@ export default function Dashboard({
             <span>today</span>
           </div>
         </section>
+        {data.mail.available === false ? (
+        <section className="card email-card">
+          <div className="section-title">
+            <h2>
+              <MailIcon size={20} /> Application emails
+            </h2>
+            <Badge>Not for this profile</Badge>
+          </div>
+          <p>{data.mail.note}</p>
+        </section>
+        ) : (
         <section className="card email-card">
           <div className="section-title">
             <h2>
@@ -244,7 +267,7 @@ export default function Dashboard({
               <p>
                 {data.mail.connection.last_error ||
                   latestMailRun?.error ||
-                  "Gmail sync is optional. Sign in to Codex on this Mac and save its Gmail connector id in Settings, then retry. Your saved email evidence is unchanged."}
+                  "Gmail sync is optional. Sign in to Codex on this machine and save its Gmail connector id in Settings, then retry. Your saved email evidence is unchanged."}
               </p>
             </div>
           )}
@@ -254,7 +277,12 @@ export default function Dashboard({
             </small>
           )}
         </section>
+        )}
       </div>
+      <WeekCard goals={data.goals} />
+      {editingPlan && (
+        <PlanEditor goals={data.goals} onClose={() => setEditingPlan(false)} onSaved={refresh} notify={notify} />
+      )}
       <section className="card workspace-panel">
         <div className="section-title">
           <div className="segmented">

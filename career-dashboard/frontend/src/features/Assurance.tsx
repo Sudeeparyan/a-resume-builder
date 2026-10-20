@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Download, ShieldCheck, X } from "lucide-react";
 import { api } from "../api";
-import { Badge, Empty, Loading } from "../components/UI";
+import { AskAssistant, Badge, Empty, Loading } from "../components/UI";
 import type { AssuranceReport, Summary } from "../types";
 
 export function confidenceTone(score: number): string {
@@ -27,6 +27,7 @@ export default function Assurance({
   const [jobId, setJobId] = useState(
     () => jobs.find((j) => drafted.has(j.id))?.id || jobs[0]?.id || "",
   );
+  const selectedJob = jobs.find((j) => j.id === jobId);
   const [report, setReport] = useState<AssuranceReport | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
@@ -118,6 +119,15 @@ export default function Assurance({
           <button className="secondary" onClick={() => onJob(jobId)}>
             Open in Resume Studio
           </button>
+          {selectedJob && (
+            <AskAssistant
+              label="Ask about these claims"
+              prompts={[
+                { label: "What should I keep or remove?", text: `Check the ${selectedJob.company} resume's claims and tell me in plain words what I should keep or remove before I apply.` },
+                { label: "Is it ready to send?", text: `Is the ${selectedJob.company} — ${selectedJob.title} resume ready to send? Check the PDF, the scores and the Assurance claims.` },
+              ]}
+            />
+          )}
           <button className="secondary" disabled={!report} onClick={download} title="Save the review report as JSON">
             <Download size={15} /> Report
           </button>
@@ -204,18 +214,19 @@ export default function Assurance({
                       <details>
                         <summary>Evidence details</summary>
                         <small>
-                          Source line {claim.line} · {claim.note}
+                          {claim.line != null ? `Source line ${claim.line}` : "Not on the current page"}
+                          {claim.note ? ` · ${claim.note}` : ""}
                         </small>
                         <pre>{(claim.evidence_ids || []).join("\n") || "No evidence tags"}</pre>
                       </details>
                     </div>
-                    {claim.items.length > 0 && (
+                    {(claim.items || []).length > 0 && (
                       <span className="claim-actions">
                         <button
                           className="secondary"
                           disabled={!!busy || claim.decision === "kept"}
                           title="Keep this on the resume"
-                          onClick={() => decide(claim.items, "kept")}
+                          onClick={() => decide(claim.items || [], "kept")}
                         >
                           <Check size={15} /> Keep
                         </button>
@@ -223,7 +234,7 @@ export default function Assurance({
                           className="secondary danger-text"
                           disabled={!!busy || claim.decision === "removed"}
                           title="Take this off the resume"
-                          onClick={() => decide(claim.items, "removed")}
+                          onClick={() => decide(claim.items || [], "removed")}
                         >
                           <X size={15} /> Remove
                         </button>

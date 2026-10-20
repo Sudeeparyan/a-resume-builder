@@ -15,8 +15,7 @@ def main():
     parser.add_argument(
         "command",
         choices=[
-            "instructions",
-            "send-instruction",
+            "fit",
             "agent-control",
             "score",
             "stale-drafts",
@@ -36,32 +35,38 @@ def main():
             "sponsor-check",
             "check-reapply",
             "age",
+            "ai-status",
+            "ai-wake",
         ],
     )
     parser.add_argument("--file", type=Path)
     parser.add_argument("--id")
     parser.add_argument("--job-id")
-    parser.add_argument('--message')
-    parser.add_argument('--revision', type=int)
-    parser.add_argument("--kind", choices=["research", "resume_advisor", "email", "discovery", "resume_build", "resume_match", "instruction_interpret", "study_plan"])
+    parser.add_argument("--kind", choices=["research", "email", "discovery", "resume_build", "resume_match", "study_plan"])
+    parser.add_argument("--refresh", action="store_true",
+                        help="fit: check the job's requirements again (AI on a free plan when one is free)")
     parser.add_argument("--preset", choices=["default", "balanced_five", "portals"], default="default",
                         help="discovery mix: portals reads tracked career pages with no AI call")
     parser.add_argument("--company")
     parser.add_argument("--title")
     parser.add_argument("--url", default="")
+    parser.add_argument("--provider", help="ai-wake: which plan to try again now (kimi_cli, codex, claude_code, azure_openai)")
+    parser.add_argument("--profile", default="annie",
+                        help="which profile's workspace (default: annie, the backup profile)")
     args = parser.parse_args()
-    s = CareerServices(Workspace(ROOT))
-    if args.command in {'instructions', 'send-instruction', 'agent-control', 'score', 'stale-drafts', 'recompile'}:
+    from backend.profiles import store
+    s = CareerServices(Workspace(store().root_for(args.profile)))
+    if args.command == "fit":
+        # What one job asks for and which registered evidence meets each item (services/fit.py).
+        if not args.job_id:
+            parser.error("--job-id is required")
+        from backend.services import fit
+        result = fit.for_job(s, args.job_id, refresh=args.refresh)
+    elif args.command in {'agent-control', 'score', 'stale-drafts', 'recompile'}:
         from backend.services.resume_studio import ResumeStudio
-        from backend.services.instruction_tracker import InstructionTracker
         from backend.services.agent_cache import AgentCache
         studio = ResumeStudio(s)
-        tracker = InstructionTracker(s, studio)
-        if args.command == 'instructions': result = tracker.history(args.job_id)
-        elif args.command == 'send-instruction':
-            if not args.message: parser.error('--message is required')
-            result = tracker.send(args.message, args.job_id, args.revision, args.id)
-        elif args.command == 'score': result = studio.score(args.job_id)
+        if args.command == 'score': result = studio.score(args.job_id)
         elif args.command == 'stale-drafts': result = studio.stale_drafts()
         elif args.command == 'recompile':
             result = studio.recompile_stale(
@@ -72,7 +77,7 @@ def main():
     elif args.command == "save-profile":
         if not args.file:
             parser.error("--file is required")
-        result = s.save_knowledge(json.loads(args.file.read_text()), args.id)
+        result = s.save_knowledge(json.loads(args.file.read_text(encoding="utf-8")), args.id)
     elif args.command == "remove-profile":
         result = s.delete_knowledge(args.id)
     elif args.command == "confirm-mail":
@@ -98,7 +103,7 @@ def main():
         if not (args.company and args.file):
             parser.error("--company and --file are required")
         from backend.services import sponsorship
-        result = sponsorship.evaluate(args.company, args.file.read_text(), args.url).as_dict()
+        result = sponsorship.evaluate(args.company, args.file.read_text(encoding="utf-8"), args.url).as_dict()
     elif args.command == "check-reapply":
         if not (args.company and args.title):
             parser.error("--company and --title are required")
@@ -106,6 +111,29 @@ def main():
         result = reapply.check(args.company, args.title, s.reapply_memory(), s.excluded(), s.w.profile())
     elif args.command == "age":
         result = {"ghosted": s.age_applications()}
+    elif args.command in {"ai-status", "ai-wake"}:
+        # Auto's route (Kimi -> Codex -> Claude -> Azure): which plans are ready, resting
+        # after a usage limit and until when, and today's paid calls. ai-wake clears a rest.
+        from backend.ai import limits, main_choice, paid_gate, ready_providers, router
+        from backend.services.agent_cache import AgentCache
+        if args.command == "ai-wake":
+            if args.provider not in router.DEFAULT_ORDER:
+                parser.error("--provider must be one of " + ", ".join(router.DEFAULT_ORDER))
+            limits.HealthBook(s.w.root).wake(args.provider)
+            with s.w.connect() as db:
+                s.w.record_event(db, "ai_plan_woken", provider=args.provider)
+        preferences = s.pref("ai_preferences", {}) or {}
+        ready = ready_providers(s.w.root)
+        main = main_choice(preferences, ready)
+        budget = AgentCache(s).stats()
+        result = {
+            "main": {"provider": main[0], "model": main[1]},
+            "route": router.status(s.w.root, router.policy_from(preferences), ready_map=ready,
+                                   paid={"block": paid_gate(s)("azure_openai")}),
+            "paid_calls": {"used_today": budget["paid_calls_today"], "limit": budget["daily_call_limit"],
+                           "left": budget["remaining_calls"]},
+            "free_calls_today": budget["free_calls_today"],
+        }
     elif args.command == "profile":
         result = s.knowledge()
     elif args.command == "export":

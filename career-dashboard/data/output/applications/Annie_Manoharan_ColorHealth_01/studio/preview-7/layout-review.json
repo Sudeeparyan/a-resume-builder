@@ -1,0 +1,47 @@
+{
+  "revision": 7,
+  "source_sha256": "b5e66ff5b3f9d0b4581caea4a95dab8772a3c4c667a8908d2e4560a785e8df1f",
+  "page_count": 1,
+  "created_at": "2026-09-23T16:44:52+00:00",
+  "path": "applications\\Annie_Manoharan_ColorHealth_01\\studio\\preview-7",
+  "review_required": true,
+  "layout": {
+    "full_pages": true,
+    "page_count": 1,
+    "target_pages": 1,
+    "paper": "letter",
+    "pages": [
+      {
+        "page": 1,
+        "fill_percent": 98.1,
+        "bottom_blank_mm": 5.1,
+        "largest_internal_gap_mm": 4.6,
+        "paper_ok": true,
+        "words": 506,
+        "within_margins": true
+      }
+    ],
+    "target_fill_percent": 80,
+    "normal_margins_mm": 12.7
+  },
+  "ranking": {
+    "track": "C",
+    "section_order": [
+      "Education",
+      "Technical Skills",
+      "Professional Experience",
+      "Projects"
+    ],
+    "changes": [
+      "Ranked SkillsLanguages items against the JD.",
+      "Ranked SkillsData items against the JD.",
+      "Ranked SkillsML items against the JD.",
+      "Ranked SkillsCloud items against the JD.",
+      "Ranked skill categories against the JD.",
+      "Track C: section order Education > Technical Skills > Professional Experience > Projects."
+    ],
+    "method": "Deterministic JD relevance ordering of registered evidence; not an ATS score.",
+    "cuts": []
+  },
+  "body_font_pt": 10.0
+}

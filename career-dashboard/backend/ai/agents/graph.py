@@ -14,11 +14,10 @@ from AGENTS.md and is asserted by tests/test_ai_agents.py.
 from __future__ import annotations
 
 import json
-import operator
 import time
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Annotated, Any, TypedDict
+from typing import Any
 
 from backend.ai import antigravity_cli, catalog, claude_code, codex, kimi_cli, models, router
 from backend.ai.agents.specialists import GROUNDING, REGISTRY, Specialist

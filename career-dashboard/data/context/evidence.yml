@@ -1,5 +1,5 @@
 schema_version: 1
-candidate_revision: 2026-09-18.1
+candidate_revision: 2026-09-23.1
 candidate: Annie Prasanna Manoharan
 status_definitions:
   confirmed: Transcribed from one of Annie's 14 real resumes in data/context/files/ and approved for normal use.
@@ -500,6 +500,58 @@ claims:
   - Great Expectations
   - Airbyte
   - Fivetran
+- id: FACT-USER-CBAEB2
+  status: user_reported
+  category: other
+  approved_external_use: always; added by Annie on the Profile page
+  source_refs:
+  - Profile page (dashboard) > added 2026-09-23
+  title: Resume chat proposal
+  value: Candidate-specific claims of experience using AI coding tools such as Copilot are not supported by the registered evidence.
+- id: FACT-USER-23E256
+  status: user_reported
+  category: other
+  approved_external_use: always; added by Annie on the Profile page
+  source_refs:
+  - Profile page (dashboard) > added 2026-09-23
+  title: Resume chat proposal
+  value: Django and React familiarity are not supported by the registered evidence.
+- id: FACT-USER-B5B139
+  status: user_reported
+  category: other
+  approved_external_use: always; added by Annie on the Profile page
+  source_refs:
+  - Profile page (dashboard) > added 2026-09-23
+  title: Resume chat proposal
+  value: The registered education records show a B.E. in Electronics and Communication and an M.S. in Computer Engineering, not a four-year Computer Science degree.
+- id: FACT-USER-7CFEBA
+  status: user_reported
+  category: other
+  approved_external_use: always; added by Annie on the Profile page
+  source_refs:
+  - Profile page (dashboard) > added 2026-09-23
+  title: Resume chat proposal
+  value: 'Local LLM-Powered News Research Platform | Python, LangChain, Streamlit, FAISS, Ollama, Llama 3.2
+
+    • Built an end-to-end local ETL pipeline using Streamlit and WebBaseLoader to ingest, clean, chunk, and preprocess unstructured web content on demand.
+
+    • Designed a local FAISS vector store with nomic-embed-text embeddings, bypassing redundant ingestion and reducing processing latency.
+
+    • Implemented a LangChain RAG pipeline to run semantic queries against vectorized data using local Llama 3.2 instances. is not a registered, resume-ready project'
+- id: FACT-USER-E43CC4
+  status: user_reported
+  category: other
+  approved_external_use: always; added by Annie on the Profile page
+  source_refs:
+  - Profile page (dashboard) > added 2026-09-23
+  title: Resume chat proposal
+  value: 'Resume Classification Model
+
+    • Built an end-to-end NLP classification pipeline using TF-IDF and Logistic Regression across 25 job-role categories from 962 resumes.
+
+    • Achieved 89.48% test accuracy and 88% macro F1 across 193 held-out test samples.
+
+    • Deployed the model through a Flask REST API for real-time prediction. is not a registered, resume-ready project'
 projects:
 - id: PROJ-P01-IOT
   canonical_name: Real-Time Medical IoT Analytics Platform

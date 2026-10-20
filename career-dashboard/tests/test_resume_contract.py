@@ -91,10 +91,10 @@ def validate(root, change=None, compile=False):
     """Run the copied validator on the copied base template (no evidence map needed for the base)."""
     base = root / "data/templates/resume-base.tex"
     if change:
-        before = base.read_text()
+        before = base.read_text(encoding="utf-8")
         after = change(before)
         assert after != before, "the mutation did not apply"
-        base.write_text(after)
+        base.write_text(after, encoding="utf-8")
     qa = root / "qa.json"
     command = [sys.executable, str(root / "backend/scripts/validate_resume.py"), str(base), "--qa-json", str(qa)]
     if compile:
@@ -121,6 +121,8 @@ MUTATIONS = {
     "untagged line": (lambda s: s.replace("  % EVIDENCE: EXP-TA-001\n  \\item", "  \\item", 1), "lacks an EVIDENCE tag"),
     "fill-in marker": (lambda s: s.replace(INSOPS_BULLET, "Built data workflows for [FILL IN: records per day] records"), "fill-in marker"),
     "held claim": (lambda s: s.replace("% EVIDENCE: EXP-INSOPS-001\n\\roleheading", "% EVIDENCE: EXP-INSOPS-DS-FRAMING\n\\roleheading", 1), "Held source EVIDENCE ID"),
+    "hidden character": (lambda s: s.replace(INSOPS_BULLET, INSOPS_BULLET.replace("data ", "data​ ")), "(AI marks)"),
+    "look-alike letter": (lambda s: s.replace(INSOPS_BULLET, INSOPS_BULLET.replace("SQL Server", "SQL Sеrver")), "(AI marks)"),
 }
 
 
@@ -140,6 +142,10 @@ def test_base_template_compiles_to_exactly_one_letter_page(workspace):
     assert qa["compile_ok"] and qa["page_count"] == 1 and qa["overflow_count"] == 0
     assert list(qa["preview_sha256"]) == ["page-01.png"]
     assert qa["pdf_metadata"]["author"] == NAME
+    # AI marks: the published PDF carries its title and author and nothing else.
+    assert qa["ai_marks"] == {"source": [], "pdf": []}
+    from pypdf import PdfReader
+    assert sorted(PdfReader(str(workspace.root / "out/resume.pdf")).metadata) == ["/Author", "/Title"]
     assert qa["status"] == "AUTOMATED_PASS_MANUAL_PENDING" and not qa["release_ready"]
 
 

@@ -83,7 +83,8 @@ def activity(services, runner, limit: int = 60) -> dict:
         # Every claim on Assurance waits for her keep/remove until she decides (Annie's rule:
         # verified and predicted items alike), so all pending decisions count.
         review_counts = {r["decision"]: r["n"] for r in db.execute(
-            "SELECT decision, COUNT(*) AS n FROM resume_items GROUP BY decision")}
+            "SELECT decision, COUNT(*) AS n FROM resume_items WHERE decision != 'pending' OR origin = 'predicted' "
+            "GROUP BY decision")}
         tailored_jobs = db.execute("SELECT COUNT(DISTINCT job_id) AS n FROM resume_items").fetchone()["n"]
     listed = [_run(r, jobs, events.get(r["id"], [])) for r in runs]
     totals = {"completed": 0, "failed": 0, "running": 0}

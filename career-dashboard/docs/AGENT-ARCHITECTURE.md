@@ -4,7 +4,7 @@ Updated 18 September 2026 for Annie Prasanna Manoharan's US edition. This descri
 
 ## What the system does
 
-The orchestrator coordinates small workers and records their progress. Routine work is deterministic Python: the sponsorship gate, the never-re-apply rules, the tracked-career-page feed reader, saving instructions, ranking projects, fitting the one-page PDF, scoring document vocabulary and monitoring runs. Optional AI is reserved for public research, discovery, instruction interpretation, qualitative document review, study plans and email interpretation. Completed AI stages are cached and reused.
+The orchestrator coordinates small workers and records their progress. Routine work is deterministic Python: the sponsorship gate, the never-re-apply rules, the tracked-career-page feed reader, verifying and scoring each job's requirement matrix (`services/fit.py`), ranking projects, fitting the one-page PDF, scoring document vocabulary and monitoring runs. Optional AI is reserved for public research, discovery, proposing a job's requirement matrix (free plans only; the code verifies it), qualitative document review, study plans and email interpretation. Resume wording changes go through the chat's `edit_resume` tool (a before/after, then her yes); Studio's separate instruction chat was removed on 24 Sep 2026. Completed AI stages are cached and reused.
 
 All mutable state lives in **`career-dashboard/data/career.db`**. The UI and the CLIs share `Workspace` and `CareerServices`; there is no second job database. The current candidate revision is **2026-09-18.1** (Q1 Soliton dates and Q4 Dräger attribution answered that day; the publication claim `PUB-001` stays on hold; no total years of experience is ever stated).
 
@@ -117,14 +117,14 @@ New tables (migrations 5–6): `excluded_postings`, `signature_assignments`, `re
 
 ## API and CLI
 
-Under `/api/v2`: `POST /jobs` (returns `excluded`, `blocked`, `duplicate` or the saved job with its tier), `GET /excluded`, `POST /excluded/{id}/restore`, `POST /jobs/{id}/sponsorship`, `POST /jobs/age`, `POST /jobs/verify-due`, `POST /studio/{id}/fill` (fits one page), `POST /agents/run` with `study_plan` among the kinds. See [API.md](API.md).
+Under `/api/v2`: `POST /jobs` (returns `excluded`, `blocked`, `duplicate` or the saved job with its tier), `GET /excluded`, `POST /excluded/{id}/restore`, `POST /jobs/{id}/sponsorship`, `POST /jobs/age`, `POST /jobs/verify-due`, `POST /studio/{id}/fill` (fits one page), `POST /agents/run` with `study_plan` among the kinds, `GET`/`POST /jobs/{id}/fit` (the verified requirement check). See [API.md](API.md).
 
 ```sh
 backend/.venv/bin/python backend/scripts/workspace.py run --kind discovery --preset portals
 backend/.venv/bin/python backend/scripts/workspace.py sponsor-check --company "Acme" --file JD.txt
 backend/.venv/bin/python backend/scripts/workspace.py check-reapply --company "Acme" --title "Data Engineer"
 backend/.venv/bin/python backend/scripts/workspace.py run --kind study_plan --job-id EXACT_ID
-backend/.venv/bin/python backend/scripts/workspace.py send-instruction --job-id EXACT_ID --revision 3 --message 'font: 10.5'
+backend/.venv/bin/python backend/scripts/workspace.py fit --job-id EXACT_ID [--refresh]
 ```
 
 ## Verification and limits

@@ -10,8 +10,9 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 from backend.paths import TIMEZONE  # noqa: E402
 
 
-def today():
-    return datetime.now(ZoneInfo(TIMEZONE)).date().isoformat()
+def today(tz=None):
+    """Today's date in `tz` (a profile's own time zone), else the default one."""
+    return datetime.now(ZoneInfo(tz or TIMEZONE)).date().isoformat()
 
 
 def valid_date(value):
@@ -51,7 +52,7 @@ class Tracking:
     def save_profile_notes(self, text):
         from career import atomic_write
         path = self.root/'data/context/UPDATES.md'
-        old = path.read_text() if path.exists() else ''
+        old = path.read_text(encoding='utf-8') if path.exists() else ''
         with self.connect() as db:
             self.record_event(db, 'profile_notes_updated', before=old, after=text,
                               review_required=True)
@@ -60,7 +61,7 @@ class Tracking:
         return {'saved': True, 'note': 'Update saved in your activity history. Review the evidence registry before using new facts on a resume.'}
 
     def start_search(self, date=None):
-        date = valid_date(date or today())
+        date = valid_date(date or self.today())
         with self.connect() as db:
             changed = db.execute('INSERT OR IGNORE INTO search_runs(date,created_at) VALUES(?,?)',
                                  (date, datetime.now(timezone.utc).isoformat(timespec='seconds'))).rowcount
@@ -73,7 +74,7 @@ class Tracking:
         job = self.get_job(job_id)
         if job.get('deleted_at'):
             raise ValueError('Restore this removed role before adding it to a search run')
-        date = valid_date(date or today())
+        date = valid_date(date or self.today())
         self.start_search(date)
         with self.connect() as db:
             changed = db.execute('INSERT OR IGNORE INTO search_jobs VALUES(?,?)', (date, job_id)).rowcount
@@ -105,4 +106,4 @@ class Tracking:
         atomic_write(self.root/'data/jobs.json', json.dumps(self.jobs(), indent=2, ensure_ascii=False)+'\n')
         atomic_write(self.root/'data/activity.json', json.dumps(self.activity(limit=-1), indent=2, ensure_ascii=False)+'\n')
         for run in self.search_runs():
-            atomic_write(self.root.parent/'daily-job-search'/run['date']/'run.json', json.dumps(run, indent=2, ensure_ascii=False)+'\n')
+            atomic_write(self.daily_dir/run['date']/'run.json', json.dumps(run, indent=2, ensure_ascii=False)+'\n')

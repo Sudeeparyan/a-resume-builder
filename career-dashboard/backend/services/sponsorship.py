@@ -33,8 +33,16 @@ RULES_PATH = CONFIG / "sponsorship.yml"
 SPONSORS_DIR = DATA / "sponsors"
 SPONSORS_CSV = SPONSORS_DIR / "sponsors-uscis.csv"
 INDEX_DB = SPONSORS_DIR / "index.db"
+# Where the CSV comes from; cited as the legal-presence record for an employer found in it.
+USCIS_HUB_URL = "https://www.uscis.gov/tools/reports-and-studies/h-1b-employer-data-hub"
 
 TIER_RANK = {"S": 1, "A": 2, "B": 3, "C": 4, "EXCLUDED": 99}
+REASON_LABEL = {
+    "cannot_hire": "Requires citizenship / clearance / ITAR / permanent residency",
+    "no_sponsorship": "Posting explicitly will not sponsor",
+    "explicit_sponsorship": "Posting explicitly offers sponsorship",
+    "silent": "Posting says nothing about sponsorship; the normal case",
+}
 TIER_LABEL = {
     "S": "Cap-exempt employer: files H-1B year-round, no lottery",
     "A": "Posting says it sponsors",
@@ -76,7 +84,8 @@ class Verdict:
     h1b_years: list[str] = field(default_factory=list)
     h1b_denials: int = 0
     everify: bool = False
-    restored: bool = False       # Annie reviewed the exclusion sentence and restored the posting
+    restored: bool = False       # the candidate reviewed the exclusion sentence and restored the posting
+    tier_labels: dict = field(default_factory=dict, repr=False)  # a profile's own wording (sponsorship.yml)
 
     @property
     def excluded(self) -> bool:
@@ -90,9 +99,10 @@ class Verdict:
         if self.tier == "B" and self.h1b_approvals:
             years = ", ".join(self.h1b_years) if self.h1b_years else "recent years"
             return f"H-1B history: {self.h1b_approvals:,} approvals ({years}); posting is silent"
+        labels = {**TIER_LABEL, **(self.tier_labels or {})}
         if self.tier == "S" and self.cap_exempt_reason:
-            return f"{TIER_LABEL['S']} ({self.cap_exempt_reason})"
-        return TIER_LABEL[self.tier]
+            return f"{labels['S']} ({self.cap_exempt_reason})"
+        return labels[self.tier]
 
     def evidence_json(self) -> dict[str, Any]:
         return {
@@ -170,6 +180,9 @@ def _compile_rules(path: str, _stamp: int) -> dict[str, Any]:
     compiled["cap_exempt_signals"] = cfg.get("cap_exempt_signals", {}) or {}
     compiled["tiers"] = cfg.get("tiers", {}) or {}
     compiled["disclaimer"] = cfg.get("disclaimer", "")
+    # Optional per-country wording; the defaults are the US wording.
+    compiled["labels"] = {**REASON_LABEL, **(cfg.get("labels") or {})}
+    compiled["tier_labels"] = dict(cfg.get("tier_labels") or {})
     return compiled
 
 
@@ -184,6 +197,27 @@ def split_sentences(text: str) -> list[str]:
     normalized = re.sub(r"([.!?;])(?:\s*\.)+", r"\1", normalized)
     parts = re.split(r"(?<=[.!?;])\s+", normalized)
     return [p.strip() for p in parts if p.strip()]
+
+
+# A reviewer's note that reports the ABSENCE of restrictive wording ("No sponsorship or
+# citizenship sentence was visible in the posting text"; "the pages do not show the precise
+# sentence"). When a posting page cannot be fetched, the gate reads the discovery AI's own
+# description, and its restriction words appear there only to say they are missing. These
+# guards hold for every profile and country pack, on top of each sponsorship.yml. They need
+# a word about the text itself (sentence, wording, mention...) plus a verb of finding, so a
+# real refusal ("No sponsorship is available") still excludes: no verb may sit between the
+# "no" and that word.
+_META = r"(?:sentences?|language|wording|mentions?|statements?|text|references?|clauses?|phrases?)"
+_SEEN = r"(?:visible|found|present|shown|seen|stated|included|given|listed|located|identified|displayed|mentioned)"
+_NO_VERB = r"(?:(?!\b(?:is|are|will|shall|can|be|been|being|offered|available|provided|sponsor|sponsors)\b)[^.;])"
+ABSENCE_CLAIMS = [re.compile(pattern, re.IGNORECASE) for pattern in (
+    rf"\b(?:no|none\s+of\s+the|not\s+any)\b{_NO_VERB}{{0,160}}\b{_META}\b[^.;]{{0,40}}\b(?:was|were|is|are|could\s+be)\s+(?:not\s+)?{_SEEN}\b",
+    rf"\b(?:did|do|does|could|can)\s*(?:not|n['’]t)\s+(?:see|find|show|locate|display|contain|include|mention|state|list|give)\b[^.;]{{0,120}}\b{_META}\b",
+    rf"\b{_META}\b[^.;]{{0,120}}\b(?:was|were|is|are)\s+not\s+{_SEEN}\b",
+)]
+
+
+CONTRAST = re.compile(r"\b(?:but|however|although|though|except\s+that)\b", re.IGNORECASE)
 
 
 def _first_match(patterns, sentence: str):
@@ -285,6 +319,7 @@ def screen(jd_text: str, rules: dict[str, Any] | None = None) -> Screen:
     authorized to work") can never exclude: Annie is authorized.
     """
     rules = rules or load_rules()
+    labels = rules.get("labels") or REASON_LABEL
     everify = bool(_first_match(rules["everify_signals"], jd_text or ""))
     positives: list[dict] = []
     guards = [*rules["negation_guards"], *ABSENCE_CLAIMS, *rules["ambiguous_sponsor_noun"],
@@ -315,9 +350,9 @@ def screen(jd_text: str, rules: dict[str, Any] | None = None) -> Screen:
             if positive:
                 positives.append({"pattern": positive.pattern, "sentence": original[:400]})
     if positives:
-        return Screen("KEEP", "explicit_sponsorship", "Posting explicitly offers sponsorship",
+        return Screen("KEEP", "explicit_sponsorship", labels["explicit_sponsorship"],
                       sentence=positives[0]["sentence"], evidence=positives[:3], everify=everify)
-    return Screen("KEEP", "silent", "Posting says nothing about sponsorship; the normal case", everify=everify)
+    return Screen("KEEP", "silent", labels["silent"], everify=everify)
 
 
 # --------------------------------------------------------------------------
@@ -344,6 +379,9 @@ def is_cap_exempt(company: str, domain: str = "", rules: dict[str, Any] | None =
     """Universities, national labs, nonprofit research bodies and academic medical centers file year-round."""
     rules = rules or load_rules()
     signals = rules["cap_exempt_signals"]
+    if signals.get("enabled") is False:
+        # A country without an H-1B-style lottery (Ireland) has no cap-exempt tier.
+        return False, ""
     lowered = (company or "").lower()
     for suffix in signals.get("domains", [".edu", ".gov"]):
         if domain and domain.endswith(suffix):
@@ -489,6 +527,23 @@ def index() -> SponsorIndex:
     if _INDEX is None:
         _INDEX = SponsorIndex()
     return _INDEX
+
+
+class NullIndex:
+    """No employer history for this country: every lookup is 'not found', never a negative."""
+
+    def lookup(self, employer: str, state: str = "") -> dict[str, Any]:
+        return {"found": False, "matched_name": None, "approvals": 0, "denials": 0, "years": [], "states": []}
+
+    def stats(self) -> dict[str, Any]:
+        return {"employers": 0, "built_at": None, "csv": ""}
+
+
+def index_for(root) -> SponsorIndex | NullIndex:
+    """The employer-history index a workspace's country pack uses (USCIS H-1B for the US)."""
+    from backend.countries import pack_for
+
+    return index() if pack_for(root).sponsor_index == "uscis" else NullIndex()
 
 
 # --------------------------------------------------------------------------

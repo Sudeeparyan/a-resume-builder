@@ -36,9 +36,14 @@ def service(workspace, monkeypatch):
 
 @pytest.fixture
 def studio(service, monkeypatch):
+    from backend.services import fit
+
     studio = ResumeStudio(service)
     monkeypatch.setattr(studio, "fit", lambda job_id, revision: studio.get(job_id))
     monkeypatch.setattr(studio, "score", lambda job_id: {"cached": True})
+    # These tests pin the plan itself; the requirement check and its skill top-up have
+    # their own tests below (test_verified_skills_the_role_requires_are_topped_up) and in test_fit.py.
+    monkeypatch.setattr(fit, "for_job", lambda services, job_id, **_: None)
     return studio
 
 
@@ -128,10 +133,33 @@ def test_items_are_persisted_and_only_projects_and_skills_change(service, studio
     # The rendered document is seamless: the review labels never reach the source.
     assert "predicted" not in after.casefold() and "verified" not in after.casefold()
     assert draft["fields"]["SecondProjectTitle"] == "Streaming Order Analytics Prototype"
-    assert plain(new["SkillsLanguages"]) == "Python"
-    assert plain(new["SkillsData"]) == "Apache Kafka"
-    assert plain(new["SkillsML"]) == ""
-    assert plain(new["SkillsCloud"]) == "Confluent Cloud"
+    # The tailored picks lead each line; a line the plan all but emptied keeps its first
+    # original entries (half of them, at least three), so no heading prints bare.
+    assert plain(new["SkillsLanguages"]) == "Python, SQL, C#"
+    assert plain(new["SkillsData"]).startswith("Apache Kafka, Apache Flink, Flink SQL")
+    assert plain(new["SkillsML"]).startswith("PyTorch, Scikit-learn, Pandas")
+    assert plain(new["SkillsCloud"]).endswith("Docker, Confluent Cloud")
+
+
+def test_a_thin_skills_plan_never_leaves_a_line_empty_or_prints_a_phrase(service, studio, job):
+    """Live on 23 Sep (Azure, Color Health): the plan kept five skills and 'predicted' two
+    sentences, so 'Data Engineering:' printed empty and Cloud read as prose."""
+    studio.open(job["id"])
+    result = tailored_result(service)
+    result.skills = [
+        schemas.TailoredSkill(name="Python", origin="verified"),
+        schemas.TailoredSkill(name="LangChain", origin="verified"),
+        schemas.TailoredSkill(name="REST API design for patient onboarding and screening workflows", origin="predicted"),
+        schemas.TailoredSkill(name="Automated testing and observability for Python web services", origin="predicted"),
+        schemas.TailoredSkill(name="Confluent Cloud", origin="predicted"),
+    ]
+    draft = studio.tailor(job["id"], StubTeam(result))
+    macros = {name: plain(value) for name, value in extract_zero_argument_macros(draft["source"]).items()
+              if name.startswith("Skills")}
+    assert all(len(value.split(", ")) >= 3 for value in macros.values()), macros
+    assert macros["SkillsCloud"].endswith(", Confluent Cloud")
+    assert "patient onboarding" not in draft["source"] and "observability for" not in draft["source"]
+    assert [row["content"] for row in studio.items(job["id"]) if row["section"] == "skills"] == ["Python", "LangChain", "Confluent Cloud"]
 
 
 def test_a_removed_project_restores_the_slot_from_the_registry(service, studio, job):
@@ -168,6 +196,20 @@ def test_a_removed_skill_is_stripped_and_a_kept_one_changes_nothing(service, stu
 
     with pytest.raises(ValueError, match="kept or removed"):
         studio.decide(job["id"], verified["id"], "maybe")
+
+
+def test_the_tailor_is_told_which_projects_may_lead(service, studio, job):
+    """Another company's signature and a support-only project cannot fill the first slot, so the
+    tailor must be told; before, it chose a taken signature and the whole tailor failed."""
+    studio.open(job["id"])
+    with service.w.connect() as db:
+        db.execute("INSERT OR REPLACE INTO signature_assignments VALUES(?,?,?,?)",
+                   ("othercompany", "PROJ-P06-EXPENSE", None, service.now()))
+    team = StubTeam(tailored_result(service))
+    studio.tailor(job["id"], team)
+    lead = {project["evidence_id"]: project["can_lead"] for project in team.called[1]["verified_projects"]}
+    assert lead["PROJ-P06-EXPENSE"] is False and lead["PROJ-P10-PACMAN"] is False
+    assert lead["PROJ-P05-RESUME"] is True
 
 
 def test_a_failed_tailor_leaves_the_draft_and_items_untouched(service, studio, job):
@@ -234,6 +276,9 @@ def test_nothing_usable_still_fails_and_leaves_the_draft_untouched(service, stud
 
 
 def test_the_three_tailoring_routes(service, job, monkeypatch):
+    from backend.services import fit
+
+    monkeypatch.setattr(fit, "for_job", lambda services, job_id, **_: None)  # the plan alone, no top-up
     team = StubTeam(tailored_result(service))
     monkeypatch.setattr(backend.ai, "any_provider_configured", lambda root: True)
     monkeypatch.setattr(backend.ai, "team_for", lambda services, on_usage=None: team)
@@ -269,3 +314,40 @@ def test_the_tailor_route_needs_an_ai_runtime(service, job, monkeypatch):
         response = client.post("/api/v2/studio/" + job["id"] + "/tailor")
         assert response.status_code == 400
         assert "No AI runtime is set up" in response.json()["detail"]
+
+
+def test_re_tailoring_files_skills_by_the_base_resume_not_a_thinned_draft(service, studio, job):
+    """Live on 23 Sep (Azure, Color Health): a draft an earlier tailoring had thinned
+    (Data Engineering empty, two phrases on Cloud) sent every data tool to Cloud and Tools."""
+    from backend.services.resume_studio import write_field
+
+    draft = studio.open(job["id"])
+    thinned = write_field(draft["source"], "SkillsData", "")
+    thinned = write_field(thinned, "SkillsCloud", "REST API design for patient onboarding and screening workflows")
+    with service.w.connect() as db:
+        db.execute("UPDATE studio_drafts SET source=? WHERE job_id=?", (thinned, job["id"]))
+    result = tailored_result(service)
+    result.skills = [schemas.TailoredSkill(name=name, origin="verified")
+                     for name in ("Apache Kafka", "Apache Flink", "PyTorch", "Python", "Docker")]
+    tailored = studio.tailor(job["id"], StubTeam(result))
+    macros = {name: plain(value) for name, value in extract_zero_argument_macros(tailored["source"]).items()
+              if name.startswith("Skills")}
+    assert macros["SkillsData"].startswith("Apache Kafka, Apache Flink")
+    assert macros["SkillsML"].startswith("PyTorch") and macros["SkillsLanguages"].startswith("Python")
+    assert macros["SkillsCloud"].startswith("Docker") and "Apache Kafka" not in macros["SkillsCloud"]
+    assert "patient onboarding" not in tailored["source"]
+
+
+def test_re_tailoring_rebuilds_evidence_tags_instead_of_piling_them_up(service, studio, job):
+    """Live on 23 Sep: after three tailorings the Cloud line's EVIDENCE comment held dozens of
+    duplicate tags and tags of deleted review rows, and Assurance marked it unsupported."""
+    import re as _re
+
+    studio.open(job["id"])
+    studio.tailor(job["id"], StubTeam(tailored_result(service)))
+    second = studio.tailor(job["id"], StubTeam(tailored_result(service)))
+    comment = _re.search(r"% EVIDENCE: ([^\n]+)\n\\newcommand\{\\SkillsCloud\}", second["source"])[1].split()
+    assert len(comment) == len(set(comment)), comment
+    live = {"resume_items:" + row["id"] for row in studio.items(job["id"])}
+    assert all(tag in live for tag in comment if tag.startswith("resume_items:")), comment
+    assert any(tag.startswith("resume_items:") for tag in comment)  # the predicted skill stays traceable

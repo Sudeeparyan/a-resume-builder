@@ -10,4 +10,6 @@ __pycache__/
 .env
 .env.*
 !.env.example
-data/*.db*
+# Which AI plans are resting after a usage limit (backend/ai/limits.py); this PC's state only.
+.ai-plan-health.json
+.ai-plan-health.json.saving

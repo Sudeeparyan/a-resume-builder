@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 
 # ---- Annie's posting-evaluation graph (backend/ai/agents/graph.py) --------------------
@@ -20,50 +20,21 @@ class Requirement(BaseModel):
     text: str = Field(description="The requirement as a short canonical phrase, e.g. 'Power BI'")
     category: Literal["required", "responsibility", "preferred"]
     excerpt: str = Field(description="The exact sentence from the job description, copied verbatim")
+    status: Literal["met", "partial", "missing"]
+    evidence_ids: list[str] = Field(default_factory=list, description="Ids from the evidence catalogue that show it; empty when missing")
+    note: str = Field(default="", description="One short clause on how the evidence meets it, or what is missing")
 
 
-class RequirementSet(BaseModel):
-    """Grounded requirements. Any excerpt absent from the saved JD is discarded."""
-    requirements: list[Requirement]
+class FitBlocker(BaseModel):
+    excerpt: str = Field(description="The exact sentence from the job description, copied verbatim")
+    reason: str = Field(description="Why it rules the candidate out, in a few words")
 
 
-class RelevanceVerdict(BaseModel):
-    role_family_matches: bool = Field(description="Is this an analyst/BI/data role the candidate targets?")
-    seniority_suitable: bool = Field(description="Is it open to early-career candidates (0-3 years)?")
-    location_matches: bool = Field(description="Is it in the United States, or explicitly US-remote?")
-    hard_blockers: list[str] = Field(description="Stated conditions that disqualify the candidate outright, e.g. a required active security clearance")
-    reasons: list[str] = Field(description="Short factual reasons for the verdict, each traceable to the posting")
-
-
-class CompanyFinding(BaseModel):
-    claim: str
-    source_url: str = Field(description="A public URL supporting this claim")
-
-
-class CompanyAssessment(BaseModel):
-    """Public-record research only. Never a guarantee, always cited."""
-    legal_presence: bool = Field(description="Is there a company register or legal-entity record?")
-    size_category: Literal["startup", "mid", "large", "unknown"]
-    employee_estimate: Optional[int] = None
-
-    @field_validator("employee_estimate", mode="before")
-    @classmethod
-    def _blank_when_unknown(cls, value):
-        """Models answer 'unknown' here rather than omitting the field."""
-        if isinstance(value, str):
-            digits = "".join(c for c in value if c.isdigit())
-            return int(digits) if digits else None
-        return value
-    sponsorship_evidence: Literal["stated", "documented", "none", "unknown"] = Field(
-        description="'stated' if this posting says so, 'documented' if the employer publishes a sponsorship policy"
-    )
-    red_flags: list[str] = Field(description="Fraud signals: upfront payment, identity documents, personal-email-only contact, impersonation")
-    findings: list[CompanyFinding]
-
-
-class PostingVerdict(BaseModel):
-    state: Literal["active", "expired", "needs_review"]
-    evidence: str = Field(description="The wording on the page that justifies this state, quoted")
+class FitAnalysis(BaseModel):
+    """The requirement matrix. Code verifies every excerpt and evidence id before it is trusted (services/fit.py)."""
+    requirements: list[FitRequirement]
+    hard_blockers: list[FitBlocker] = Field(default_factory=list)
+    summary: str = Field(default="", description="One sentence on the overall fit")
 
 
 class FitRequirement(BaseModel):
@@ -158,7 +129,7 @@ class PostingFields(BaseModel):
     """
     company: str = Field(default="", description="Employer name exactly as the posting writes it; empty if not stated")
     title: str = Field(default="", description="Job title exactly as the posting writes it; empty if not stated")
-    location: str = Field(default="", description="City and state, 'Remote (US)' or similar, as the posting states it; empty if not stated")
+    location: str = Field(default="", description="City and state or country, 'Remote (US)', 'Remote (Ireland)' or similar, as the posting states it; empty if not stated")
     url: str = Field(default="", description="The application or posting link if the text contains one; empty otherwise")
 
 

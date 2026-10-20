@@ -1,4 +1,4 @@
-# Annie's job search — front page
+# Annie Prasanna Manoharan's job search — front page
 
 Last run: posting_verified at 2026-10-17T13:59:40+00:00. Generated from data/career.db; open the dashboard to act on anything here.
 
